@@ -147,19 +147,17 @@ reproducible.
 
 ## Roadmap
 
-See [docs/roadmap.md](docs/roadmap.md) for the full plan (architecture + worked
-examples for photon-transfer curves, star-field exposure planning, AO
-wavefront-sensing, and transit photometry).
+**1.0 is shipped:** the full photon → electron → ADU signal path (dark, bias,
+flat, and rendered scenes) across CCD / CMOS / EMCCD / eAPD / sCMOS, with a
+unified gain stage, detector-realism effects, opt-in spectral mode, analysis
+helpers, and a frozen API.
 
-- [x] Dark frames (CCD / CMOS / EMCCD)
-- [x] **Photon/signal path** — `Camera.expose`, photoelectrons + shot noise, flats & bias *(v0.2)*
-- [x] **Unified gain stage** — exact EMCCD + eAPD/IR detectors *(v0.3)*
-- [x] **Scene layer** — sources + PSF + optics → photon maps; `Camera.observe` *(v0.4)*
-- [x] **Analysis helpers** — aperture photometry, centroiding, photon-transfer curve *(v0.5a)*
-- [x] **Detector realism** — nonlinearity, cosmic rays, sCMOS per-pixel read noise *(v0.5b)*
-- [x] **Spectral mode** — `QE(λ)`, SEDs, spectral bandpasses, WCS tagging *(v0.6)*
-- [x] **1.0** — API freeze, validated presets, full docs
-- [ ] Persistence/latent images (needs cross-frame state)
+The **2.0 plan** moves from a *frame* to an *observation* — closing the
+raw → reduced → ground-truth validation loop, making time-series (variability,
+jitter, persistence) and richer scenes (extended sources, catalogs, sky
+coordinates) first-class, and deepening detector and radiometric fidelity. See
+[docs/roadmap.md](docs/roadmap.md) for the full critique, phased plan, and worked
+examples.
 
 ## Contributing
 

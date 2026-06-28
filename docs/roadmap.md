@@ -1,462 +1,335 @@
-# Roadmap: from dark frames to a detector modelling toolkit
+# Roadmap: from a frame to an observation (towards 2.0)
 
-This document plans how `getframes` grows from "generate dark frames" into a tool
-that can accurately model detectors end-to-end, driven by four concrete user
-stories:
+`getframes` 1.0 does one thing very well: it turns a *photon-rate map* into a
+single physically realistic **frame**, with auditable noise physics and a clean,
+frozen API. This roadmap plans the 1.x → 2.0 arc, whose theme is the next noun up:
+the **observation**. Real users don't take one frame — they take *sequences*, of
+*structured scenes*, and then *reduce them against ground truth*. 2.0 makes those
+three things first-class.
 
-1. **Photon transfer curve (PTC)** — feed synthetic flats through an analysis
-   pipeline to characterise gain, read noise, and full well.
-2. **Astronomical exposure planning** — render a star field (magnitudes + PSF +
-   instrument) to estimate exposure time and frame counts.
-3. **Adaptive-optics wavefront sensing** — estimate the limiting magnitude of a
-   WFS from realistic sub-aperture frames on EMCCD and **eAPD/IR** detectors.
-4. **Time-series transit photometry** (our own case) — simulate a sequence of
-   frames of a slightly variable star to test detectability and pipeline noise.
-
-The whole plan rests on one observation: **every use case is the same pipeline**
-— turn a *photon rate map* into a realistic frame — with a different front end
-producing the photon map and a different back-end detector consuming it.
-
-```
-          ┌─────────────┐   photons/s/pixel   ┌──────────────┐   ADU    ┌───────┐
- inputs → │  SCENE layer │ ──────────────────► │ DETECTOR layer│ ───────► │ Frame │
-          └─────────────┘   (focal plane)     └──────────────┘          └───────┘
-   sources/PSF/optics (#2,#4)                  QE, dark, gain, read,
-   uniform illumination (#1)                   defects, digitisation
-   known photon flux   (#3)                    CCD/CMOS/EMCCD/eAPD/IR
-```
-
-The detector layer is what we already have (expanded); the scene layer is new.
-The connective tissue is a single primitive: `Camera.expose(photon_rate, exposure)`.
+The plan is grounded in a critical, user's-eye audit of what 1.0 can and cannot do
+(below), and it keeps every commitment from 1.0: one-way data flow
+(`scene → camera → detector → frame`), pure seeded physics functions, units in
+every name, `mypy --strict`, and SemVer (additive in 1.x; breaking changes are
+deprecated through 1.x and only land at 2.0).
 
 ---
 
-## 1. The unifying abstraction
+## 1. Where 1.0 left us
 
-Add one method that everything else builds on:
+The **detector layer** is strong: dark/bias/flat/`expose`, the photon→electron→ADU
+chain, PRNU/DSNU, hot pixels, shot noise, CIC, a unified stochastic gain stage
+(EMCCD + eAPD, exact excess-noise factor), simple nonlinearity, single-pixel
+cosmic rays, sCMOS per-pixel read noise, temperature-scaled dark current, and
+`Frame.truth` ground truth.
 
-```python
-frame = camera.expose(
-    photon_rate,          # ndarray [photons/s/pixel] *incident on the detector*, or a scalar
-    exposure,             # seconds
-    *,
-    background=0.0,       # additive sky/thermal photon rate [photons/s/pixel]
-    temperature=None,     # defaults to the camera's operating temperature
-    seed=None,
-)
-```
+The **scene layer** exists but is thin: `PointSource` (by magnitude or photon
+rate), a uniform `Sky`, `GaussianPSF`/`MoffatPSF`, a `Telescope` (aperture,
+throughput, plate scale, obstruction), band-integrated Johnson UBVRI zero points,
+opt-in spectral mode (`QE(λ)`/`SED`/effective QE), and TAN `WCSInfo` *tagging*.
 
-`dark_frame` becomes the special case `expose(0.0, exposure)`, so existing code
-keeps working. The full electron signal chain inside `expose`:
+The **analysis layer** is deliberately minimal: `aperture_sum`, `centroid`, and a
+`photon_transfer_curve` that recovers gain/read-noise/full-well.
 
-| Step | Effect | Notes |
+## 2. The gap — what a real user still can't do
+
+Reading the four driving use cases back against the shipped API, the same three
+holes appear:
+
+**The pipeline-validation loop is only half-built.** The promise is "measure your
+pipeline against ground truth." But the library only emits *raw* frames + truth;
+it offers no master-frame builders and no calibration step. A user must hand-roll
+bias/dark/flat reduction to close the loop. `dark_series` exists, but there is no
+`expose_series`/`observe_series` — the API is asymmetric. There is no way to round
+-trip raw → reduced → compare-to-truth, which is the single most common thing this
+library should make trivial.
+
+**Time is not a first-class dimension.** Cases #3 (AO wavefront sensing) and #4
+(transit photometry) are fundamentally *time series*, yet a scene is static and
+you rebuild it by hand each frame. There is no temporal variability (a transit
+injection), no pointing jitter / drift / dither, no atmospheric tip-tilt or image
+motion, and no persistence/latent images (explicitly deferred in 1.0 for "needing
+cross-frame state"). The AO and transit examples work only because they manually
+loop and re-instantiate a `Scene` per frame.
+
+**Scenes are too simple for real astronomy.** Only point sources and a flat sky.
+No extended sources (galaxies/nebulae), no `Catalog` to place many stars, no
+sky-coordinate placement (WCS *tags* but does not project RA/Dec → pixels), no
+`AiryPSF`/`ArrayPSF`, no elliptical or field-dependent PSF, no vignetting or
+distortion. Crowded fields, resolved sources, and "load my Gaia catalog" are out
+of reach.
+
+Three further gaps limit credibility and reach:
+
+- **Detector fidelity has depth limits.** No CTI, blooming, IPC, kTC/reset noise,
+  multi-amplifier readout, defect/bad-column maps, rolling-shutter timing, or
+  cosmic-ray *tracks* (hits are single-pixel). Bias is a flat pedestal. These are
+  exactly the artifacts a calibration pipeline is supposed to handle.
+- **Radiometry is shallow.** Vega/Johnson only (no AB, ugriz, Gaia, 2MASS), no
+  real filter/QE/atmosphere transmission products, no extinction, and no IR
+  thermal background — which *dominates* for the eAPD/IR detectors we ship.
+- **No scale story.** Everything is float64, full-array, single-threaded,
+  in-memory, with Python-side per-source loops. Large detectors and
+  generating thousands of raw+truth pairs (e.g. ML training data) are painful.
+
+## 3. The 2.0 thesis
+
+> 1.0 modelled a **frame**. 2.0 models an **observation**: a reproducible
+> *sequence* of frames of a *structured, possibly time-varying scene*, that you
+> can *reduce against ground truth* — on detectors faithful enough that the
+> artifacts your pipeline must survive are actually present.
+
+Four threads carry this, each independently shippable:
+
+| Thread | Why it matters | Serves |
 | --- | --- | --- |
-| 1 | Incident photons `= (photon_rate + background) * exposure` | photon domain |
-| 2 | Photoelectrons `= photons * QE`, modulated by **PRNU** | photo-response non-uniformity |
-| 3 | Dark electrons `= D(T) * exposure`, modulated by **DSNU**/hot pixels | existing model |
-| 4 | **Shot noise**: `Poisson(mean photo + mean dark + CIC)` | per-pixel |
-| 5 | **Nonlinearity** + **full-well** saturation | optional polynomial / soft knee |
-| 6 | **Stochastic gain stage** (EM register or APD avalanche) | unified model, §3 |
-| 7 | **Read noise** (+ optional kTC/reset noise) | Gaussian at the amplifier |
-| 8 | **Digitisation**: gain → ADU, bias, quantise, clip to bit depth | existing model |
-
-All randomness continues to flow through a seeded `numpy.random.Generator`.
-
-### The `Frame` keeps ground truth
-
-For pipeline validation (cases 1 & 4) the `Frame` optionally carries the
-noise-free truth it was generated from:
-
-```python
-frame.data            # ADU, as today
-frame.truth.photoelectrons   # noise-free electrons (mean)
-frame.truth.photon_rate      # the input map
-frame.metadata               # provenance (now includes optics/scene summary)
-```
-
-This is what makes `getframes` valuable: you can measure your pipeline against
-the exact ground truth.
+| **Close the loop** | round-trip raw → reduced → truth | all 4 cases, the core promise |
+| **Add time** | sequences, variability, jitter, persistence | #3 AO, #4 transit |
+| **Enrich scenes** | extended sources, catalogs, sky coords, more PSFs | #2 astronomy |
+| **Deepen fidelity & reach** | CTI/IPC/amps/tracks, real radiometry, scale | accuracy, IR, ML |
 
 ---
 
-## 2. Target architecture
+## 4. Target architecture additions
+
+Additive modules; existing ones grow backwards-compatibly until the 2.0 cut.
 
 ```
 src/getframes/
-  config.py            # CameraConfig — expanded with QE, PRNU, gain-stage, nonlinearity
-  frame.py             # Frame (+ FrameTruth)
+  observation.py      # NEW: Observation / time-series driver, jitter, dither
+  calibrate.py        # NEW: master frames + reduction (bias/dark/flat) round-trip
+  io.py               # NEW: richer FITS (cubes, std keywords, read), config save/load
   detector/
-    __init__.py
-    signal.py          # photon→electron path (expose), shot noise, nonlinearity
-    gain.py            # unified stochastic gain stage (EMCCD + eAPD), §3
-    readout.py         # read noise, kTC, digitisation
-    defects.py         # hot/dead pixels, cosmic rays, persistence, IPC
-  camera.py            # Camera: expose / observe / dark_frame / bias_frame / flat_frame
+    sequence.py       # NEW: cross-frame state (persistence/latent images)
+    transfer.py       # NEW: CTI, blooming/bleed, IPC kernel
+    readout.py        # GROW: kTC/reset noise, multi-amplifier, rolling shutter, structured bias
+    defects.py        # GROW: cosmic-ray tracks, bad-column/defect maps, traps
   scene/
-    __init__.py
-    sources.py         # PointSource, ExtendedSource, UniformIllumination, Catalog
-    psf.py             # GaussianPSF, MoffatPSF, AiryPSF, ArrayPSF
-    optics.py          # Telescope/Instrument: aperture, throughput, plate scale
-    photometry.py      # Bandpass, zero points, magnitude↔photon-rate
-    scene.py           # Scene.photon_rate_map(camera) → ndarray
-  analysis/            # thin, optional helpers that make examples clean
-    ptc.py             # build + fit a photon transfer curve
-    apertures.py       # aperture sums, simple centroiding / SNR
-  presets/
-    data/*.toml        # + eAPD, sCMOS, IR arrays, more CCD/CMOS/EMCCD
-  units.py             # constants, magnitude/flux helpers
+    sources.py        # GROW: ExtendedSource (Sersic/array), UniformIllumination
+    catalog.py        # NEW: Catalog.from_table, RA/Dec -> pixel via WCS
+    psf.py            # GROW: AiryPSF, ArrayPSF, elliptical / field-varying PSF
+    optics.py         # GROW: vignetting, distortion, field-dependent plate scale
+    photometry.py     # GROW: AB system, ugriz/Gaia/2MASS, transmission products, extinction
+    thermal.py        # NEW: IR thermal background + detector glow
+  dataset.py          # NEW: scalable raw+truth dataset generation (float32, chunked)
+  cli.py              # NEW: `getframes` command (generate from a config file)
 ```
 
-Design rules carried over from [CLAUDE.md](https://github.com/jacotay7/getframes/blob/main/CLAUDE.md):
-one-way data flow (`scene → camera → detector → frame`), pure seeded functions for
-the physics, units in every name, `mypy --strict`.
-
 ---
 
-## 3. Detector model extensions
-
-### 3.1 The photon/signal path (new) — unblocks **all** use cases
-
-`detector/signal.py` adds the mean photoelectron map and Poisson shot noise,
-mirroring the existing `dark_signal_map`. New `CameraConfig` fields:
-
-- `quantum_efficiency` (already present; band-averaged scalar now, `QE(λ)` later)
-- `prnu` — fractional photo-response non-uniformity (flat-field fixed pattern)
-- `nonlinearity` — optional polynomial coefficients or a soft-saturation knee
-- `pixel_area_arcsec2` / plate scale (informational; the scene layer owns geometry)
-
-### 3.2 Unified stochastic gain stage — unblocks **case 3** (and improves EMCCD)
-
-Replace the EMCCD-specific `apply_em_gain` with a single model parameterised by a
-mean gain `G` and an **excess noise factor `F`**, so EMCCDs and avalanche
-photodiodes share one code path:
-
-> For an input of `n` electrons, the multiplied output is
-> `Gamma(shape = n·α, scale = θ)` with `α = 1/(F² − 1)` and `θ = G·(F² − 1)`.
->
-> Then `E[out] = nG` and, with Poisson input of mean `μ`, the total output
-> variance is `G²F²μ` — i.e. the model reproduces the requested excess noise
-> factor exactly.
-
-| Detector | `F` | `α` | Behaviour |
-| --- | --- | --- | --- |
-| EMCCD (high gain) | √2 ≈ 1.41 | 1 | recovers today's `Gamma(n, G)` model |
-| **eAPD / SAPHIRA** | ~1.2–1.4 | ~2–6 | near-noiseless IR avalanche gain |
-| Linear/CMOS | → 1 | → ∞ | deterministic ×G |
-
-This single change makes the EMCCD model exact at low gain *and* adds the eAPD
-detector AO researchers need, with one well-documented function.
-
-### 3.3 New sensor types
-
-- `SensorType.EAPD` — electron-APD IR arrays (e.g. SAPHIRA): avalanche gain stage
-  (§3.2), sub-electron effective read noise at high gain, dark current that is
-  partly multiplied ("dark × gain" / tunnelling), optional detector glow.
-- `SensorType.SCMOS` — per-pixel read-noise *distribution* (not a single RMS),
-  rolling-shutter timing, higher dark current — important for honest CMOS noise.
-- IR-array effects shared by eAPD/HxRG: **reset/kTC noise**, **inter-pixel
-  capacitance (IPC)** as a small fixed convolution kernel, and **persistence**.
-
-### 3.4 Defects & transients (`detector/defects.py`)
-
-Hot/dead/warm pixels (generalise the current hot-pixel model), **cosmic rays**
-(rate ∝ exposure × area, with track morphology), and persistence/latent images
-for IR arrays. These matter for cases 2 and 4 (long/again exposures) and for
-validating calibration pipelines.
-
----
-
-## 4. Scene / optics layer (new) — unblocks **cases 2 & 4**
-
-The scene layer turns astrophysical inputs into a photon-rate map at the
-detector. Kept band-integrated initially (scalar QE + photometric zero points);
-a spectral mode (`SED` × `QE(λ)` × `Bandpass(λ)`) is a later, additive upgrade.
-
-```python
-import getframes as gf
-
-scope = gf.Telescope(
-    aperture_diameter_m=8.0,
-    central_obstruction=0.14,
-    throughput=0.35,                 # optics + filter + atmosphere
-    plate_scale_arcsec_per_pixel=0.20,
-    band=gf.Bandpass.johnson("V"),   # zero point + effective width
-)
-psf = gf.MoffatPSF(fwhm_arcsec=0.7, beta=3.0)
-scene = gf.Scene(
-    shape=(1024, 1024),
-    optics=scope,
-    psf=psf,
-    sources=[gf.PointSource(x=512, y=512, magnitude=18.5), ...],
-    sky=gf.Sky(surface_brightness_mag_arcsec2=21.3),
-)
-
-photon_rate = scene.photon_rate_map()   # photons/s/pixel at the detector
-```
-
-Components:
-
-- **`sources.py`** — `PointSource(x, y, magnitude|photon_rate)`,
-  `ExtendedSource` (Sersic/array), `UniformIllumination` (for flats, case 1),
-  `Catalog.from_table(...)` for many stars.
-- **`psf.py`** — `GaussianPSF`, `MoffatPSF`, `AiryPSF` (diffraction; needs SciPy
-  Bessel), `ArrayPSF` (user-supplied kernel, e.g. from an AO sim). Sub-pixel
-  placement via shifted sampling; flux-conserving normalisation.
-- **`optics.py` / `photometry.py`** — collecting area, throughput, plate scale,
-  and the magnitude→photon-rate conversion through a `Bandpass` zero point. A few
-  standard bands (Johnson UBVRI, SDSS ugriz) shipped as data.
-- **`scene.py`** — `Scene.photon_rate_map()` renders sources through the PSF onto
-  the focal-plane grid and adds the sky. `Camera.observe(scene, exposure)` is sugar
-  for `expose(scene.photon_rate_map(), exposure, background=scene.sky_rate)`.
-
----
-
-## 5. Analysis utilities (thin, optional) — make the examples clean
-
-`getframes.analysis` provides just enough to demonstrate the use cases without
-pulling in heavy deps (users can still use `photutils`/`astropy` instead):
-
-- `ptc.photon_transfer_curve(camera, levels, ...)` → mean/variance arrays + a fit
-  returning gain, read noise, and full well (case 1).
-- `apertures.centroid(...)`, `apertures.aperture_sum(...)`, `snr(...)` for cases
-  2–4.
-
-These stay optional and dependency-light by design.
-
----
-
-## 6. Preset library expansion
-
-Add, with sourced parameters and `notes`:
-
-- **eAPD / IR**: Leonardo SAPHIRA (AO WFS), a generic HxRG-style IR array.
-- **sCMOS**: Teledyne Kinetix / Andor Zyla / Hamamatsu Fusion.
-- **More EMCCD/CCD**: Nüvü HNü, e2v CCD201-20; Sony IMX455 (full-frame CMOS).
-- Keep the `generic_*` references and add `generic_eapd`, `generic_scmos`.
-
-Each new field added to `CameraConfig` is optional with a sensible default, so
-existing presets keep loading unchanged.
-
----
-
-## 7. Dependencies & packaging
-
-- **Core**: `numpy` (+ `tomli` < 3.11), unchanged.
-- **Add `scipy`** as a core dependency for the scene layer (convolution, Bessel
-  for Airy, fitting). It is ubiquitous in the target audience; alternative is to
-  gate it behind `getframes[scene]` — *decision needed* (see §10).
-- **Optional**: `astropy` (WCS, FITS, photometric tables), `matplotlib`
-  (plotting). Stay in extras.
-
----
-
-## 8. Testing & validation strategy
-
-The library's promise is *accuracy*, so tests assert physics, not pixels:
-
-- **Noise statistics**: shot-noise variance ≈ mean (done); read-noise RMS matches
-  config; gain stage reproduces the requested excess noise factor `F` to within
-  Monte-Carlo error.
-- **Closed loop**: a generated PTC recovers the input gain/read-noise/full-well
-  (case 1 is its own regression test).
-- **Photometry**: aperture sum of a rendered `PointSource` recovers the input
-  photon count to within shot noise; PSF kernels conserve flux.
-- **Radiometry**: magnitude→photon-rate against hand-checked zero points.
-- **Determinism**: seeded reproducibility across all new paths.
-
----
-
-## 9. Phased roadmap
+## 5. Phased plan
 
 | Version | Theme | Ships | Unblocks |
 | --- | --- | --- | --- |
-| **0.2** ✅ | Signal path | `Camera.expose`, photoelectrons + shot noise, PRNU, `flat_frame`, `bias_frame`, `Frame.truth` | **#1** |
-| **0.3** ✅ | Gain unification + eAPD | unified stochastic gain stage (§3.2), `SensorType.EAPD`, eAPD presets | **#3** |
-| **0.4** ✅ | Scene layer | sources, PSF (Gaussian/Moffat), optics, bandpass/zero points, `Scene`, `Camera.observe` | **#2, #4** |
-| **0.5a** ✅ | Analysis helpers | `analysis.aperture_sum`, `analysis.centroid`, `analysis.photon_transfer_curve` | all 4 examples |
-| **0.5b** ✅ | Detector realism | nonlinearity, cosmic rays, sCMOS per-pixel read noise (persistence deferred --- needs cross-frame state) | accuracy, polish |
-| **0.6** ✅ | Spectral mode (opt-in) | `QE(λ)`, `SED`, spectral bandpasses, colour-dependent effective QE; `WCSInfo` (FITS WCS + astropy pixel↔world) | accuracy |
-| **1.0** | Stability | API freeze, validated presets, full docs | — |
+| **1.1** | Close the loop | master bias/dark/flat builders, `calibrate()`, `expose_series`/`observe_series`, richer FITS I/O + config save/load | the validation workflow for **all 4** |
+| **1.2** | Add time | `Observation` time-series driver, time-varying source brightness, pointing jitter / drift / dither, image motion; **persistence/latent images** | **#3, #4** |
+| **1.3** | Enrich scenes | `ExtendedSource` (Sersic/array), `UniformIllumination`, `Catalog.from_table` with RA/Dec→pixel, `AiryPSF`/`ArrayPSF`, elliptical PSF | **#2** |
+| **1.4** | Detector depth | CTI, blooming/bleed, IPC, kTC/reset noise, multi-amplifier readout, cosmic-ray tracks, defect/bad-column maps, structured bias, polynomial nonlinearity | accuracy |
+| **1.5** | Radiometry & IR | AB system, ugriz/Gaia/2MASS bands, transmission-product loading, extinction, true spectral flux integration, **IR thermal background + glow** | quantitative photometry, honest IR |
+| **1.6** | Scale & datasets | float32 path, chunked/vectorised rendering, `dataset` generator for raw+truth pairs at scale, a `getframes` CLI, benchmarks | ML training data, large detectors |
+| **2.0** | Stability | promote new APIs to stable, land deprecated breaking changes, validation/benchmark suite vs. published characterisations, JOSS paper + citation, full docs | — |
 
-Each phase is independently shippable and leaves existing APIs working.
-
----
-
-## 10. Open decisions
-
-1. **SciPy as core vs. `[scene]` extra.** Leaning core (audience already has it),
-   but happy to gate it. *Needs a call.*
-2. **Photometric convention.** Band-integrated zero points first (simple, covers
-   the use cases) vs. spectral from day one (accurate, heavier). Plan defers
-   spectral to 0.6.
-3. **Geometry/WCS ownership.** Pixel coordinates in the scene now; optional
-   astropy WCS later for sky coordinates.
-4. **eAPD dark model.** How much detail (tunnelling/glow vs. a single multiplied
-   dark term) before it's "accurate enough" for AO limiting-magnitude work.
+Persistence (1.2) is the one item explicitly deferred from the 1.0 series; it lands
+once 1.2 introduces cross-frame state via `Observation`.
 
 ---
 
-## Worked examples (target API)
+## 6. Phase detail
 
-These are written against the **post-implementation** API above to show where we
-are headed. Each maps to a use case and doubles as an acceptance test.
+### 1.1 — Close the loop (highest leverage)
+The fastest way to make `getframes` more useful is to finish the workflow it
+already half-supports.
 
-### Example 1 — Photon transfer curve through a user pipeline (v0.2)
+- **Master frames.** `analysis.combine(frames, method="sigma_clip")` and
+  `Camera.master_dark/bias/flat(...)` returning a `Frame`. Sigma-clipped mean /
+  median stacking.
+- **Reduction.** `calibrate(raw, *, bias=None, dark=None, flat=None)` → a reduced
+  `Frame`, so a user can do `truth ≈ calibrate(raw, ...)` and quantify residuals.
+  This *is* the ground-truth-validation promise, made one call.
+- **API symmetry.** `expose_series` / `observe_series` mirroring `dark_series`
+  (independent-but-reproducible derived seeds; per-frame metadata).
+- **I/O.** Standard FITS keywords (`EXPTIME`, `GAIN`, `CCD-TEMP`, …), data-cube and
+  multi-extension writers, `Frame.from_fits`, and `CameraConfig.to_toml/from_toml`
+  so an experiment is a file you can share.
+
+### 1.2 — Add time
+- **`Observation`.** A driver that produces a reproducible *stack* from a scene
+  plus a time model: `cam.observe_series(scene, exposure, n_frames, cadence=...)`,
+  with a per-source brightness-vs-time callable (transit/variable-star injection)
+  and a returned per-frame truth (a true light curve).
+- **Pointing.** Jitter (per-frame Gaussian offset), slow drift, and programmed
+  dither; atmospheric tip-tilt / image motion for AO sub-apertures.
+- **Persistence / latent images.** Cross-frame charge memory for IR arrays,
+  carried on the `Observation` state — the deferred 1.0 item.
+
+### 1.3 — Enrich scenes
+- **Sources.** `ExtendedSource` (Sersic profile + arbitrary image/array),
+  `UniformIllumination` (clean flats for PTC).
+- **Catalogs.** `Catalog.from_table(table, ...)` placing many sources; with a
+  scene `WCSInfo`, accept RA/Dec and project to pixels (the WCS finally *does*
+  something, not just tags).
+- **PSFs.** `AiryPSF` (diffraction-limited, space/AO), `ArrayPSF` (user kernel,
+  e.g. straight from an AO simulation), elliptical/position-angle PSFs; optional
+  field-varying PSF.
+- **Optics.** Vignetting / illumination falloff and a simple radial distortion.
+
+### 1.4 — Detector depth
+The artifacts a calibration pipeline must survive: **CTI** (CCD charge-transfer
+inefficiency), **blooming/bleed** along saturated columns, **IPC** (inter-pixel
+capacitance kernel), **kTC/reset noise**, **multi-amplifier** readout (per-amp
+gain/offset/quadrants + seams), **cosmic-ray tracks** (morphology, not single
+pixels), **defect/bad-column maps** and traps, and **structured bias**.
+Nonlinearity generalises to a polynomial / lookup.
+
+### 1.5 — Radiometry & IR
+**AB** alongside Vega; **SDSS ugriz, Gaia, 2MASS** bands; loading real
+filter × QE × atmosphere **transmission products**; interstellar **extinction**;
+true spectral **flux integration** (an `SED` can set the integrated rate, not only
+the effective QE). For IR/eAPD honesty: a **thermal background + detector glow**
+model (resolving 1.0 open decision #4). Optional `astropy.units` interop.
+
+### 1.6 — Scale & datasets
+A **float32** fast path, **chunked/tiled** rendering and **vectorised** multi-source
+PSF evaluation (a 10⁵-star catalog should not loop in Python), an optional
+**`dataset`** generator yielding raw+truth pairs at scale for ML training (denoising,
+deconvolution, calibration), a **`getframes` CLI** to generate frames from a config
+file, and a **benchmark** suite to keep throughput honest.
+
+---
+
+## 7. Worked examples (target API)
+
+Written against the **post-implementation** API; each doubles as an acceptance
+test, mirroring the 1.0 roadmap's style.
+
+### A — Close the validation loop (1.1)
 
 ```python
-"""Generate flat-field pairs at increasing flux, build a PTC, recover the gain."""
 import numpy as np
 import getframes as gf
 
-cam = gf.Camera.from_preset("generic_cmos")
+cam = gf.Camera.from_preset("generic_cmos", default_temperature_c=-10.0)
 
-# Flux levels from a few e- up to saturation (photons/s/pixel).
-levels = np.geomspace(10, 200_000, 25)
-exposure = 1.0
+# Build calibration masters from synthetic series.
+master_bias = cam.master_bias(n_frames=50, seed=0)
+master_dark = cam.master_dark(exposure=60.0, n_frames=25, seed=1)
+master_flat = cam.master_flat(photon_rate=20_000.0, exposure=1.0, n_frames=25, seed=2)
 
-means, variances = [], []
-for flux in levels:
-    # Two independent flats at the same level; differencing removes fixed-pattern
-    # noise so the variance is purely shot + read (the standard PTC trick).
-    f1 = cam.expose(flux, exposure, seed=int(flux))
-    f2 = cam.expose(flux, exposure, seed=int(flux) + 1)
-    a, b = np.asarray(f1), np.asarray(f2)
-    means.append((a.mean() + b.mean()) / 2)
-    variances.append((a - b).var() / 2)
+# A science frame that carries its own ground truth.
+sci = cam.expose(photon_rate=300.0, exposure=60.0, seed=3)
 
-means, variances = np.array(means), np.array(variances)
-
-# In the shot-noise-limited regime: variance[ADU] = (1/gain)*mean + read_noise^2.
-shot = (means > 500) & (means < 0.7 * cam.config.max_adu)
-slope, intercept = np.polyfit(means[shot], variances[shot], 1)
-gain = 1.0 / slope                       # e-/ADU
-read_noise = np.sqrt(max(intercept, 0)) * gain
-print(f"Recovered gain: {gain:.3f} e-/ADU (input {cam.config.gain_e_per_adu})")
-print(f"Recovered read noise: {read_noise:.2f} e- (input {cam.config.read_noise_e})")
-
-# Or just: gain, rn, fwc = gf.analysis.photon_transfer_curve(cam, levels, exposure).fit()
+# Reduce it and check the pipeline against truth.
+reduced = gf.calibrate(sci, bias=master_bias, dark=master_dark, flat=master_flat)
+residual = np.asarray(reduced) - sci.truth.mean_photoelectrons / cam.config.gain_e_per_adu
+print(f"calibration residual RMS: {residual.std():.3f} ADU")   # ~ read/shot floor
 ```
 
-### Example 2 — Star field exposure planning (v0.4)
+### B — Transit photometry as a time series (1.2)
 
 ```python
-"""Render a field of stars and find the exposure that reaches SNR=50 on a target."""
-import numpy as np
-import getframes as gf
-
-scope = gf.Telescope(
-    aperture_diameter_m=2.5,
-    throughput=0.30,
-    plate_scale_arcsec_per_pixel=0.40,
-    band=gf.Bandpass.johnson("V"),
-)
-psf = gf.MoffatPSF(fwhm_arcsec=1.1, beta=3.0)
-
-target = gf.PointSource(x=256, y=256, magnitude=21.0)
-field = [target, gf.PointSource(x=100, y=180, magnitude=18.2),
-         gf.PointSource(x=400, y=300, magnitude=19.7)]
-
-scene = gf.Scene(
-    shape=(512, 512), optics=scope, psf=psf, sources=field,
-    sky=gf.Sky(surface_brightness_mag_arcsec2=21.0),
-)
-cam = gf.Camera.from_preset("zwo_asi2600mm", default_temperature_c=-10.0)
-
-for exposure in (30, 60, 120, 300, 600):
-    # Average many frames to beat down noise; SNR grows like sqrt(total time).
-    snrs = []
-    for trial in range(20):
-        frame = cam.observe(scene, exposure=exposure, seed=trial)
-        flux, noise = gf.analysis.aperture_snr(frame, center=(256, 256), r=3 * 1.1 / 0.40)
-        snrs.append(flux / noise)
-    snr = np.mean(snrs)
-    print(f"{exposure:4d} s  →  SNR ≈ {snr:5.1f} on V={target.magnitude}")
-    if snr >= 50:
-        print(f"  ✓ single {exposure}s exposure suffices")
-        break
-else:
-    print("  need to stack: n_frames ≈ (50/snr)^2 at the longest exposure")
-```
-
-### Example 3 — AO wavefront-sensor limiting magnitude on EMCCD vs eAPD (v0.3)
-
-```python
-"""Sweep guide-star flux; find where centroid error exceeds the AO error budget."""
-import numpy as np
-import getframes as gf
-
-# A 2x2-pixel quad-cell sub-aperture; the spot is a small Gaussian.
-spot = gf.GaussianPSF(fwhm_arcsec=1.0)
-subap = gf.Scene(shape=(8, 8), optics=gf.Telescope.unit(plate_scale_arcsec_per_pixel=0.5),
-                 psf=spot, sources=[gf.PointSource(x=3.5, y=3.5, photon_rate=1.0)])
-pattern = subap.photon_rate_map()        # unit-flux spot shape
-
-frame_rate = 1000.0                       # Hz; AO runs fast
-exposure = 1.0 / frame_rate
-budget_mas = 20.0                         # centroid error budget (milliarcsec)
-
-for cam_name in ("andor_ixon_ultra_888", "leonardo_saphira"):
-    cam = gf.Camera.from_preset(cam_name)
-    print(f"\n{cam.name} ({cam.sensor_type})")
-    for photons_per_frame in (5, 10, 30, 100, 300):
-        photon_rate = pattern / pattern.sum() * photons_per_frame / exposure
-        centroids = []
-        for trial in range(500):
-            f = cam.expose(photon_rate, exposure, seed=trial)
-            centroids.append(gf.analysis.centroid(np.asarray(f)))
-        # Centroid scatter → angular error via the plate scale.
-        err_mas = np.std(centroids, axis=0).mean() * 500.0  # px → mas (0.5"/px)
-        flag = "✓" if err_mas < budget_mas else " "
-        print(f"  {photons_per_frame:4d} ph/frame → σ_c = {err_mas:6.1f} mas {flag}")
-# The eAPD's near-unity excess-noise factor (F≈1.3 vs √2) wins at the faint end:
-# it reaches the budget at fewer photons, i.e. a fainter limiting magnitude.
-```
-
-### Example 4 — Time-series transit photometry (v0.5, our own case)
-
-```python
-"""Inject a shallow transit into a light curve of frames; test detectability."""
-import numpy as np
 import getframes as gf
 
 scope = gf.Telescope(aperture_diameter_m=0.2, throughput=0.5,
                      plate_scale_arcsec_per_pixel=5.0, band=gf.Bandpass.johnson("R"))
-psf = gf.GaussianPSF(fwhm_arcsec=8.0)     # defocused, as transit photometry often is
-cam = gf.Camera.from_preset("generic_cmos", default_temperature_c=-5.0)
+scene = gf.Scene(shape=(256, 256), optics=scope, psf=gf.GaussianPSF(fwhm_arcsec=8.0),
+                 sources=[gf.PointSource(x=64, y=64, magnitude=12.0, name="target"),
+                          gf.PointSource(x=180, y=180, magnitude=11.5, name="ref")],
+                 sky=gf.Sky(surface_brightness_mag_arcsec2=20.0))
 
-n_frames, exposure = 300, 20.0
-t = np.arange(n_frames) * exposure
-depth = 0.01                              # 1% transit
-in_transit = (t > 2000) & (t < 4000)
-rel_flux = np.where(in_transit, 1 - depth, 1.0)
+# A 1% box transit between t=2000s and t=4000s, plus realistic pointing jitter.
+transit = gf.LightCurve.box(depth=0.01, t0=2000, t1=4000)
+obs = cam.observe_series(scene, exposure=20.0, n_frames=300,
+                         variability={"target": transit},
+                         jitter_arcsec=2.0, seed=0)
 
-lightcurve = []
-for i, scale in enumerate(rel_flux):
-    star = gf.PointSource(x=64, y=64, magnitude=12.0 - 2.5 * np.log10(scale))
-    ref = gf.PointSource(x=180, y=180, magnitude=11.5)   # comparison star
-    scene = gf.Scene(shape=(256, 256), optics=scope, psf=psf, sources=[star, ref],
-                     sky=gf.Sky(surface_brightness_mag_arcsec2=20.0))
-    frame = cam.observe(scene, exposure=exposure, seed=i)
-    star_flux = gf.analysis.aperture_sum(frame, (64, 64), r=12)
-    ref_flux = gf.analysis.aperture_sum(frame, (180, 180), r=12)
-    lightcurve.append(star_flux / ref_flux)   # differential photometry
-
-lc = np.array(lightcurve)
-lc /= np.median(lc[~in_transit])
-measured_depth = 1 - np.median(lc[in_transit])
-scatter = lc[~in_transit].std()
-print(f"Injected depth: {depth:.4f}")
-print(f"Measured depth: {measured_depth:.4f}")
-print(f"Out-of-transit scatter: {scatter:.4f}  →  detection S/N ≈ {measured_depth/scatter:.1f}")
+lc = [gf.analysis.aperture_sum(f, (64, 64), r=12) /
+      gf.analysis.aperture_sum(f, (180, 180), r=12) for f in obs.frames]
+# obs.truth.light_curve["target"] holds the injected signal to validate against.
 ```
+
+### C — Crowded field from a catalog (1.3)
+
+```python
+import getframes as gf
+from astropy.table import Table
+
+scene = gf.Scene(
+    shape=(2048, 2048),
+    optics=gf.Telescope(aperture_diameter_m=4.0, throughput=0.4,
+                        plate_scale_arcsec_per_pixel=0.2, band=gf.Bandpass.ab("g")),
+    psf=gf.MoffatPSF(fwhm_arcsec=0.8, beta=3.0),
+    wcs=gf.WCSInfo.tan(ra=150.1, dec=2.2, plate_scale_arcsec_per_pixel=0.2, shape=(2048, 2048)),
+)
+scene.add(gf.Catalog.from_table(Table.read("gaia.fits"), ra="ra", dec="dec", magnitude="phot_g"))
+scene.add(gf.ExtendedSource.sersic(ra=150.10, dec=2.20, magnitude=16.0, n=1.0, r_eff_arcsec=2.5))
+frame = cam.observe(scene, exposure=300.0, seed=0)
+```
+
+### D — Generate an ML training set (1.6)
+
+```python
+import getframes as gf
+
+# Raw + noise-free-truth pairs streamed to disk, float32, chunked.
+ds = gf.dataset.pairs(camera=gf.Camera.from_preset("zwo_asi2600mm"),
+                      scenes=gf.dataset.random_star_fields(n=10_000, shape=(512, 512)),
+                      exposure=60.0, dtype="float32", seed=0)
+ds.to_npz("train/")   # each item: {"raw": ADU, "truth": e-} for a denoiser
+```
+
+---
+
+## 8. Validation strategy
+
+The library's promise is accuracy, so 2.0 adds a **benchmark** suite that asserts
+physics against published behaviour, not just internal consistency:
+
+- A synthetic PTC recovers the configured gain/read-noise/full-well (have).
+- The gain stage reproduces the requested excess-noise factor `F` (have); the
+  EMCCD output-electron distribution matches the analytic Gamma form.
+- A reduced frame (1.1) recovers `Frame.truth` to the shot/read floor.
+- Aperture/PSF photometry recovers injected fluxes to within shot noise; PSF
+  kernels conserve flux (have for Gaussian/Moffat; extend to Airy/Array).
+- Radiometry: magnitude→photon-rate against hand-checked AB/Vega zero points.
+- CTI/IPC/blooming move signal by the documented amount and conserve charge.
+- Determinism across every new path (seeded reproducibility).
+
+A short "validation" doc reproduces one or two **real** detector characterisations
+(e.g. a measured EMCCD ENF curve) to build trust for quantitative use.
+
+## 9. Open decisions
+
+1. **Time-model ownership.** Does variability live on sources (a `brightness(t)`)
+   or on the `Observation` (a per-source schedule)? Leaning `Observation`-owned to
+   keep sources immutable and the scene reusable.
+2. **WCS dependency.** Catalog placement by RA/Dec needs a projection. Ship a tiny
+   built-in TAN (as 1.0's `WCSInfo` does) and make full `astropy.wcs` optional?
+3. **Spectral depth vs. scope.** True spectral flux integration edges toward a
+   spectrograph simulator. Cap it at broadband synthetic photometry (no dispersed
+   IFU/slit frames) — see non-goals.
+4. **`astropy` as core vs. extra.** Catalog/WCS/units lean on it. Keep it an extra
+   with NumPy fallbacks, or promote to core for the scene layer? *Needs a call.*
+5. **Performance ceiling.** How far to push — float32 + chunking only, or optional
+   GPU (`cupy`)? Start CPU-only; gate any GPU path behind an extra.
+
+## 10. Non-goals (scope guardrails)
+
+To keep the API "clean, small, well-documented," 2.0 will *not* attempt: full
+optical ray-tracing / Zemax-class modelling; dispersed spectrograph / IFU /
+slit frames; full radiative-transfer SED synthesis; real-time/streaming
+acquisition; or replacing `photutils`/`astropy.wcs` (we interoperate, not
+reimplement). The detector and the observation are the product; everything else
+stays a thin, optional convenience.
 
 ---
 
 ## Summary
 
-The single highest-leverage step is **0.2: the photon/signal path** (`expose`),
-because all four use cases need it. **0.3** adds the unified gain stage that makes
-EMCCD exact and brings eAPD/IR detectors online for AO. **0.4** adds the scene
-layer for astronomy. Everything is additive — `dark_frame` and the existing
-presets keep working throughout — and each phase ships an example that doubles as
-an acceptance test.
+The single highest-leverage step is **1.1: close the loop** — master frames plus a
+one-call `calibrate`, finishing the ground-truth-validation workflow the library
+was built to enable. **1.2** makes time first-class (and finally lands
+persistence), unblocking the AO and transit cases properly. **1.3** enriches scenes
+for real astronomy, **1.4–1.5** deepen detector and radiometric fidelity, and
+**1.6** unlocks scale and ML datasets. **2.0** freezes the enlarged surface with a
+validation suite and a citable paper. Everything is additive within 1.x; breaking
+changes are deprecated first and land only at the 2.0 cut.
