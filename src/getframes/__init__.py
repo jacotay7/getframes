@@ -12,6 +12,7 @@ Quick start
 
 from __future__ import annotations
 
+from . import analysis
 from .__about__ import __version__
 from .camera import Camera
 from .config import CameraConfig, SensorType
@@ -43,6 +44,7 @@ __all__ = [
     "Sky",
     "Telescope",
     "__version__",
+    "analysis",
     "available_presets",
     "load_preset",
 ]

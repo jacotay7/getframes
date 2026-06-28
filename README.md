@@ -145,7 +145,8 @@ wavefront-sensing, and transit photometry).
 - [x] **Photon/signal path** — `Camera.expose`, photoelectrons + shot noise, flats & bias *(v0.2)*
 - [x] **Unified gain stage** — exact EMCCD + eAPD/IR detectors *(v0.3)*
 - [x] **Scene layer** — sources + PSF + optics → photon maps; `Camera.observe` *(v0.4)*
-- [ ] Nonlinearity, cosmic rays, persistence, sCMOS, analysis helpers *(v0.5)*
+- [x] **Analysis helpers** — aperture photometry, centroiding, photon-transfer curve *(v0.5a)*
+- [ ] Detector realism — nonlinearity, cosmic rays, persistence, sCMOS *(v0.5b)*
 - [ ] Spectral mode: `QE(λ)`, SEDs, WCS *(v0.6)*
 
 ## Contributing

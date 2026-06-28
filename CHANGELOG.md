@@ -8,6 +8,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Analysis helpers** (`getframes.analysis`): `aperture_sum`, `centroid`, and a
+  `photon_transfer_curve` that fits gain and read noise. Pure NumPy; used by the
+  examples and handy for quick checks.
 - **Scene/optics layer** (`getframes.scene`) and `Camera.observe(scene, ...)`:
   render astronomical sources through a PSF and telescope into an incident
   photon-rate map, then expose it. New public types: `Scene`, `Telescope`,

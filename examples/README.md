@@ -25,3 +25,5 @@ pip install -e ".[examples]"
 | [`05_visualise.py`](05_visualise.py) | EMCCD dark frame and its EM-gain noise tail. |
 | [`06_photon_transfer_curve.py`](06_photon_transfer_curve.py) | Build a PTC from synthetic flats; recover gain & read noise. |
 | [`07_star_field_exposure.py`](07_star_field_exposure.py) | Render a star field; find the exposure for a target SNR. |
+| [`08_ao_limiting_magnitude.py`](08_ao_limiting_magnitude.py) | AO wavefront-sensor centroid error: EMCCD vs eAPD limiting flux. |
+| [`09_transit_photometry.py`](09_transit_photometry.py) | Inject a transit into a frame sequence; recover it by differential photometry. |

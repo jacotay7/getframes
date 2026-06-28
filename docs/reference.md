@@ -34,6 +34,12 @@
 
 ::: getframes.scene.psf
 
+## Analysis helpers
+
+::: getframes.analysis.apertures
+
+::: getframes.analysis.ptc
+
 ## Noise models
 
 ::: getframes.noise
