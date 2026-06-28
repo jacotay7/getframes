@@ -6,6 +6,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Photon/signal path** (`Camera.expose`): generate frames from an incident
+  photon rate (scalar or per-pixel map), with quantum-efficiency conversion,
+  photo-response non-uniformity (PRNU), shot noise, dark current, optional EM
+  gain, read noise, and digitisation.
+- `Camera.flat_frame` and `Camera.bias_frame` convenience wrappers.
+- `FrameTruth`: noise-free ground truth (mean electron maps) attached to frames
+  for pipeline validation; available on `Frame.truth`.
+- `noise.simulate_frame` / `noise.photo_signal_map` / `noise.frame_electrons`
+  building blocks. `noise.generate_dark_frame` is now the `photon_rate = 0` case.
+- `CameraConfig.prnu` field.
+
+### Changed
+
+- `scipy` is now a core dependency (groundwork for the scene/optics layer).
+
 ## [0.1.0] - 2026-06-27
 
 ### Added

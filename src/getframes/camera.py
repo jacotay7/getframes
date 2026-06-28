@@ -9,11 +9,13 @@ import numpy as np
 
 from . import noise
 from .config import CameraConfig
-from .frame import Frame
+from .frame import Frame, FrameTruth
 from .presets import load_preset
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
+
+    from .noise import PhotonRate
 
 
 class Camera:
@@ -155,6 +157,100 @@ class Camera:
             frame = self.dark_frame(exposure, temperature, seed=frame_seed)
             frame.metadata["frame_index"] = i
             yield frame
+
+    def expose(
+        self,
+        photon_rate: PhotonRate,
+        exposure: float,
+        temperature: float | None = None,
+        *,
+        background: PhotonRate = 0.0,
+        seed: int | None = None,
+        include_truth: bool = True,
+    ) -> Frame:
+        """Expose the sensor to an incident photon rate and return a frame.
+
+        This is the general signal path; :meth:`dark_frame`, :meth:`flat_frame`,
+        and :meth:`bias_frame` are convenience wrappers around it.
+
+        Parameters
+        ----------
+        photon_rate:
+            Incident photon rate in photons/s/pixel, as a scalar (uniform
+            illumination) or a 2-D array matching :attr:`resolution`.
+        exposure:
+            Integration time in seconds.
+        temperature:
+            Sensor temperature in degrees Celsius. Defaults to
+            :attr:`default_temperature_c`.
+        background:
+            Additive background (sky/thermal) photon rate in photons/s/pixel.
+        seed:
+            If given, use a fresh generator seeded with this value for a fully
+            reproducible frame.
+        include_truth:
+            If ``True`` (default), attach the noise-free ground truth to the
+            returned :class:`~getframes.frame.Frame` for pipeline validation.
+        """
+        temp = self.default_temperature_c if temperature is None else temperature
+        rng = self._resolve_rng(seed)
+        result = noise.simulate_frame(
+            self.config,
+            photon_rate,
+            exposure,
+            temperature_c=temp,
+            background_photon_rate=background,
+            rng=rng,
+        )
+        truth = (
+            FrameTruth(
+                mean_electrons=result.mean_photoelectrons + result.mean_dark_electrons,
+                mean_photoelectrons=result.mean_photoelectrons,
+                photon_rate=result.photon_rate,
+            )
+            if include_truth
+            else None
+        )
+        metadata = self._metadata("light", exposure, temp, seed)
+        return Frame(data=result.adu, metadata=metadata, truth=truth)
+
+    def flat_frame(
+        self,
+        photon_rate: PhotonRate,
+        exposure: float,
+        temperature: float | None = None,
+        *,
+        background: PhotonRate = 0.0,
+        seed: int | None = None,
+        include_truth: bool = True,
+    ) -> Frame:
+        """A uniformly (or per-pixel) illuminated flat-field frame.
+
+        Equivalent to :meth:`expose`; provided as a named entry point for
+        flat-field/photon-transfer workflows. Pass a scalar ``photon_rate`` for a
+        uniform flat.
+        """
+        frame = self.expose(
+            photon_rate,
+            exposure,
+            temperature,
+            background=background,
+            seed=seed,
+            include_truth=include_truth,
+        )
+        frame.metadata["frame_type"] = "flat"
+        return frame
+
+    def bias_frame(
+        self,
+        temperature: float | None = None,
+        *,
+        seed: int | None = None,
+    ) -> Frame:
+        """A zero-exposure bias frame (bias pedestal + read noise only)."""
+        frame = self.expose(0.0, 0.0, temperature, seed=seed, include_truth=False)
+        frame.metadata["frame_type"] = "bias"
+        return frame
 
     def _metadata(
         self, frame_type: str, exposure: float, temperature: float, seed: int | None

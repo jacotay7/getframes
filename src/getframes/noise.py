@@ -5,21 +5,25 @@ The models here are deliberately small, composable, and well-documented so that
 the physics is auditable. Each function takes a configuration, exposure, and a
 seeded :class:`numpy.random.Generator`, and returns electrons or ADU.
 
-Dark-frame signal chain
------------------------
-1. Mean dark signal per pixel: ``D(T) * t_exp`` electrons (temperature-scaled).
-2. Fixed-pattern non-uniformity (DSNU) and hot pixels modulate the mean per pixel.
-3. Shot noise: the dark electrons are Poisson-distributed about that mean.
+Signal chain (:func:`simulate_frame`)
+-------------------------------------
+1. Mean photo signal: ``(photon_rate + background) * t_exp * QE`` electrons,
+   modulated per pixel by photo-response non-uniformity (PRNU).
+2. Mean dark signal: ``D(T) * t_exp`` electrons (temperature-scaled), modulated by
+   dark-signal non-uniformity (DSNU) and hot pixels.
+3. Shot noise: the total electrons are Poisson-distributed about that mean.
 4. Clock-induced charge (EMCCD) adds a small Poisson term.
 5. EM register multiplication (EMCCD) with its stochastic excess noise.
 6. Read noise: Gaussian in electrons, added at the output amplifier.
 7. Conversion to ADU via gain, plus the bias pedestal.
 8. Saturation at full well / ADC range and quantisation to integers.
+
+A dark frame is simply the special case ``photon_rate = 0``.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 import numpy as np
 
@@ -27,6 +31,8 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from .config import CameraConfig
+
+    PhotonRate = float | NDArray[np.float64]
 
 
 def dark_signal_map(
@@ -57,6 +63,40 @@ def dark_signal_map(
         signal[hot_mask] *= config.hot_pixel_factor
 
     return signal
+
+
+def photo_signal_map(
+    config: CameraConfig,
+    photon_rate: PhotonRate,
+    exposure_s: float,
+    background_photon_rate: PhotonRate,
+    rng: np.random.Generator,
+) -> NDArray[np.float64]:
+    """Per-pixel *mean* photo-generated signal in electrons (noise-free).
+
+    Converts an incident photon rate (photons/s/pixel, plus an additive
+    background) to photoelectrons via the quantum efficiency, then imprints a
+    fixed multiplicative PRNU pattern. ``photon_rate`` may be a scalar (uniform
+    illumination) or a 2-D array matching the sensor resolution.
+    """
+    height, width = config.resolution
+    rate = np.asarray(photon_rate, dtype=np.float64)
+    background = np.asarray(background_photon_rate, dtype=np.float64)
+    if rate.ndim not in (0, 2) or background.ndim not in (0, 2):
+        raise ValueError("photon_rate/background must be a scalar or a 2-D array.")
+
+    mean_photo = np.zeros((height, width), dtype=np.float64)
+    # Broadcasts a scalar or an (h, w) array; a mismatched array shape raises here.
+    mean_photo += (rate + background) * exposure_s * config.quantum_efficiency
+
+    # Photo-response non-uniformity: log-normal multiplier with unit mean, applied
+    # only where there is light (keeps the dark path's random stream untouched).
+    if config.prnu > 0 and np.any(mean_photo > 0):
+        sigma = config.prnu
+        prnu = rng.lognormal(mean=-0.5 * sigma**2, sigma=sigma, size=mean_photo.shape)
+        mean_photo *= prnu
+
+    return mean_photo
 
 
 def apply_em_gain(
@@ -103,18 +143,26 @@ def digitize(
     return adu.astype(np.uint32)
 
 
-def dark_frame_electrons(
+class SimulationResult(NamedTuple):
+    """The output of :func:`simulate_frame`: the digitised frame plus ground truth."""
+
+    adu: NDArray[np.uint32]
+    mean_photoelectrons: NDArray[np.float64]
+    mean_dark_electrons: NDArray[np.float64]
+    photon_rate: PhotonRate
+
+
+def frame_electrons(
     config: CameraConfig,
-    exposure_s: float,
-    temperature_c: float,
+    mean_electrons: NDArray[np.float64],
     rng: np.random.Generator,
 ) -> NDArray[np.float64]:
-    """Generate the electron-domain dark frame prior to digitisation.
+    """Apply shot noise, clock-induced charge, and any gain stage to a mean map.
 
-    Combines mean dark signal, shot noise, clock-induced charge, and EM gain.
+    Takes the noise-free expected electrons per pixel and returns a realised
+    electron frame prior to read noise and digitisation.
     """
-    mean_signal = dark_signal_map(config, exposure_s, temperature_c, rng)
-    electrons = rng.poisson(mean_signal).astype(np.float64)
+    electrons = rng.poisson(mean_electrons).astype(np.float64)
 
     if config.clock_induced_charge_e > 0:
         electrons += rng.poisson(config.clock_induced_charge_e, size=electrons.shape)
@@ -125,6 +173,46 @@ def dark_frame_electrons(
     return electrons
 
 
+def simulate_frame(
+    config: CameraConfig,
+    photon_rate: PhotonRate,
+    exposure_s: float,
+    *,
+    temperature_c: float,
+    background_photon_rate: PhotonRate = 0.0,
+    rng: np.random.Generator | None = None,
+    seed: int | None = None,
+) -> SimulationResult:
+    """Simulate one frame end-to-end, returning ADU and the noise-free truth.
+
+    Parameters
+    ----------
+    config:
+        The detector configuration.
+    photon_rate:
+        Incident photon rate in photons/s/pixel, as a scalar (uniform) or a 2-D
+        array. Use ``0.0`` for a dark/bias frame.
+    exposure_s:
+        Integration time in seconds (``0`` for a bias frame).
+    temperature_c:
+        Sensor temperature in degrees Celsius.
+    background_photon_rate:
+        Additive background (sky/thermal) photon rate in photons/s/pixel.
+    rng, seed:
+        Provide an existing generator, or a seed to build a fresh one.
+    """
+    if exposure_s < 0:
+        raise ValueError("exposure_s must be non-negative.")
+    if rng is None:
+        rng = np.random.default_rng(seed)
+
+    mean_photo = photo_signal_map(config, photon_rate, exposure_s, background_photon_rate, rng)
+    mean_dark = dark_signal_map(config, exposure_s, temperature_c, rng)
+    electrons = frame_electrons(config, mean_photo + mean_dark, rng)
+    adu = digitize(electrons, config, rng)
+    return SimulationResult(adu, mean_photo, mean_dark, photon_rate)
+
+
 def generate_dark_frame(
     config: CameraConfig,
     exposure_s: float,
@@ -132,19 +220,31 @@ def generate_dark_frame(
     rng: np.random.Generator | None = None,
     seed: int | None = None,
 ) -> NDArray[np.uint32]:
-    """End-to-end dark frame in ADU for ``config`` at the given exposure/temperature."""
-    if exposure_s < 0:
-        raise ValueError("exposure_s must be non-negative.")
-    if rng is None:
-        rng = np.random.default_rng(seed)
-    electrons = dark_frame_electrons(config, exposure_s, temperature_c, rng)
-    return digitize(electrons, config, rng)
+    """End-to-end dark frame in ADU (the ``photon_rate = 0`` case of ``simulate_frame``)."""
+    return simulate_frame(
+        config, 0.0, exposure_s, temperature_c=temperature_c, rng=rng, seed=seed
+    ).adu
+
+
+def dark_frame_electrons(
+    config: CameraConfig,
+    exposure_s: float,
+    temperature_c: float,
+    rng: np.random.Generator,
+) -> NDArray[np.float64]:
+    """Electron-domain dark frame prior to digitisation (kept for convenience)."""
+    mean_dark = dark_signal_map(config, exposure_s, temperature_c, rng)
+    return frame_electrons(config, mean_dark, rng)
 
 
 __all__ = [
+    "SimulationResult",
     "apply_em_gain",
     "dark_frame_electrons",
     "dark_signal_map",
     "digitize",
+    "frame_electrons",
     "generate_dark_frame",
+    "photo_signal_map",
+    "simulate_frame",
 ]

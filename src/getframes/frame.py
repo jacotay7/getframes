@@ -13,6 +13,30 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
+class FrameTruth:
+    """Noise-free ground truth a :class:`Frame` was generated from.
+
+    Useful for validating analysis pipelines against exactly what went in. All
+    arrays are in electrons unless noted, shaped like the frame.
+
+    Attributes
+    ----------
+    mean_electrons:
+        Noise-free total signal (photo + dark) per pixel, in electrons. This is
+        the expectation value before shot noise, gain, and read noise.
+    mean_photoelectrons:
+        Noise-free photo signal per pixel, in electrons (i.e. excluding dark).
+    photon_rate:
+        The incident photon rate the frame was exposed to, in photons/s/pixel, as
+        provided by the caller (a scalar for uniform illumination, else an array).
+    """
+
+    mean_electrons: NDArray[np.float64]
+    mean_photoelectrons: NDArray[np.float64]
+    photon_rate: NDArray[np.float64] | float
+
+
+@dataclass(frozen=True)
 class Frame:
     """A single simulated image plus the metadata describing how it was made.
 
@@ -26,10 +50,14 @@ class Frame:
     metadata:
         Free-form dictionary describing the simulation (camera name, exposure,
         temperature, frame type, etc.). Suitable for writing to a FITS header.
+    truth:
+        Optional :class:`FrameTruth` holding the noise-free signal the frame was
+        built from, for ground-truth comparisons. ``None`` if not requested.
     """
 
     data: NDArray[np.floating[Any] | np.integer[Any]]
     metadata: dict[str, Any] = field(default_factory=dict)
+    truth: FrameTruth | None = None
 
     @property
     def shape(self) -> tuple[int, ...]:

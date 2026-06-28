@@ -64,6 +64,11 @@ class CameraConfig:
         Electronic offset (pedestal) added to every pixel, in ADU.
     read_noise_e:
         RMS read noise in electrons.
+    prnu:
+        Photo-response non-uniformity: fractional pixel-to-pixel variation in
+        sensitivity (e.g. ``0.01`` for 1% RMS). Imprints a fixed multiplicative
+        pattern on the *photo* signal (not the dark signal). Ignored for dark
+        frames, where there is no light.
     dark_current_e_per_s:
         Dark current in electrons per pixel per second, specified at
         ``dark_current_ref_temp_c``.
@@ -99,6 +104,7 @@ class CameraConfig:
     bias_offset_adu: float
     read_noise_e: float
     dark_current_e_per_s: float
+    prnu: float = 0.0
     dark_current_ref_temp_c: float = 20.0
     dark_current_doubling_temp_c: float = 6.3
     em_gain: float = 1.0
@@ -128,6 +134,8 @@ class CameraConfig:
             raise ValueError("gain_e_per_adu must be positive.")
         if self.read_noise_e < 0:
             raise ValueError("read_noise_e must be non-negative.")
+        if self.prnu < 0:
+            raise ValueError("prnu must be non-negative.")
         if self.dark_current_e_per_s < 0:
             raise ValueError("dark_current_e_per_s must be non-negative.")
         if self.dark_current_doubling_temp_c <= 0:

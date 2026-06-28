@@ -14,3 +14,4 @@ pip install -e ".[examples]"
 | [`03_master_dark.py`](03_master_dark.py) | Stack a dark series into a master dark. |
 | [`04_browse_presets.py`](04_browse_presets.py) | List the bundled preset library. |
 | [`05_visualise.py`](05_visualise.py) | Display a dark frame and histogram with matplotlib. |
+| [`06_photon_transfer_curve.py`](06_photon_transfer_curve.py) | Build a PTC from synthetic flats and recover gain & read noise. |

@@ -15,13 +15,14 @@ from __future__ import annotations
 from .__about__ import __version__
 from .camera import Camera
 from .config import CameraConfig, SensorType
-from .frame import Frame
+from .frame import Frame, FrameTruth
 from .presets import available_presets, load_preset
 
 __all__ = [
     "Camera",
     "CameraConfig",
     "Frame",
+    "FrameTruth",
     "SensorType",
     "__version__",
     "available_presets",

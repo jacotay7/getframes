@@ -29,6 +29,7 @@ nav:
       - Getting started: guides/getting-started.md
       - The noise model: guides/noise-model.md
       - Camera presets: guides/presets.md
+  - Roadmap: roadmap.md
   - API reference: reference.md
 
 plugins:
