@@ -1,0 +1,21 @@
+# A plain scientific CMOS (sCMOS) for testing and teaching.
+name = "Generic sCMOS"
+sensor_type = "SCMOS"
+resolution = [2048, 2048]
+pixel_size_um = 6.5
+quantum_efficiency = 0.82
+full_well_e = 30000.0
+bit_depth = 16
+gain_e_per_adu = 0.5
+bias_offset_adu = 100.0
+read_noise_e = 1.6                    # median read noise
+read_noise_nonuniformity = 0.3        # per-pixel spread
+dark_current_e_per_s = 0.5
+dark_current_ref_temp_c = -10.0
+dark_current_doubling_temp_c = 6.0
+prnu = 0.01
+nonlinearity = 0.01
+dark_current_nonuniformity = 0.03
+hot_pixel_fraction = 0.001
+hot_pixel_factor = 130.0
+notes = "Idealised sCMOS demonstrating per-pixel read noise and mild nonlinearity."

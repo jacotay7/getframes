@@ -38,10 +38,12 @@ cam = gf.Camera(warmer)
 | `andor_ixon_ultra_888` | EMCCD | Single-photon-sensitive EMCCD |
 | `leonardo_saphira` | EAPD | HgCdTe avalanche IR array (AO wavefront sensing) |
 | `zwo_asi2600mm` | CMOS | Sony IMX571 cooled CMOS |
+| `hamamatsu_orca_fusion` | sCMOS | Back-thinned sCMOS with per-pixel read noise |
 | `generic_ccd` | CCD | Idealised CCD for teaching/testing |
 | `generic_cmos` | CMOS | Idealised uncooled CMOS |
 | `generic_emccd` | EMCCD | Idealised EMCCD |
 | `generic_eapd` | EAPD | Idealised eAPD (avalanche gain, low excess noise) |
+| `generic_scmos` | sCMOS | Idealised sCMOS (per-pixel read noise, nonlinearity) |
 
 !!! warning "Verify before quantitative use"
     Preset values are representative of published specifications but are not a

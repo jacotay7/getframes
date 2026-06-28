@@ -1,0 +1,25 @@
+# Hamamatsu ORCA-Fusion BT — back-thinned scientific CMOS (sCMOS).
+# Representative parameters; sCMOS read noise varies pixel-to-pixel, captured here
+# by read_noise_nonuniformity rather than a single RMS.
+name = "Hamamatsu ORCA-Fusion BT"
+manufacturer = "Hamamatsu"
+model = "ORCA-Fusion BT (C15440)"
+sensor_type = "SCMOS"
+resolution = [2304, 2304]
+pixel_size_um = 6.5
+quantum_efficiency = 0.95
+full_well_e = 18000.0
+bit_depth = 16
+gain_e_per_adu = 0.3
+bias_offset_adu = 100.0
+read_noise_e = 1.4                    # median; see spread below
+read_noise_nonuniformity = 0.35       # per-pixel read-noise spread (sCMOS)
+dark_current_e_per_s = 0.2
+dark_current_ref_temp_c = -10.0
+dark_current_doubling_temp_c = 6.0
+prnu = 0.01
+nonlinearity = 0.01
+dark_current_nonuniformity = 0.02
+hot_pixel_fraction = 0.0005
+hot_pixel_factor = 120.0
+notes = "Back-thinned sCMOS; very high QE and low median read noise with a per-pixel spread."

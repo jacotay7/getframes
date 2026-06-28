@@ -113,7 +113,8 @@ preset_info()         # rich descriptors for each preset
 | `andor_ixon_ultra_888` | EMCCD | Single-photon-sensitive EMCCD |
 | `leonardo_saphira` | EAPD | HgCdTe avalanche IR array (AO wavefront sensing) |
 | `zwo_asi2600mm` | CMOS | Sony IMX571 cooled CMOS |
-| `generic_ccd` / `generic_cmos` / `generic_emccd` / `generic_eapd` | — | Idealised references for teaching/testing |
+| `hamamatsu_orca_fusion` | sCMOS | Back-thinned sCMOS with per-pixel read noise |
+| `generic_ccd` / `generic_cmos` / `generic_emccd` / `generic_eapd` / `generic_scmos` | — | Idealised references for teaching/testing |
 
 ## How the dark-frame model works
 
@@ -146,7 +147,8 @@ wavefront-sensing, and transit photometry).
 - [x] **Unified gain stage** — exact EMCCD + eAPD/IR detectors *(v0.3)*
 - [x] **Scene layer** — sources + PSF + optics → photon maps; `Camera.observe` *(v0.4)*
 - [x] **Analysis helpers** — aperture photometry, centroiding, photon-transfer curve *(v0.5a)*
-- [ ] Detector realism — nonlinearity, cosmic rays, persistence, sCMOS *(v0.5b)*
+- [x] **Detector realism** — nonlinearity, cosmic rays, sCMOS per-pixel read noise *(v0.5b)*
+- [ ] Persistence/latent images (needs cross-frame state)
 - [ ] Spectral mode: `QE(λ)`, SEDs, WCS *(v0.6)*
 
 ## Contributing

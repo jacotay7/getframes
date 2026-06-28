@@ -21,6 +21,7 @@ class SensorType(str, Enum):
     CMOS = "CMOS"
     EMCCD = "EMCCD"
     EAPD = "EAPD"  # electron-avalanche photodiode (e.g. SAPHIRA IR arrays)
+    SCMOS = "SCMOS"  # scientific CMOS (per-pixel read noise, rolling shutter)
 
     @classmethod
     def coerce(cls, value: SensorType | str) -> SensorType:
@@ -66,7 +67,21 @@ class CameraConfig:
     bias_offset_adu:
         Electronic offset (pedestal) added to every pixel, in ADU.
     read_noise_e:
-        RMS read noise in electrons.
+        RMS read noise in electrons. For sCMOS this is the *median*; see
+        ``read_noise_nonuniformity``.
+    read_noise_nonuniformity:
+        Fractional pixel-to-pixel spread of the read-noise RMS (e.g. ``0.3`` for a
+        30% log-normal spread). Models the per-pixel read-noise distribution of
+        sCMOS sensors. ``0`` gives a single uniform read noise.
+    nonlinearity:
+        Fractional signal compression at full well, in ``[0, 0.5)``. The collected
+        charge is bent as ``q -> q * (1 - nonlinearity * q / full_well_e)``, so a
+        pixel at full well reads ``nonlinearity`` fraction low. ``0`` is perfectly
+        linear.
+    cosmic_ray_rate_per_cm2_s:
+        Cosmic-ray hit rate in events per cm^2 per second (sea level is ~5). The
+        number of hits scales with sensor area and exposure; each deposits a burst
+        of charge in a random pixel.
     prnu:
         Photo-response non-uniformity: fractional pixel-to-pixel variation in
         sensitivity (e.g. ``0.01`` for 1% RMS). Imprints a fixed multiplicative
@@ -116,6 +131,9 @@ class CameraConfig:
     read_noise_e: float
     dark_current_e_per_s: float
     prnu: float = 0.0
+    read_noise_nonuniformity: float = 0.0
+    nonlinearity: float = 0.0
+    cosmic_ray_rate_per_cm2_s: float = 0.0
     dark_current_ref_temp_c: float = 20.0
     dark_current_doubling_temp_c: float = 6.3
     em_gain: float = 1.0
@@ -148,6 +166,12 @@ class CameraConfig:
             raise ValueError("read_noise_e must be non-negative.")
         if self.prnu < 0:
             raise ValueError("prnu must be non-negative.")
+        if self.read_noise_nonuniformity < 0:
+            raise ValueError("read_noise_nonuniformity must be non-negative.")
+        if not 0.0 <= self.nonlinearity < 0.5:
+            raise ValueError("nonlinearity must be in [0, 0.5).")
+        if self.cosmic_ray_rate_per_cm2_s < 0:
+            raise ValueError("cosmic_ray_rate_per_cm2_s must be non-negative.")
         if self.dark_current_e_per_s < 0:
             raise ValueError("dark_current_e_per_s must be non-negative.")
         if self.dark_current_doubling_temp_c <= 0:

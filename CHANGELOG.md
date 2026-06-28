@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Detector-realism effects**, all off by default: nonlinearity (`nonlinearity`),
+  cosmic rays (`cosmic_ray_rate_per_cm2_s`), and per-pixel sCMOS read noise
+  (`read_noise_nonuniformity`). New `SensorType.SCMOS` and presets
+  `hamamatsu_orca_fusion` and `generic_scmos`.
 - **Analysis helpers** (`getframes.analysis`): `aperture_sum`, `centroid`, and a
   `photon_transfer_curve` that fits gain and read noise. Pure NumPy; used by the
   examples and handy for quick checks.

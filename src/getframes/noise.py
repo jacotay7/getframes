@@ -152,6 +152,50 @@ def apply_em_gain(
     return apply_gain_stage(electrons, em_gain, np.sqrt(2.0), rng)
 
 
+def apply_nonlinearity(
+    electrons: NDArray[np.float64],
+    config: CameraConfig,
+) -> NDArray[np.float64]:
+    """Bend the charge response near full well (detector nonlinearity).
+
+    Applies ``q -> q * (1 - nonlinearity * q / full_well)``, a smooth, monotonic
+    compression so a pixel near full well reads slightly low. Deterministic (no
+    randomness).
+    """
+    if config.nonlinearity <= 0:
+        return electrons
+    factor = 1.0 - config.nonlinearity * np.clip(electrons, 0.0, None) / config.full_well_e
+    return electrons * np.clip(factor, 0.0, None)
+
+
+def add_cosmic_rays(
+    electrons: NDArray[np.float64],
+    config: CameraConfig,
+    exposure_s: float,
+    rng: np.random.Generator,
+) -> NDArray[np.float64]:
+    """Deposit cosmic-ray charge bursts into random pixels.
+
+    The number of hits is Poisson with mean ``rate * area * exposure``; each hit
+    drops a burst of order ten thousand electrons into one pixel. A simple
+    single-pixel model --- enough to populate long darks with the characteristic
+    bright spots that calibration pipelines must reject.
+    """
+    height, width = electrons.shape
+    pixel_cm = config.pixel_size_um * 1e-4
+    area_cm2 = height * width * pixel_cm**2
+    expected = config.cosmic_ray_rate_per_cm2_s * area_cm2 * exposure_s
+    n_hits = int(rng.poisson(expected))
+    if n_hits == 0:
+        return electrons
+    ys = rng.integers(0, height, n_hits)
+    xs = rng.integers(0, width, n_hits)
+    # Charge per hit: a broad distribution centred on ~10,000 e-.
+    charges = rng.gamma(shape=2.0, scale=5000.0, size=n_hits)
+    np.add.at(electrons, (ys, xs), charges)
+    return electrons
+
+
 def digitize(
     electrons: NDArray[np.float64],
     config: CameraConfig,
@@ -159,16 +203,23 @@ def digitize(
 ) -> NDArray[np.uint32]:
     """Add read noise, convert electrons to ADU, then saturate and quantise.
 
-    Read noise is referenced to the sensor output amplifier. For an EMCCD the
-    multiplied electrons are divided by ``em_gain`` worth of conversion implicitly
-    through ``gain_e_per_adu`` (the supplied gain is the system gain at the ADC).
+    Read noise is referenced to the sensor output amplifier. When
+    ``read_noise_nonuniformity`` is set (sCMOS), each pixel gets its own read-noise
+    RMS drawn from a log-normal distribution about ``read_noise_e``.
     """
     signal = np.clip(electrons, 0.0, None)
     signal = np.minimum(signal, config.full_well_e)
 
     # Read noise in electrons, added at the amplifier.
     if config.read_noise_e > 0:
-        signal = signal + rng.normal(0.0, config.read_noise_e, size=signal.shape)
+        if config.read_noise_nonuniformity > 0:
+            spread = config.read_noise_nonuniformity
+            sigma_map = config.read_noise_e * rng.lognormal(
+                mean=-0.5 * spread**2, sigma=spread, size=signal.shape
+            )
+            signal = signal + rng.standard_normal(signal.shape) * sigma_map
+        else:
+            signal = signal + rng.normal(0.0, config.read_noise_e, size=signal.shape)
 
     adu = signal / config.gain_e_per_adu + config.bias_offset_adu
     adu = np.clip(np.round(adu), 0, config.max_adu)
@@ -188,16 +239,24 @@ def frame_electrons(
     config: CameraConfig,
     mean_electrons: NDArray[np.float64],
     rng: np.random.Generator,
+    exposure_s: float = 0.0,
 ) -> NDArray[np.float64]:
-    """Apply shot noise, clock-induced charge, and any gain stage to a mean map.
+    """Apply shot noise, CIC, cosmic rays, nonlinearity, and any gain stage.
 
     Takes the noise-free expected electrons per pixel and returns a realised
-    electron frame prior to read noise and digitisation.
+    electron frame prior to read noise and digitisation. ``exposure_s`` is needed
+    only to scale the cosmic-ray rate.
     """
     electrons = rng.poisson(mean_electrons).astype(np.float64)
 
     if config.clock_induced_charge_e > 0:
         electrons += rng.poisson(config.clock_induced_charge_e, size=electrons.shape)
+
+    if config.cosmic_ray_rate_per_cm2_s > 0 and exposure_s > 0:
+        electrons = add_cosmic_rays(electrons, config, exposure_s, rng)
+
+    if config.nonlinearity > 0:
+        electrons = apply_nonlinearity(electrons, config)
 
     if config.has_gain_stage:
         electrons = apply_gain_stage(
@@ -242,7 +301,7 @@ def simulate_frame(
 
     mean_photo = photo_signal_map(config, photon_rate, exposure_s, background_photon_rate, rng)
     mean_dark = dark_signal_map(config, exposure_s, temperature_c, rng)
-    electrons = frame_electrons(config, mean_photo + mean_dark, rng)
+    electrons = frame_electrons(config, mean_photo + mean_dark, rng, exposure_s)
     adu = digitize(electrons, config, rng)
     return SimulationResult(adu, mean_photo, mean_dark, photon_rate)
 
@@ -268,13 +327,15 @@ def dark_frame_electrons(
 ) -> NDArray[np.float64]:
     """Electron-domain dark frame prior to digitisation (kept for convenience)."""
     mean_dark = dark_signal_map(config, exposure_s, temperature_c, rng)
-    return frame_electrons(config, mean_dark, rng)
+    return frame_electrons(config, mean_dark, rng, exposure_s)
 
 
 __all__ = [
     "SimulationResult",
+    "add_cosmic_rays",
     "apply_em_gain",
     "apply_gain_stage",
+    "apply_nonlinearity",
     "dark_frame_electrons",
     "dark_signal_map",
     "digitize",

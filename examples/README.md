@@ -27,3 +27,4 @@ pip install -e ".[examples]"
 | [`07_star_field_exposure.py`](07_star_field_exposure.py) | Render a star field; find the exposure for a target SNR. |
 | [`08_ao_limiting_magnitude.py`](08_ao_limiting_magnitude.py) | AO wavefront-sensor centroid error: EMCCD vs eAPD limiting flux. |
 | [`09_transit_photometry.py`](09_transit_photometry.py) | Inject a transit into a frame sequence; recover it by differential photometry. |
+| [`10_detector_realism.py`](10_detector_realism.py) | Visualise cosmic-ray hits and detector nonlinearity. |
