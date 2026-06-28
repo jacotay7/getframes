@@ -17,6 +17,7 @@ gf.Frame, gf.FrameTruth
 gf.load_preset, gf.available_presets
 gf.Scene, gf.Telescope, gf.Bandpass, gf.PointSource, gf.Sky, gf.WCSInfo
 gf.PSF, gf.GaussianPSF, gf.MoffatPSF
+gf.LightCurve, gf.Observation, gf.ObservationTruth, gf.Pointing
 gf.QE, gf.SED, gf.Spectrum, gf.SpectralBandpass
 gf.analysis.aperture_sum, gf.analysis.centroid, gf.analysis.photon_transfer_curve
 ```

@@ -31,6 +31,7 @@ nav:
       - The noise model: guides/noise-model.md
       - Calibration & ground truth: guides/calibration.md
       - Observing scenes: guides/scenes.md
+      - Time series & observations: guides/time-series.md
       - Spectral mode: guides/spectral.md
       - Camera presets: guides/presets.md
   - API reference: reference.md

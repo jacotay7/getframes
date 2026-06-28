@@ -12,13 +12,14 @@ from .optics import Telescope
 from .photometry import Bandpass
 from .psf import PSF, GaussianPSF, MoffatPSF
 from .scene import Scene
-from .sources import PointSource, Sky
+from .sources import LightCurve, PointSource, Sky
 from .wcs import WCSInfo
 
 __all__ = [
     "PSF",
     "Bandpass",
     "GaussianPSF",
+    "LightCurve",
     "MoffatPSF",
     "PointSource",
     "Scene",

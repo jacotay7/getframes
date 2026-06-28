@@ -306,6 +306,7 @@ def simulate_frame(
     temperature_c: float,
     background_photon_rate: PhotonRate = 0.0,
     quantum_efficiency: float | None = None,
+    extra_electrons: PhotonRate = 0.0,
     rng: np.random.Generator | None = None,
     seed: int | None = None,
 ) -> SimulationResult:
@@ -327,6 +328,11 @@ def simulate_frame(
     quantum_efficiency:
         Overrides ``config.quantum_efficiency`` for the photon-to-electron step
         (used by spectral mode with a pre-converted electron map and ``1.0``).
+    extra_electrons:
+        Additive noise-free signal already in electrons (scalar or 2-D array),
+        injected before shot noise and the gain stage. Used to carry latent charge
+        from image persistence across the frames of an observation; it is real
+        charge in the well, so it picks up shot noise and any EM/avalanche gain.
     rng, seed:
         Provide an existing generator, or a seed to build a fresh one.
     """
@@ -339,7 +345,8 @@ def simulate_frame(
         config, photon_rate, exposure_s, background_photon_rate, quantum_efficiency
     )
     mean_dark = dark_signal_map(config, exposure_s, temperature_c)
-    electrons = frame_electrons(config, mean_photo + mean_dark, rng, exposure_s)
+    mean_total = mean_photo + mean_dark + np.asarray(extra_electrons, dtype=np.float64)
+    electrons = frame_electrons(config, mean_total, rng, exposure_s)
     adu = digitize(electrons, config, rng)
     return SimulationResult(adu, mean_photo, mean_dark, photon_rate)
 

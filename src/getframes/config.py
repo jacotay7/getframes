@@ -116,6 +116,16 @@ class CameraConfig:
     clock_induced_charge_e:
         Clock-induced charge (spurious charge) in electrons per pixel per frame.
         Relevant mainly for EMCCD.
+    persistence_fraction:
+        Fraction of a frame's collected charge captured into traps as a latent
+        image (image persistence), in ``[0, 1]``. Relevant for IR arrays (eAPD).
+        The trapped charge is released into subsequent frames of an
+        :class:`~getframes.observation.Observation` (it needs the cross-frame state
+        that :meth:`Camera.observe_series` provides). ``0`` disables persistence.
+    persistence_decay:
+        Fraction of the trapped charge released each subsequent frame, in
+        ``[0, 1]``. ``1`` dumps all latent charge into the very next frame; smaller
+        values give a slowly fading ghost over several frames.
     dark_current_nonuniformity:
         Fractional pixel-to-pixel dark-signal non-uniformity (DSNU), e.g. ``0.05``
         for 5% RMS. Models fixed-pattern structure in the dark signal.
@@ -155,6 +165,8 @@ class CameraConfig:
     em_gain: float = 1.0
     excess_noise_factor: float | None = None
     clock_induced_charge_e: float = 0.0
+    persistence_fraction: float = 0.0
+    persistence_decay: float = 0.5
     dark_current_nonuniformity: float = 0.0
     hot_pixel_fraction: float = 0.0
     hot_pixel_factor: float = 100.0
@@ -201,6 +213,10 @@ class CameraConfig:
             raise ValueError("full_well_e must be positive.")
         if not 0.0 <= self.hot_pixel_fraction <= 1.0:
             raise ValueError("hot_pixel_fraction must be in [0, 1].")
+        if not 0.0 <= self.persistence_fraction <= 1.0:
+            raise ValueError("persistence_fraction must be in [0, 1].")
+        if not 0.0 <= self.persistence_decay <= 1.0:
+            raise ValueError("persistence_decay must be in [0, 1].")
         if self.qe_curve is not None and not isinstance(self.qe_curve, QE):
             raise ValueError("qe_curve must be a getframes.spectral.QE instance or None.")
 

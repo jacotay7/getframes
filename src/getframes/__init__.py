@@ -18,11 +18,13 @@ from .calibrate import calibrate, combine
 from .camera import Camera
 from .config import CameraConfig, SensorType
 from .frame import Frame, FrameTruth
+from .observation import Observation, ObservationTruth, Pointing
 from .presets import available_presets, load_preset
 from .scene import (
     PSF,
     Bandpass,
     GaussianPSF,
+    LightCurve,
     MoffatPSF,
     PointSource,
     Scene,
@@ -42,8 +44,12 @@ __all__ = [
     "Frame",
     "FrameTruth",
     "GaussianPSF",
+    "LightCurve",
     "MoffatPSF",
+    "Observation",
+    "ObservationTruth",
     "PointSource",
+    "Pointing",
     "Scene",
     "SensorType",
     "Sky",

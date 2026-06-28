@@ -42,6 +42,16 @@
 
 ::: getframes.scene.psf
 
+## Time series
+
+::: getframes.scene.sources.LightCurve
+
+::: getframes.observation.Observation
+
+::: getframes.observation.ObservationTruth
+
+::: getframes.observation.Pointing
+
 ## Spectral mode
 
 ::: getframes.spectral

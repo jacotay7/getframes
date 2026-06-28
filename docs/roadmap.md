@@ -119,15 +119,15 @@ src/getframes/
 
 ## 5. Phased plan
 
-| Version | Theme | Ships | Unblocks |
-| --- | --- | --- | --- |
-| **1.1** | Close the loop | master bias/dark/flat builders, `calibrate()`, `expose_series`/`observe_series`, richer FITS I/O + config save/load | the validation workflow for **all 4** |
-| **1.2** | Add time | `Observation` time-series driver, time-varying source brightness, pointing jitter / drift / dither, image motion; **persistence/latent images** | **#3, #4** |
-| **1.3** | Enrich scenes | `ExtendedSource` (Sersic/array), `UniformIllumination`, `Catalog.from_table` with RA/Dec→pixel, `AiryPSF`/`ArrayPSF`, elliptical PSF | **#2** |
-| **1.4** | Detector depth | CTI, blooming/bleed, IPC, kTC/reset noise, multi-amplifier readout, cosmic-ray tracks, defect/bad-column maps, structured bias, polynomial nonlinearity | accuracy |
-| **1.5** | Radiometry & IR | AB system, ugriz/Gaia/2MASS bands, transmission-product loading, extinction, true spectral flux integration, **IR thermal background + glow** | quantitative photometry, honest IR |
-| **1.6** | Scale & datasets | float32 path, chunked/vectorised rendering, `dataset` generator for raw+truth pairs at scale, a `getframes` CLI, benchmarks | ML training data, large detectors |
-| **2.0** | Stability | promote new APIs to stable, land deprecated breaking changes, validation/benchmark suite vs. published characterisations, JOSS paper + citation, full docs | — |
+| ✓ | Version | Theme | Ships | Unblocks |
+| --- | --- | --- | --- | --- |
+| ✅ | **1.1** | Close the loop | master bias/dark/flat builders, `calibrate()`, `expose_series`/`observe_series`, richer FITS I/O + config save/load | the validation workflow for **all 4** |
+| ✅ | **1.2** | Add time | `Observation` time-series driver, time-varying source brightness, pointing jitter / drift / dither, image motion; **persistence/latent images** | **#3, #4** |
+| ☐ | **1.3** | Enrich scenes | `ExtendedSource` (Sersic/array), `UniformIllumination`, `Catalog.from_table` with RA/Dec→pixel, `AiryPSF`/`ArrayPSF`, elliptical PSF | **#2** |
+| ☐ | **1.4** | Detector depth | CTI, blooming/bleed, IPC, kTC/reset noise, multi-amplifier readout, cosmic-ray tracks, defect/bad-column maps, structured bias, polynomial nonlinearity | accuracy |
+| ☐ | **1.5** | Radiometry & IR | AB system, ugriz/Gaia/2MASS bands, transmission-product loading, extinction, true spectral flux integration, **IR thermal background + glow** | quantitative photometry, honest IR |
+| ☐ | **1.6** | Scale & datasets | float32 path, chunked/vectorised rendering, `dataset` generator for raw+truth pairs at scale, a `getframes` CLI, benchmarks | ML training data, large detectors |
+| ☐ | **2.0** | Stability | promote new APIs to stable, land deprecated breaking changes, validation/benchmark suite vs. published characterisations, JOSS paper + citation, full docs | — |
 
 Persistence (1.2) is the one item explicitly deferred from the 1.0 series; it lands
 once 1.2 introduces cross-frame state via `Observation`.
@@ -136,65 +136,78 @@ once 1.2 introduces cross-frame state via `Observation`.
 
 ## 6. Phase detail
 
-### 1.1 — Close the loop (highest leverage)
+### 1.1 — Close the loop (highest leverage) ✅
 The fastest way to make `getframes` more useful is to finish the workflow it
 already half-supports.
 
-- **Master frames.** `analysis.combine(frames, method="sigma_clip")` and
+- [x] **Master frames.** `analysis.combine(frames, method="sigma_clip")` and
   `Camera.master_dark/bias/flat(...)` returning a `Frame`. Sigma-clipped mean /
   median stacking.
-- **Reduction.** `calibrate(raw, *, bias=None, dark=None, flat=None)` → a reduced
+- [x] **Reduction.** `calibrate(raw, *, bias=None, dark=None, flat=None)` → a reduced
   `Frame`, so a user can do `truth ≈ calibrate(raw, ...)` and quantify residuals.
   This *is* the ground-truth-validation promise, made one call.
-- **API symmetry.** `expose_series` / `observe_series` mirroring `dark_series`
+- [x] **API symmetry.** `expose_series` / `observe_series` mirroring `dark_series`
   (independent-but-reproducible derived seeds; per-frame metadata).
-- **I/O.** Standard FITS keywords (`EXPTIME`, `GAIN`, `CCD-TEMP`, …), data-cube and
+- [x] **I/O.** Standard FITS keywords (`EXPTIME`, `GAIN`, `CCD-TEMP`, …), data-cube and
   multi-extension writers, `Frame.from_fits`, and `CameraConfig.to_toml/from_toml`
   so an experiment is a file you can share.
 
-### 1.2 — Add time
-- **`Observation`.** A driver that produces a reproducible *stack* from a scene
-  plus a time model: `cam.observe_series(scene, exposure, n_frames, cadence=...)`.
-  Variability is **owned by the source** — each `PointSource` may carry an optional
-  `brightness(t)` (`LightCurve`) that `observe_series` samples per frame — and the
-  observation returns a per-frame truth (a true light curve).
-- **Pointing.** Jitter (per-frame Gaussian offset), slow drift, and programmed
-  dither; atmospheric tip-tilt / image motion for AO sub-apertures.
-- **Persistence / latent images.** Cross-frame charge memory for IR arrays,
-  carried on the `Observation` state — the deferred 1.0 item.
+### 1.2 — Add time ✅
+- [x] **`Observation`.** A driver that produces a reproducible *stack* from a scene
+  plus a time model: `cam.observe_series(scene, exposure, n_frames, cadence=...)`
+  now returns an iterable `Observation` (frames + timestamps + realised pointing
+  offsets + truth). Variability is **owned by the source** — each `PointSource` may
+  carry an optional `brightness(t)` (`LightCurve`) that `observe_series` samples per
+  frame — and the observation returns a per-frame truth (a true light curve).
+- [x] **Pointing.** A `Pointing` model: jitter (per-frame Gaussian offset), slow
+  drift, and programmed dither; jitter doubles as atmospheric tip-tilt / image
+  motion for AO sub-apertures. The `jitter_arcsec=` shortcut covers the common case.
+- [x] **Persistence / latent images.** Cross-frame charge memory for IR arrays
+  (`persistence_fraction` / `persistence_decay`), carried on the `Observation`
+  driver — the deferred 1.0 item.
 
 ### 1.3 — Enrich scenes
-- **Sources.** `ExtendedSource` (Sersic profile + arbitrary image/array),
+- [ ] **Sources.** `ExtendedSource` (Sersic profile + arbitrary image/array),
   `UniformIllumination` (clean flats for PTC).
-- **Catalogs.** `Catalog.from_table(table, ...)` placing many sources; with a
+- [ ] **Catalogs.** `Catalog.from_table(table, ...)` placing many sources; with a
   scene `WCSInfo`, accept RA/Dec and project to pixels (the WCS finally *does*
   something, not just tags).
-- **PSFs.** `AiryPSF` (diffraction-limited, space/AO), `ArrayPSF` (user kernel,
+- [ ] **PSFs.** `AiryPSF` (diffraction-limited, space/AO), `ArrayPSF` (user kernel,
   e.g. straight from an AO simulation), elliptical/position-angle PSFs; optional
   field-varying PSF.
-- **Optics.** Vignetting / illumination falloff and a simple radial distortion.
+- [ ] **Optics.** Vignetting / illumination falloff and a simple radial distortion.
 
 ### 1.4 — Detector depth
-The artifacts a calibration pipeline must survive: **CTI** (CCD charge-transfer
-inefficiency), **blooming/bleed** along saturated columns, **IPC** (inter-pixel
-capacitance kernel), **kTC/reset noise**, **multi-amplifier** readout (per-amp
-gain/offset/quadrants + seams), **cosmic-ray tracks** (morphology, not single
-pixels), **defect/bad-column maps** and traps, and **structured bias**.
-Nonlinearity generalises to a polynomial / lookup.
+The artifacts a calibration pipeline must survive:
+
+- [ ] **CTI** (CCD charge-transfer inefficiency).
+- [ ] **Blooming/bleed** along saturated columns.
+- [ ] **IPC** (inter-pixel capacitance kernel).
+- [ ] **kTC/reset noise.**
+- [ ] **Multi-amplifier** readout (per-amp gain/offset/quadrants + seams).
+- [ ] **Cosmic-ray tracks** (morphology, not single pixels).
+- [ ] **Defect/bad-column maps** and traps, and **structured bias**.
+- [ ] Nonlinearity generalises to a polynomial / lookup.
 
 ### 1.5 — Radiometry & IR
-**AB** alongside Vega; **SDSS ugriz, Gaia, 2MASS** bands; loading real
-filter × QE × atmosphere **transmission products**; interstellar **extinction**;
-true spectral **flux integration** (an `SED` can set the integrated rate, not only
-the effective QE). For IR/eAPD honesty: a **thermal background + detector glow**
-model (resolving 1.0 open decision #4). Optional `astropy.units` interop.
+- [ ] **AB** alongside Vega.
+- [ ] **SDSS ugriz, Gaia, 2MASS** bands.
+- [ ] Loading real filter × QE × atmosphere **transmission products**.
+- [ ] Interstellar **extinction**.
+- [ ] True spectral **flux integration** (an `SED` can set the integrated rate, not
+  only the effective QE).
+- [ ] For IR/eAPD honesty: a **thermal background + detector glow** model (resolving
+  1.0 open decision #4).
+- [ ] Optional `astropy.units` interop.
 
 ### 1.6 — Scale & datasets
-A **float32** fast path, **chunked/tiled** rendering and **vectorised** multi-source
-PSF evaluation (a 10⁵-star catalog should not loop in Python), an optional
-**`dataset`** generator yielding raw+truth pairs at scale for ML training (denoising,
-deconvolution, calibration), a **`getframes` CLI** to generate frames from a config
-file, and a **benchmark** suite to keep throughput honest.
+- [ ] A **float32** fast path.
+- [ ] **Chunked/tiled** rendering and **vectorised** multi-source PSF evaluation (a
+  10⁵-star catalog should not loop in Python).
+- [ ] An optional **`dataset`** generator yielding raw+truth pairs at scale for ML
+  training (denoising, deconvolution, calibration).
+- [ ] A **`getframes` CLI** to generate frames from a config file.
+- [ ] A **benchmark** suite to keep throughput honest.
 
 ---
 
@@ -233,13 +246,15 @@ import getframes as gf
 
 scope = gf.Telescope(aperture_diameter_m=0.2, throughput=0.5,
                      plate_scale_arcsec_per_pixel=5.0, band=gf.Bandpass.johnson("R"))
+
+# Variability is owned by the source: a 1% box transit between t=2000s and 4000s.
+transit = gf.LightCurve.box(depth=0.01, t0=2000, t1=4000)
 scene = gf.Scene(shape=(256, 256), optics=scope, psf=gf.GaussianPSF(fwhm_arcsec=8.0),
-                 sources=[gf.PointSource(x=64, y=64, magnitude=12.0, name="target"),
+                 sources=[gf.PointSource(x=64, y=64, magnitude=12.0, name="target",
+                                         brightness=transit),
                           gf.PointSource(x=180, y=180, magnitude=11.5, name="ref")],
                  sky=gf.Sky(surface_brightness_mag_arcsec2=20.0))
 
-# Variability is owned by the source: a 1% box transit between t=2000s and 4000s.
-scene.sources[0].brightness = gf.LightCurve.box(depth=0.01, t0=2000, t1=4000)
 obs = cam.observe_series(scene, exposure=20.0, n_frames=300, jitter_arcsec=2.0, seed=0)
 
 lc = [gf.analysis.aperture_sum(f, (64, 64), r=12) /
@@ -304,8 +319,8 @@ These were open during planning and are now settled (they shape the phases above
 1. **Time-model ownership → the source.** Variability lives on the source as an
    optional `brightness(t)` (a `LightCurve`), not on the `Observation`. Sources
    carry their own time behaviour; `observe_series` just samples them at each
-   frame's timestamp. (Sources gain one optional field and stay otherwise
-   immutable.)
+   frame's timestamp. (Sources gain two optional fields — `brightness` and a
+   `name` to key the truth light curve — and stay otherwise immutable.)
 2. **`astropy` is a core dependency.** Catalogs, WCS projection (RA/Dec→pixel),
    and units lean on it; rather than maintain NumPy fallbacks it becomes core
    (joining `numpy`/`scipy`). FITS I/O therefore no longer needs the `examples`

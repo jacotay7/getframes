@@ -10,15 +10,20 @@ import numpy as np
 from . import noise
 from .config import CameraConfig
 from .frame import Frame, FrameTruth
+from .observation import Observation, ObservationTruth, Pointing
 from .presets import load_preset
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterator, Sequence
 
     from numpy.typing import NDArray
 
     from .noise import PhotonRate
     from .scene import Scene
+    from .scene.sources import PointSource
+
+# Sub-stream salt for the pointing RNG, kept distinct from per-frame noise seeds.
+_POINTING_STREAM = 0x504F494E54  # "POINT"
 
 
 class Camera:
@@ -177,6 +182,7 @@ class Camera:
         *,
         background: PhotonRate = 0.0,
         quantum_efficiency: float | None = None,
+        extra_electrons: PhotonRate = 0.0,
         seed: int | None = None,
         include_truth: bool = True,
     ) -> Frame:
@@ -201,6 +207,10 @@ class Camera:
             Overrides the config's scalar QE for this exposure. Spectral mode uses
             this with an already-photoelectron map and ``1.0``; most callers leave
             it ``None``.
+        extra_electrons:
+            Additive noise-free signal in electrons (scalar or array) injected
+            before shot noise. Used by :meth:`observe_series` to carry latent charge
+            from image persistence; most callers leave it ``0.0``.
         seed:
             If given, use a fresh generator seeded with this value for a fully
             reproducible frame.
@@ -217,11 +227,14 @@ class Camera:
             temperature_c=temp,
             background_photon_rate=background,
             quantum_efficiency=quantum_efficiency,
+            extra_electrons=extra_electrons,
             rng=rng,
         )
         truth = (
             FrameTruth(
-                mean_electrons=result.mean_photoelectrons + result.mean_dark_electrons,
+                mean_electrons=result.mean_photoelectrons
+                + result.mean_dark_electrons
+                + np.asarray(extra_electrons, dtype=np.float64),
                 mean_photoelectrons=result.mean_photoelectrons,
                 photon_rate=result.photon_rate,
             )
@@ -294,32 +307,45 @@ class Camera:
                 f"scene.shape {tuple(scene.shape)} does not match camera "
                 f"resolution {self.resolution}."
             )
+        rate, background, qe, spectral = self._scene_inputs(scene)
+        frame = self.expose(
+            rate,
+            exposure,
+            temperature,
+            background=background,
+            quantum_efficiency=qe,
+            seed=seed,
+            include_truth=include_truth,
+        )
+        self._tag_science(frame, scene, spectral)
+        return frame
+
+    def _scene_inputs(
+        self,
+        scene: Scene,
+        time_s: float | None = None,
+        offset_xy: tuple[float, float] = (0.0, 0.0),
+    ) -> tuple[PhotonRate, PhotonRate, float | None, bool]:
+        """Render a scene to the ``(rate, background, qe, spectral)`` :meth:`expose` inputs.
+
+        Selects spectral mode when the config carries a QE curve and the scene's
+        band has a spectral response. ``time_s`` and ``offset_xy`` thread the
+        per-frame time and pointing offset through to the scene renderer.
+        """
         spectral = self.config.qe_curve is not None and scene.is_spectral_capable
         if spectral:
             assert self.config.qe_curve is not None  # narrowed by `spectral`
-            frame = self.expose(
-                scene.photoelectron_rate_map(self.config.qe_curve),
-                exposure,
-                temperature,
-                background=scene.sky_electron_rate(self.config.qe_curve),
-                quantum_efficiency=1.0,
-                seed=seed,
-                include_truth=include_truth,
-            )
-        else:
-            frame = self.expose(
-                scene.photon_rate_map(),
-                exposure,
-                temperature,
-                background=scene.sky_photon_rate(),
-                seed=seed,
-                include_truth=include_truth,
-            )
+            rate = scene.photoelectron_rate_map(self.config.qe_curve, time_s, offset_xy)
+            return rate, scene.sky_electron_rate(self.config.qe_curve), 1.0, True
+        return scene.photon_rate_map(time_s, offset_xy), scene.sky_photon_rate(), None, False
+
+    @staticmethod
+    def _tag_science(frame: Frame, scene: Scene, spectral: bool) -> None:
+        """Stamp the shared science-frame metadata (frame type, spectral flag, WCS)."""
         frame.metadata["frame_type"] = "science"
         frame.metadata["spectral"] = spectral
         if scene.wcs is not None:
             frame.metadata.update(scene.wcs.header_cards())
-        return frame
 
     def expose_series(
         self,
@@ -357,22 +383,154 @@ class Camera:
         n_frames: int,
         temperature: float | None = None,
         *,
+        cadence: float | None = None,
+        pointing: Pointing | None = None,
+        jitter_arcsec: float = 0.0,
         seed: int | None = None,
         include_truth: bool = True,
-    ) -> Iterator[Frame]:
-        """Yield ``n_frames`` independent science frames of the same ``scene``.
+    ) -> Observation:
+        """Observe ``scene`` over time, returning a reproducible :class:`Observation`.
 
-        The :meth:`observe` analogue of :meth:`dark_series`. Each frame uses a
-        distinct derived seed, so the stack is independent but reproducible. (Time
-        variability and pointing jitter arrive in a later release; for now every
-        frame observes the identical static scene.)
+        Produces a time-ordered stack of science frames. Frame ``i`` is exposed at
+        timestamp ``t_i = i * cadence`` (the start of its exposure); sources
+        carrying a :class:`~getframes.scene.sources.LightCurve` vary accordingly,
+        and a :class:`~getframes.observation.Pointing` model shifts the field per
+        frame. If the detector has a non-zero
+        :attr:`~getframes.config.CameraConfig.persistence_fraction`, latent charge
+        is carried across frames.
+
+        The returned :class:`Observation` is iterable over its frames (so
+        ``for f in cam.observe_series(...)`` still works) and carries the per-frame
+        timestamps, realised pointing offsets, and the ground-truth light curve.
+
+        Parameters
+        ----------
+        scene, exposure, temperature:
+            As in :meth:`observe`.
+        n_frames:
+            Number of frames in the series.
+        cadence:
+            Seconds between successive frame start times. Defaults to ``exposure``
+            (back-to-back frames with no dead time).
+        pointing:
+            A :class:`~getframes.observation.Pointing` model for per-frame field
+            offsets. If ``None`` and ``jitter_arcsec`` is given, a jitter-only model
+            is built from it.
+        jitter_arcsec:
+            Convenience for the common case: the RMS of a per-frame Gaussian
+            pointing jitter (ignored if ``pointing`` is given explicitly).
+        seed:
+            When given, the series is reproducible; each frame draws a distinct
+            derived seed (independent frames) and the pointing jitter uses its own
+            derived stream, so the whole observation repeats exactly.
+        include_truth:
+            Whether to attach per-frame :class:`~getframes.frame.FrameTruth` and
+            build the observation's light-curve truth.
         """
-        for i, frame_seed in enumerate(self._series_seeds(seed, n_frames)):
-            frame = self.observe(
-                scene, exposure, temperature, seed=frame_seed, include_truth=include_truth
+        cadence = exposure if cadence is None else cadence
+        if pointing is None and jitter_arcsec > 0:
+            pointing = Pointing(jitter_arcsec=jitter_arcsec)
+        plate_scale = scene.optics.plate_scale_arcsec_per_pixel
+
+        frame_seeds = self._series_seeds(seed, n_frames)
+        # A pointing stream independent of the per-frame shot/read-noise seeds, so
+        # jitter is reproducible without coupling to (or perturbing) frame noise.
+        point_seq = None if seed is None else np.random.SeedSequence([int(seed), _POINTING_STREAM])
+        point_rng = np.random.default_rng(point_seq)
+
+        names = self._source_names(scene.sources)
+        light_curve: dict[str, list[float]] = {name: [] for name in names}
+        frames: list[Frame] = []
+        times: list[float] = []
+        offsets: list[tuple[float, float]] = []
+        latent: PhotonRate = 0.0  # trapped charge (electrons) carried across frames
+
+        for i, frame_seed in enumerate(frame_seeds):
+            t = i * cadence
+            offset = (0.0, 0.0)
+            if pointing is not None and not pointing.is_static:
+                offset = pointing.offset_pixels(i, t, plate_scale, point_rng)
+
+            rate, background, qe, spectral = self._scene_inputs(scene, t, offset)
+            extra = self.config.persistence_decay * latent if self._has_persistence else 0.0
+            frame = self.expose(
+                rate,
+                exposure,
+                temperature,
+                background=background,
+                quantum_efficiency=qe,
+                extra_electrons=extra,
+                seed=frame_seed,
+                include_truth=include_truth,
             )
+            self._tag_science(frame, scene, spectral)
             frame.metadata["frame_index"] = i
-            yield frame
+            frame.metadata["time_s"] = t
+            frame.metadata["pointing_offset_px"] = offset
+
+            if self._has_persistence:
+                latent = self._update_latent(latent, extra, rate, exposure, background, qe)
+            if include_truth:
+                for name, source in zip(names, scene.sources):
+                    light_curve[name].append(scene._source_photon_rate(source, t) * exposure)
+
+            frames.append(frame)
+            times.append(t)
+            offsets.append(offset)
+
+        truth = (
+            ObservationTruth(
+                times_s=np.asarray(times, dtype=np.float64),
+                light_curve={k: np.asarray(v, dtype=np.float64) for k, v in light_curve.items()},
+            )
+            if include_truth
+            else None
+        )
+        return Observation(
+            frames=frames,
+            times_s=np.asarray(times, dtype=np.float64),
+            offsets_pixels=np.asarray(offsets, dtype=np.float64).reshape(n_frames, 2),
+            truth=truth,
+        )
+
+    @property
+    def _has_persistence(self) -> bool:
+        return self.config.persistence_fraction > 0.0
+
+    def _update_latent(
+        self,
+        latent: PhotonRate,
+        released: PhotonRate,
+        rate: PhotonRate,
+        exposure: float,
+        background: PhotonRate,
+        qe: float | None,
+    ) -> NDArray[np.float64]:
+        """Advance the latent-charge state after a frame.
+
+        Trapped charge releases ``persistence_decay`` of itself into the frame just
+        exposed (``released``) and captures ``persistence_fraction`` of that frame's
+        noise-free photo-signal. The remainder stays trapped for the next frame.
+        """
+        signal = noise.photo_signal_map(self.config, rate, exposure, background, qe)
+        captured = self.config.persistence_fraction * signal
+        latent_arr = np.asarray(latent, dtype=np.float64)
+        released_arr = np.asarray(released, dtype=np.float64)
+        updated: NDArray[np.float64] = latent_arr - released_arr + captured
+        return updated
+
+    @staticmethod
+    def _source_names(sources: Sequence[PointSource]) -> list[str]:
+        """A stable, unique name per source (falling back to ``source_{i}``)."""
+        names: list[str] = []
+        seen: set[str] = set()
+        for i, source in enumerate(sources):
+            name = source.name if source.name is not None else f"source_{i}"
+            if name in seen:
+                name = f"{name}_{i}"
+            seen.add(name)
+            names.append(name)
+        return names
 
     # ------------------------------------------------------------------
     # Calibration masters

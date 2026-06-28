@@ -8,6 +8,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Time as a first-class dimension** (roadmap phase 1.2): observe a scene over
+  time and validate the result against a ground-truth light curve.
+  - `getframes.Observation` (and `ObservationTruth`): the iterable stack returned
+    by `Camera.observe_series`, carrying the frames, per-frame timestamps, realised
+    pointing offsets, and the per-source truth `light_curve`.
+  - `LightCurve` (owned by the source): `PointSource` gains optional `brightness`
+    (a `LightCurve`) and `name` fields. `LightCurve.box` / `sinusoidal` /
+    `constant` / `from_function` make a source vary in time; `observe_series`
+    samples it at each frame's timestamp.
+  - `Pointing`: per-frame field offsets from jitter (Gaussian, also models
+    atmospheric tip-tilt / image motion), slow linear drift, and a programmed
+    dither pattern. `Camera.observe_series(..., jitter_arcsec=...)` is a shortcut.
+  - **Persistence / latent images** (the deferred 1.0 item): new
+    `CameraConfig.persistence_fraction` and `persistence_decay` carry trapped
+    charge across the frames of an `Observation` (IR arrays). `Camera.expose` and
+    `noise.simulate_frame` gain an `extra_electrons` argument that injects this
+    latent charge before shot noise.
+  - `Scene.photon_rate_map` / `photoelectron_rate_map` gain optional `time_s` and
+    `offset_xy` arguments (backwards-compatible no-ops by default).
 - **Calibration loop** (`getframes.calibrate` module, roadmap phase 1.1): combine
   frames into masters and reduce raw frames against them.
   - `combine(frames, method=...)` stacks frames into a master (`"mean"`,
@@ -23,6 +42,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `Camera.observe_series` now returns an `Observation` rather than a lazy
+  iterator. The `Observation` is iterable and indexable over its frames, so
+  `for frame in cam.observe_series(...)` and `list(cam.observe_series(...))` keep
+  working; the new `cadence`, `pointing`, and `jitter_arcsec` keyword arguments
+  are additive.
 - **Fixed-pattern noise is now genuinely fixed.** PRNU, DSNU, and the hot-pixel
   map are drawn from a deterministic per-sensor stream (keyed on
   `CameraConfig.fixed_pattern_seed`) instead of the per-frame RNG, so the pattern
