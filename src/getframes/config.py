@@ -8,6 +8,7 @@ and the noise models in :mod:`getframes.noise`.
 
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
@@ -19,6 +20,7 @@ class SensorType(str, Enum):
     CCD = "CCD"
     CMOS = "CMOS"
     EMCCD = "EMCCD"
+    EAPD = "EAPD"  # electron-avalanche photodiode (e.g. SAPHIRA IR arrays)
 
     @classmethod
     def coerce(cls, value: SensorType | str) -> SensorType:
@@ -44,7 +46,8 @@ class CameraConfig:
     name:
         Human-readable identifier (e.g. ``"Andor iKon-M 934"``).
     sensor_type:
-        One of :class:`SensorType` (CCD, CMOS, EMCCD). Selects the noise model.
+        One of :class:`SensorType` (CCD, CMOS, EMCCD, EAPD). Selects the noise
+        model; EMCCD and EAPD additionally use the stochastic gain stage.
     resolution:
         Sensor size as ``(height, width)`` in pixels, matching NumPy's row-major
         array convention.
@@ -78,7 +81,15 @@ class CameraConfig:
         Temperature increase (deg C) that doubles the dark current. Typical CCD/CMOS
         silicon values are 5-8 C.
     em_gain:
-        Electron-multiplying gain (EMCCD only). ``1.0`` disables EM multiplication.
+        Mean gain of the stochastic multiplication stage: the EM register of an
+        EMCCD or the avalanche gain of an eAPD. ``1.0`` disables it (CCD/CMOS).
+    excess_noise_factor:
+        Excess noise factor ``F`` of the gain stage, quantifying the extra noise
+        from stochastic multiplication. ``F = 1`` is noiseless multiplication;
+        EMCCDs approach ``F = sqrt(2) ~ 1.41`` at high gain; eAPDs are much
+        quieter (``F ~ 1.2-1.4``). If ``None`` (default), an appropriate value is
+        used for the sensor type (sqrt(2) for EMCCD, 1.0 otherwise) --- see
+        :attr:`gain_excess_noise_factor`.
     clock_induced_charge_e:
         Clock-induced charge (spurious charge) in electrons per pixel per frame.
         Relevant mainly for EMCCD.
@@ -108,6 +119,7 @@ class CameraConfig:
     dark_current_ref_temp_c: float = 20.0
     dark_current_doubling_temp_c: float = 6.3
     em_gain: float = 1.0
+    excess_noise_factor: float | None = None
     clock_induced_charge_e: float = 0.0
     dark_current_nonuniformity: float = 0.0
     hot_pixel_fraction: float = 0.0
@@ -142,6 +154,8 @@ class CameraConfig:
             raise ValueError("dark_current_doubling_temp_c must be positive.")
         if self.em_gain < 1.0:
             raise ValueError("em_gain must be >= 1.0 (use 1.0 to disable).")
+        if self.excess_noise_factor is not None and self.excess_noise_factor < 1.0:
+            raise ValueError("excess_noise_factor must be >= 1.0 (1.0 is noiseless).")
         if self.full_well_e <= 0:
             raise ValueError("full_well_e must be positive.")
         if not 0.0 <= self.hot_pixel_fraction <= 1.0:
@@ -151,6 +165,25 @@ class CameraConfig:
     def max_adu(self) -> int:
         """The saturation value of the ADC output."""
         return int(2**self.bit_depth - 1)
+
+    @property
+    def has_gain_stage(self) -> bool:
+        """Whether a stochastic multiplication stage (EM/avalanche) is active."""
+        return self.em_gain > 1.0
+
+    @property
+    def gain_excess_noise_factor(self) -> float:
+        """The effective excess noise factor ``F`` of the gain stage.
+
+        Returns :attr:`excess_noise_factor` if set, else a sensible default for the
+        sensor type: ``sqrt(2)`` for EMCCD (the high-gain limit) and ``1.0``
+        (noiseless) otherwise.
+        """
+        if self.excess_noise_factor is not None:
+            return self.excess_noise_factor
+        if self.sensor_type is SensorType.EMCCD:
+            return math.sqrt(2.0)
+        return 1.0
 
     def dark_current_at(self, temperature_c: float) -> float:
         """Dark current (e-/pixel/s) scaled to ``temperature_c``.

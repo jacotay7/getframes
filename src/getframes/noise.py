@@ -99,25 +99,57 @@ def photo_signal_map(
     return mean_photo
 
 
+def apply_gain_stage(
+    electrons: NDArray[np.float64],
+    gain: float,
+    excess_noise_factor: float,
+    rng: np.random.Generator,
+) -> NDArray[np.float64]:
+    r"""Apply a stochastic multiplication stage (EM register or APD avalanche).
+
+    A single model covers both EMCCDs and avalanche photodiodes, parameterised by
+    the mean gain ``G`` and the excess noise factor ``F``. For ``n`` input
+    electrons the multiplied output is drawn from a Gamma distribution:
+
+    .. math::
+
+        \text{out} \sim \mathrm{Gamma}(\text{shape}=n\alpha,\ \text{scale}=\theta),
+        \quad \alpha = \frac{1}{F^2 - 1}, \quad \theta = G\,(F^2 - 1).
+
+    Then :math:`E[\text{out}] = nG` and, with Poisson input of mean :math:`\mu`, the
+    total output variance is :math:`G^2 F^2 \mu` --- i.e. the model reproduces the
+    requested excess noise factor exactly. Special cases:
+
+    * ``F = sqrt(2)`` gives ``alpha = 1`` --- the classic EMCCD ``Gamma(n, G)`` model.
+    * ``F -> 1`` is noiseless multiplication (deterministic ``n * G``).
+
+    Pixels with zero input electrons produce zero output.
+    """
+    if gain <= 1.0:
+        return electrons
+    if excess_noise_factor <= 1.0:
+        return electrons * gain  # noiseless multiplication
+
+    f2 = excess_noise_factor**2
+    alpha = 1.0 / (f2 - 1.0)
+    theta = gain * (f2 - 1.0)
+    out = np.zeros_like(electrons, dtype=np.float64)
+    nonzero = electrons > 0
+    if np.any(nonzero):
+        out[nonzero] = rng.gamma(shape=electrons[nonzero] * alpha, scale=theta)
+    return out
+
+
 def apply_em_gain(
     electrons: NDArray[np.float64],
     em_gain: float,
     rng: np.random.Generator,
 ) -> NDArray[np.float64]:
-    """Apply EMCCD electron-multiplication with realistic excess noise.
+    """Backwards-compatible EMCCD multiplication (``F = sqrt(2)`` gain stage).
 
-    For an input of ``n`` electrons, the output of the EM register is modelled as a
-    Gamma distribution with shape ``n`` and scale ``em_gain``. This reproduces the
-    EMCCD excess-noise factor approaching ``sqrt(2)`` at high gain. Pixels with zero
-    input electrons produce zero output.
+    Thin wrapper over :func:`apply_gain_stage`; prefer that for new code.
     """
-    if em_gain <= 1.0:
-        return electrons
-    out = np.zeros_like(electrons, dtype=np.float64)
-    nonzero = electrons > 0
-    if np.any(nonzero):
-        out[nonzero] = rng.gamma(shape=electrons[nonzero], scale=em_gain)
-    return out
+    return apply_gain_stage(electrons, em_gain, np.sqrt(2.0), rng)
 
 
 def digitize(
@@ -167,8 +199,10 @@ def frame_electrons(
     if config.clock_induced_charge_e > 0:
         electrons += rng.poisson(config.clock_induced_charge_e, size=electrons.shape)
 
-    if config.sensor_type.value == "EMCCD" and config.em_gain > 1.0:
-        electrons = apply_em_gain(electrons, config.em_gain, rng)
+    if config.has_gain_stage:
+        electrons = apply_gain_stage(
+            electrons, config.em_gain, config.gain_excess_noise_factor, rng
+        )
 
     return electrons
 
@@ -240,6 +274,7 @@ def dark_frame_electrons(
 __all__ = [
     "SimulationResult",
     "apply_em_gain",
+    "apply_gain_stage",
     "dark_frame_electrons",
     "dark_signal_map",
     "digitize",

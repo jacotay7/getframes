@@ -1,0 +1,20 @@
+# A plain electron-avalanche photodiode (eAPD) array for testing and teaching.
+name = "Generic eAPD"
+sensor_type = "EAPD"
+resolution = [256, 256]
+pixel_size_um = 18.0
+quantum_efficiency = 0.85
+full_well_e = 80000.0
+bit_depth = 16
+gain_e_per_adu = 2.0
+bias_offset_adu = 800.0
+read_noise_e = 40.0                  # amplifier read noise before avalanche gain
+em_gain = 20.0                       # avalanche gain
+excess_noise_factor = 1.25
+dark_current_e_per_s = 2.0
+dark_current_ref_temp_c = -190.0
+dark_current_doubling_temp_c = 8.0
+dark_current_nonuniformity = 0.04
+hot_pixel_fraction = 0.0005
+hot_pixel_factor = 50.0
+notes = "Idealised eAPD for demonstrating avalanche gain with a low excess noise factor."

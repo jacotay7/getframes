@@ -90,8 +90,9 @@ preset_info()         # rich descriptors for each preset
 | --- | --- | --- |
 | `andor_ikon_m934` | CCD | Deep-cooled back-illuminated scientific CCD |
 | `andor_ixon_ultra_888` | EMCCD | Single-photon-sensitive EMCCD |
+| `leonardo_saphira` | EAPD | HgCdTe avalanche IR array (AO wavefront sensing) |
 | `zwo_asi2600mm` | CMOS | Sony IMX571 cooled CMOS |
-| `generic_ccd` / `generic_cmos` / `generic_emccd` | — | Idealised references for teaching/testing |
+| `generic_ccd` / `generic_cmos` / `generic_emccd` / `generic_eapd` | — | Idealised references for teaching/testing |
 
 ## How the dark-frame model works
 
@@ -120,8 +121,8 @@ examples for photon-transfer curves, star-field exposure planning, AO
 wavefront-sensing, and transit photometry).
 
 - [x] Dark frames (CCD / CMOS / EMCCD)
-- [ ] **Photon/signal path** — `Camera.expose`, photoelectrons + shot noise, flats & bias *(v0.2)*
-- [ ] **Unified gain stage** — exact EMCCD + eAPD/IR detectors *(v0.3)*
+- [x] **Photon/signal path** — `Camera.expose`, photoelectrons + shot noise, flats & bias *(v0.2)*
+- [x] **Unified gain stage** — exact EMCCD + eAPD/IR detectors *(v0.3)*
 - [ ] **Scene layer** — sources + PSF + optics → photon maps; `Camera.observe` *(v0.4)*
 - [ ] Nonlinearity, cosmic rays, persistence, sCMOS, analysis helpers *(v0.5)*
 - [ ] Spectral mode: `QE(λ)`, SEDs, WCS *(v0.6)*

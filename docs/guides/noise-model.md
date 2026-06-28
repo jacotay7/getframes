@@ -51,19 +51,37 @@ generation; its variance equals its mean.
 EMCCDs generate spurious charge during readout. This is added as a small Poisson
 term (`clock_induced_charge_e` electrons per pixel per frame).
 
-### 5. Electron-multiplying gain (EMCCD)
+### 5. Stochastic gain stage (EMCCD & eAPD)
 
-The EM register multiplies the signal. For an input of `n` electrons the output is
-modelled as a Gamma distribution with shape `n` and scale `em_gain`. This
-reproduces the EMCCD excess-noise factor approaching $\sqrt{2}$ at high gain, which
-effectively halves the photon-counting sensitivity but renders read noise
-negligible.
+EMCCDs (EM register) and electron-avalanche photodiodes (eAPD/SAPHIRA IR arrays)
+both multiply the signal before readout. A single model covers both, parameterised
+by the mean gain $G$ (`em_gain`) and the **excess noise factor** $F$
+(`excess_noise_factor`). For $n$ input electrons the output is drawn from a Gamma
+distribution:
+
+$$ \text{out} \sim \mathrm{Gamma}\!\left(\text{shape}=n\alpha,\ \text{scale}=\theta\right),
+\quad \alpha = \frac{1}{F^2 - 1}, \quad \theta = G\,(F^2 - 1). $$
+
+This gives $E[\text{out}] = nG$ and, with Poisson input of mean $\mu$, total output
+variance $G^2 F^2 \mu$ — i.e. it reproduces the requested excess noise factor
+exactly. Special cases:
+
+- **EMCCD**: $F = \sqrt{2}$ (the high-gain limit) ⇒ $\alpha = 1$, recovering the
+  classic $\mathrm{Gamma}(n, G)$ model. The $\sqrt{2}$ excess noise effectively
+  halves the photon-counting sensitivity.
+- **eAPD**: $F \approx 1.2$–$1.4$, much quieter than an EMCCD — the reason AO
+  wavefront sensors favour them at the faint end.
+- **Noiseless** ($F \to 1$): deterministic multiplication by $G$.
+
+If `excess_noise_factor` is left unset, $\sqrt{2}$ is used for EMCCD and $1$
+otherwise (see `CameraConfig.gain_excess_noise_factor`).
 
 ### 6. Read noise
 
 Gaussian noise with RMS `read_noise_e` is added at the output amplifier. For an
-EMCCD this is applied after EM multiplication, which is why high EM gain makes the
-effective (input-referred) read noise sub-electron.
+EMCCD or eAPD this is applied after the gain stage, which is why a high mean gain
+makes the effective (input-referred) read noise sub-electron — the eAPD's
+`read_noise_e` is the pre-avalanche amplifier noise, divided down by `em_gain`.
 
 ### 7. Digitisation
 

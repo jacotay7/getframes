@@ -8,6 +8,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Unified stochastic gain stage** (`noise.apply_gain_stage`): one model for both
+  EMCCD electron multiplication and eAPD avalanche gain, parameterised by mean gain
+  and excess noise factor `F` via a Gamma model (`alpha = 1/(F^2-1)`). Reproduces
+  the requested `F` exactly; recovers the previous EMCCD model at `F = sqrt(2)`.
+- `SensorType.EAPD` and `CameraConfig.excess_noise_factor` /
+  `gain_excess_noise_factor` / `has_gain_stage`.
+- eAPD presets: `leonardo_saphira` (SAPHIRA IR array) and `generic_eapd`.
 - **Photon/signal path** (`Camera.expose`): generate frames from an incident
   photon rate (scalar or per-pixel map), with quantum-efficiency conversion,
   photo-response non-uniformity (PRNU), shot noise, dark current, optional EM
