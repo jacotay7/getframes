@@ -56,7 +56,9 @@ def test_apply_em_gain_noop_at_unity():
 
 
 def test_dark_signal_map_is_deterministic_pattern(ccd):
-    rng = np.random.default_rng(4)
-    m = noise.dark_signal_map(ccd, exposure_s=10.0, temperature_c=20.0, rng=rng)
+    m = noise.dark_signal_map(ccd, exposure_s=10.0, temperature_c=20.0)
     assert m.shape == ccd.resolution
     assert (m >= 0).all()
+    # The fixed-pattern map is the same on every call (no per-frame randomness).
+    again = noise.dark_signal_map(ccd, exposure_s=10.0, temperature_c=20.0)
+    np.testing.assert_array_equal(m, again)

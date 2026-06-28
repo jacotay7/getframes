@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from . import analysis
 from .__about__ import __version__
+from .calibrate import calibrate, combine
 from .camera import Camera
 from .config import CameraConfig, SensorType
 from .frame import Frame, FrameTruth
@@ -53,5 +54,7 @@ __all__ = [
     "__version__",
     "analysis",
     "available_presets",
+    "calibrate",
+    "combine",
     "load_preset",
 ]

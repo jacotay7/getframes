@@ -154,9 +154,10 @@ already half-supports.
 
 ### 1.2 — Add time
 - **`Observation`.** A driver that produces a reproducible *stack* from a scene
-  plus a time model: `cam.observe_series(scene, exposure, n_frames, cadence=...)`,
-  with a per-source brightness-vs-time callable (transit/variable-star injection)
-  and a returned per-frame truth (a true light curve).
+  plus a time model: `cam.observe_series(scene, exposure, n_frames, cadence=...)`.
+  Variability is **owned by the source** — each `PointSource` may carry an optional
+  `brightness(t)` (`LightCurve`) that `observe_series` samples per frame — and the
+  observation returns a per-frame truth (a true light curve).
 - **Pointing.** Jitter (per-frame Gaussian offset), slow drift, and programmed
   dither; atmospheric tip-tilt / image motion for AO sub-apertures.
 - **Persistence / latent images.** Cross-frame charge memory for IR arrays,
@@ -210,16 +211,17 @@ import getframes as gf
 
 cam = gf.Camera.from_preset("generic_cmos", default_temperature_c=-10.0)
 
-# Build calibration masters from synthetic series.
+# Build calibration masters from synthetic series (fluxes kept in the linear regime).
 master_bias = cam.master_bias(n_frames=50, seed=0)
-master_dark = cam.master_dark(exposure=60.0, n_frames=25, seed=1)
-master_flat = cam.master_flat(photon_rate=20_000.0, exposure=1.0, n_frames=25, seed=2)
+master_dark = cam.master_dark(exposure=30.0, n_frames=25, seed=1)        # exposure-matched
+master_flat = cam.master_flat(photon_rate=2_000.0, exposure=1.0,
+                              n_frames=25, seed=2, bias=master_bias)       # pedestal-free
 
 # A science frame that carries its own ground truth.
-sci = cam.expose(photon_rate=300.0, exposure=60.0, seed=3)
+sci = cam.expose(photon_rate=40.0, exposure=30.0, seed=3)
 
-# Reduce it and check the pipeline against truth.
-reduced = gf.calibrate(sci, bias=master_bias, dark=master_dark, flat=master_flat)
+# Reduce it (subtract the matched dark, divide the normalised flat) and check truth.
+reduced = gf.calibrate(sci, dark=master_dark, flat=master_flat)
 residual = np.asarray(reduced) - sci.truth.mean_photoelectrons / cam.config.gain_e_per_adu
 print(f"calibration residual RMS: {residual.std():.3f} ADU")   # ~ read/shot floor
 ```
@@ -236,11 +238,9 @@ scene = gf.Scene(shape=(256, 256), optics=scope, psf=gf.GaussianPSF(fwhm_arcsec=
                           gf.PointSource(x=180, y=180, magnitude=11.5, name="ref")],
                  sky=gf.Sky(surface_brightness_mag_arcsec2=20.0))
 
-# A 1% box transit between t=2000s and t=4000s, plus realistic pointing jitter.
-transit = gf.LightCurve.box(depth=0.01, t0=2000, t1=4000)
-obs = cam.observe_series(scene, exposure=20.0, n_frames=300,
-                         variability={"target": transit},
-                         jitter_arcsec=2.0, seed=0)
+# Variability is owned by the source: a 1% box transit between t=2000s and 4000s.
+scene.sources[0].brightness = gf.LightCurve.box(depth=0.01, t0=2000, t1=4000)
+obs = cam.observe_series(scene, exposure=20.0, n_frames=300, jitter_arcsec=2.0, seed=0)
 
 lc = [gf.analysis.aperture_sum(f, (64, 64), r=12) /
       gf.analysis.aperture_sum(f, (180, 180), r=12) for f in obs.frames]
@@ -297,20 +297,24 @@ physics against published behaviour, not just internal consistency:
 A short "validation" doc reproduces one or two **real** detector characterisations
 (e.g. a measured EMCCD ENF curve) to build trust for quantitative use.
 
-## 9. Open decisions
+## 9. Decisions
 
-1. **Time-model ownership.** Does variability live on sources (a `brightness(t)`)
-   or on the `Observation` (a per-source schedule)? Leaning `Observation`-owned to
-   keep sources immutable and the scene reusable.
-2. **WCS dependency.** Catalog placement by RA/Dec needs a projection. Ship a tiny
-   built-in TAN (as 1.0's `WCSInfo` does) and make full `astropy.wcs` optional?
-3. **Spectral depth vs. scope.** True spectral flux integration edges toward a
-   spectrograph simulator. Cap it at broadband synthetic photometry (no dispersed
-   IFU/slit frames) — see non-goals.
-4. **`astropy` as core vs. extra.** Catalog/WCS/units lean on it. Keep it an extra
-   with NumPy fallbacks, or promote to core for the scene layer? *Needs a call.*
-5. **Performance ceiling.** How far to push — float32 + chunking only, or optional
-   GPU (`cupy`)? Start CPU-only; gate any GPU path behind an extra.
+These were open during planning and are now settled (they shape the phases above):
+
+1. **Time-model ownership → the source.** Variability lives on the source as an
+   optional `brightness(t)` (a `LightCurve`), not on the `Observation`. Sources
+   carry their own time behaviour; `observe_series` just samples them at each
+   frame's timestamp. (Sources gain one optional field and stay otherwise
+   immutable.)
+2. **`astropy` is a core dependency.** Catalogs, WCS projection (RA/Dec→pixel),
+   and units lean on it; rather than maintain NumPy fallbacks it becomes core
+   (joining `numpy`/`scipy`). FITS I/O therefore no longer needs the `examples`
+   extra. *(Lands with the phase that first needs it; folded into core deps at the
+   2.0 cut.)*
+3. **Not a spectrograph simulator.** Spectral work is capped at broadband
+   synthetic photometry. No dispersed IFU/slit/grism frames — see non-goals.
+4. **GPU is out of scope for 2.0.** The scale work (1.6) is CPU-only: float32 +
+   chunking + vectorised rendering. A `cupy`/GPU path may be revisited post-2.0.
 
 ## 10. Non-goals (scope guardrails)
 

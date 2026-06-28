@@ -35,30 +35,51 @@ if TYPE_CHECKING:
     PhotonRate = float | NDArray[np.float64]
 
 
+# Independent sub-streams of the fixed-pattern generator, so PRNU, DSNU, and the
+# hot-pixel map are mutually independent yet each stable for a given sensor.
+_FPN_STREAM_PRNU = 0
+_FPN_STREAM_DSNU = 1
+_FPN_STREAM_HOT = 2
+
+
+def _fixed_pattern_rng(config: CameraConfig, stream: int) -> np.random.Generator:
+    """A deterministic generator for the sensor's fixed-pattern noise.
+
+    Seeded only by ``config.fixed_pattern_seed`` (not the per-frame seed), so the
+    pattern is identical in every frame this camera produces --- which is what makes
+    it removable by a master flat or dark.
+    """
+    seq = np.random.SeedSequence([int(config.fixed_pattern_seed), stream])
+    return np.random.default_rng(seq)
+
+
 def dark_signal_map(
     config: CameraConfig,
     exposure_s: float,
     temperature_c: float,
-    rng: np.random.Generator,
 ) -> NDArray[np.float64]:
     """Per-pixel *mean* dark signal in electrons, including fixed-pattern structure.
 
-    This is the noise-free expectation per pixel; shot noise is applied separately
-    so that callers can inspect or reuse the deterministic pattern.
+    This is the noise-free expectation per pixel; shot noise is applied separately.
+    The fixed-pattern structure (DSNU and hot pixels) is deterministic for a given
+    sensor (keyed on :attr:`~getframes.config.CameraConfig.fixed_pattern_seed`), so
+    it repeats across frames and can be calibrated out with a master dark.
     """
     height, width = config.resolution
     mean_dark = config.dark_current_at(temperature_c) * exposure_s
     signal = np.full((height, width), mean_dark, dtype=np.float64)
 
     # Dark-signal non-uniformity: log-normal so the per-pixel gain stays positive
-    # with unit mean.
+    # with unit mean. Drawn from the fixed-pattern stream (same every frame).
     if config.dark_current_nonuniformity > 0 and mean_dark > 0:
         sigma = config.dark_current_nonuniformity
+        rng = _fixed_pattern_rng(config, _FPN_STREAM_DSNU)
         dsnu = rng.lognormal(mean=-0.5 * sigma**2, sigma=sigma, size=signal.shape)
         signal *= dsnu
 
-    # Hot pixels: a sparse population with strongly elevated dark current.
+    # Hot pixels: a sparse, *fixed* population with strongly elevated dark current.
     if config.hot_pixel_fraction > 0 and mean_dark > 0:
+        rng = _fixed_pattern_rng(config, _FPN_STREAM_HOT)
         hot_mask = rng.random(signal.shape) < config.hot_pixel_fraction
         signal[hot_mask] *= config.hot_pixel_factor
 
@@ -70,7 +91,6 @@ def photo_signal_map(
     photon_rate: PhotonRate,
     exposure_s: float,
     background_photon_rate: PhotonRate,
-    rng: np.random.Generator,
     quantum_efficiency: float | None = None,
 ) -> NDArray[np.float64]:
     """Per-pixel *mean* photo-generated signal in electrons (noise-free).
@@ -79,6 +99,10 @@ def photo_signal_map(
     background) to photoelectrons via the quantum efficiency, then imprints a
     fixed multiplicative PRNU pattern. ``photon_rate`` may be a scalar (uniform
     illumination) or a 2-D array matching the sensor resolution.
+
+    The PRNU pattern is deterministic for a given sensor (keyed on
+    :attr:`~getframes.config.CameraConfig.fixed_pattern_seed`), so it repeats across
+    frames and is removable with a master flat.
 
     ``quantum_efficiency`` overrides ``config.quantum_efficiency`` when given. The
     spectral path uses this with a pre-multiplied (already-photoelectron) map and
@@ -95,10 +119,12 @@ def photo_signal_map(
     # Broadcasts a scalar or an (h, w) array; a mismatched array shape raises here.
     mean_photo += (rate + background) * exposure_s * qe
 
-    # Photo-response non-uniformity: log-normal multiplier with unit mean, applied
-    # only where there is light (keeps the dark path's random stream untouched).
+    # Photo-response non-uniformity: a fixed log-normal multiplier with unit mean,
+    # applied only where there is light. Drawn from the fixed-pattern stream so it is
+    # the same pattern in every frame (a master flat can remove it).
     if config.prnu > 0 and np.any(mean_photo > 0):
         sigma = config.prnu
+        rng = _fixed_pattern_rng(config, _FPN_STREAM_PRNU)
         prnu = rng.lognormal(mean=-0.5 * sigma**2, sigma=sigma, size=mean_photo.shape)
         mean_photo *= prnu
 
@@ -310,9 +336,9 @@ def simulate_frame(
         rng = np.random.default_rng(seed)
 
     mean_photo = photo_signal_map(
-        config, photon_rate, exposure_s, background_photon_rate, rng, quantum_efficiency
+        config, photon_rate, exposure_s, background_photon_rate, quantum_efficiency
     )
-    mean_dark = dark_signal_map(config, exposure_s, temperature_c, rng)
+    mean_dark = dark_signal_map(config, exposure_s, temperature_c)
     electrons = frame_electrons(config, mean_photo + mean_dark, rng, exposure_s)
     adu = digitize(electrons, config, rng)
     return SimulationResult(adu, mean_photo, mean_dark, photon_rate)
@@ -338,7 +364,7 @@ def dark_frame_electrons(
     rng: np.random.Generator,
 ) -> NDArray[np.float64]:
     """Electron-domain dark frame prior to digitisation (kept for convenience)."""
-    mean_dark = dark_signal_map(config, exposure_s, temperature_c, rng)
+    mean_dark = dark_signal_map(config, exposure_s, temperature_c)
     return frame_electrons(config, mean_dark, rng, exposure_s)
 
 

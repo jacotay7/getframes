@@ -6,6 +6,32 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Calibration loop** (`getframes.calibrate` module, roadmap phase 1.1): combine
+  frames into masters and reduce raw frames against them.
+  - `combine(frames, method=...)` stacks frames into a master (`"mean"`,
+    `"median"`, or `"sigma_clip"`), reducing random noise by ~`sqrt(n)`.
+  - `calibrate(raw, *, bias, dark, flat, dark_scale)` performs standard
+    exposure-matched reduction `(raw - dark) / normalised(flat)`, so a reduced
+    frame can be compared directly against `Frame.truth`.
+  - `Camera.master_bias`, `Camera.master_dark`, and `Camera.master_flat`
+    (with optional `bias=` subtraction) build calibration masters from a series.
+- **Series symmetry**: `Camera.expose_series` and `Camera.observe_series` mirror
+  `dark_series` (independent-but-reproducible derived seeds; per-frame metadata).
+- `CameraConfig.fixed_pattern_seed`: seeds the sensor's fixed-pattern noise.
+
+### Changed
+
+- **Fixed-pattern noise is now genuinely fixed.** PRNU, DSNU, and the hot-pixel
+  map are drawn from a deterministic per-sensor stream (keyed on
+  `CameraConfig.fixed_pattern_seed`) instead of the per-frame RNG, so the pattern
+  repeats across every frame a camera produces — which is what lets a master flat
+  or dark actually remove it. This changes the exact per-pixel output (for a given
+  `seed`) of any config with `prnu`, `dark_current_nonuniformity`, or hot pixels;
+  statistical behaviour is unchanged. `noise.dark_signal_map` and
+  `noise.photo_signal_map` no longer take an `rng` argument.
+
 ## [1.0.0] - 2026-06-28
 
 First stable release. The public API is now frozen under

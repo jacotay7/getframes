@@ -15,6 +15,8 @@ from .presets import load_preset
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from numpy.typing import NDArray
+
     from .noise import PhotonRate
     from .scene import Scene
 
@@ -102,6 +104,22 @@ class Camera:
     def _resolve_rng(self, seed: int | None) -> np.random.Generator:
         return np.random.default_rng(seed) if seed is not None else self._rng
 
+    @staticmethod
+    def _series_seeds(seed: int | None, n_frames: int) -> list[int | None]:
+        """Derive ``n_frames`` independent-but-reproducible per-frame seeds.
+
+        When ``seed`` is given, each frame gets a distinct seed spawned from a
+        :class:`numpy.random.SeedSequence`, so the frames are statistically
+        independent yet the whole series repeats exactly. When ``seed`` is ``None``,
+        every frame draws from the camera's internal generator instead.
+        """
+        if n_frames < 1:
+            raise ValueError("n_frames must be >= 1.")
+        if seed is None:
+            return [None] * n_frames
+        ss = np.random.SeedSequence(seed)
+        return [int(s.generate_state(1)[0]) for s in ss.spawn(n_frames)]
+
     def dark_frame(
         self,
         exposure: float,
@@ -146,15 +164,7 @@ class Camera:
         When ``seed`` is given the series is reproducible; each frame uses a distinct
         derived seed so the frames are independent but the whole series is repeatable.
         """
-        if n_frames < 1:
-            raise ValueError("n_frames must be >= 1.")
-        seeds: list[int | None]
-        if seed is not None:
-            ss = np.random.SeedSequence(seed)
-            seeds = [int(s.generate_state(1)[0]) for s in ss.spawn(n_frames)]
-        else:
-            seeds = [None] * n_frames
-        for i, frame_seed in enumerate(seeds):
+        for i, frame_seed in enumerate(self._series_seeds(seed, n_frames)):
             frame = self.dark_frame(exposure, temperature, seed=frame_seed)
             frame.metadata["frame_index"] = i
             yield frame
@@ -310,6 +320,130 @@ class Camera:
         if scene.wcs is not None:
             frame.metadata.update(scene.wcs.header_cards())
         return frame
+
+    def expose_series(
+        self,
+        photon_rate: PhotonRate,
+        exposure: float,
+        n_frames: int,
+        temperature: float | None = None,
+        *,
+        background: PhotonRate = 0.0,
+        seed: int | None = None,
+        include_truth: bool = True,
+    ) -> Iterator[Frame]:
+        """Yield ``n_frames`` independent illuminated frames (the :meth:`expose` series).
+
+        The light-frame analogue of :meth:`dark_series`. When ``seed`` is given the
+        series is reproducible; each frame uses a distinct derived seed so the
+        frames are independent but the whole series repeats.
+        """
+        for i, frame_seed in enumerate(self._series_seeds(seed, n_frames)):
+            frame = self.expose(
+                photon_rate,
+                exposure,
+                temperature,
+                background=background,
+                seed=frame_seed,
+                include_truth=include_truth,
+            )
+            frame.metadata["frame_index"] = i
+            yield frame
+
+    def observe_series(
+        self,
+        scene: Scene,
+        exposure: float,
+        n_frames: int,
+        temperature: float | None = None,
+        *,
+        seed: int | None = None,
+        include_truth: bool = True,
+    ) -> Iterator[Frame]:
+        """Yield ``n_frames`` independent science frames of the same ``scene``.
+
+        The :meth:`observe` analogue of :meth:`dark_series`. Each frame uses a
+        distinct derived seed, so the stack is independent but reproducible. (Time
+        variability and pointing jitter arrive in a later release; for now every
+        frame observes the identical static scene.)
+        """
+        for i, frame_seed in enumerate(self._series_seeds(seed, n_frames)):
+            frame = self.observe(
+                scene, exposure, temperature, seed=frame_seed, include_truth=include_truth
+            )
+            frame.metadata["frame_index"] = i
+            yield frame
+
+    # ------------------------------------------------------------------
+    # Calibration masters
+    # ------------------------------------------------------------------
+    def master_bias(
+        self,
+        n_frames: int,
+        temperature: float | None = None,
+        *,
+        seed: int | None = None,
+        method: str = "median",
+    ) -> Frame:
+        """Combine ``n_frames`` bias frames into a master bias (see :func:`getframes.combine`)."""
+        from .calibrate import combine
+
+        frames = (self.bias_frame(temperature, seed=s) for s in self._series_seeds(seed, n_frames))
+        return combine(frames, method=method)
+
+    def master_dark(
+        self,
+        exposure: float,
+        n_frames: int,
+        temperature: float | None = None,
+        *,
+        seed: int | None = None,
+        method: str = "median",
+    ) -> Frame:
+        """Combine ``n_frames`` dark frames into a master dark.
+
+        The result still contains the bias pedestal, so it is subtracted directly
+        from an exposure-matched science frame (``calibrate(sci, dark=master)``).
+        """
+        from .calibrate import combine
+
+        return combine(self.dark_series(exposure, n_frames, temperature, seed=seed), method=method)
+
+    def master_flat(
+        self,
+        photon_rate: PhotonRate,
+        exposure: float,
+        n_frames: int,
+        temperature: float | None = None,
+        *,
+        background: PhotonRate = 0.0,
+        bias: Frame | NDArray[np.floating[Any]] | None = None,
+        seed: int | None = None,
+        method: str = "median",
+    ) -> Frame:
+        """Combine ``n_frames`` flat frames into a master flat.
+
+        If ``bias`` is given it is subtracted, yielding a pedestal-free flat whose
+        pixel-to-pixel structure is the detector's response — the form
+        :func:`getframes.calibrate` expects to normalise and divide by.
+        """
+        from .calibrate import combine
+
+        frames = self.expose_series(
+            photon_rate,
+            exposure,
+            n_frames,
+            temperature,
+            background=background,
+            seed=seed,
+            include_truth=False,
+        )
+        master = combine(frames, method=method)
+        if bias is None:
+            return master
+        data = np.asarray(master.data, dtype=np.float64) - np.asarray(bias, dtype=np.float64)
+        metadata = {**master.metadata, "bias_subtracted": True}
+        return Frame(data=data, metadata=metadata)
 
     def _metadata(
         self, frame_type: str, exposure: float, temperature: float, seed: int | None

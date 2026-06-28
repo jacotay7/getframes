@@ -123,6 +123,13 @@ class CameraConfig:
         Fraction of pixels that are "hot" (anomalously high dark current).
     hot_pixel_factor:
         Multiplicative dark-current factor applied to hot pixels.
+    fixed_pattern_seed:
+        Seed for the sensor's *fixed-pattern* noise (PRNU, DSNU, and the hot-pixel
+        map). These patterns are a property of the physical sensor, so they are the
+        *same in every frame* this camera produces --- which is exactly what lets a
+        master flat or dark capture and remove them. Two configs with the same seed
+        and shape share a pattern; change it to mint a different sensor. Independent
+        of the per-frame ``seed`` that drives shot/read noise.
     manufacturer, model, notes:
         Optional provenance metadata.
     """
@@ -151,6 +158,7 @@ class CameraConfig:
     dark_current_nonuniformity: float = 0.0
     hot_pixel_fraction: float = 0.0
     hot_pixel_factor: float = 100.0
+    fixed_pattern_seed: int = 0
     manufacturer: str | None = None
     model: str | None = None
     notes: str | None = None
