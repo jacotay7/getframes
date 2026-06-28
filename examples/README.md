@@ -24,3 +24,4 @@ pip install -e ".[examples]"
 | [`04_browse_presets.py`](04_browse_presets.py) | List presets; compare dark current vs temperature & read noise. |
 | [`05_visualise.py`](05_visualise.py) | EMCCD dark frame and its EM-gain noise tail. |
 | [`06_photon_transfer_curve.py`](06_photon_transfer_curve.py) | Build a PTC from synthetic flats; recover gain & read noise. |
+| [`07_star_field_exposure.py`](07_star_field_exposure.py) | Render a star field; find the exposure for a target SNR. |

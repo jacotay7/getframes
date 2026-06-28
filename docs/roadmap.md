@@ -272,7 +272,7 @@ The library's promise is *accuracy*, so tests assert physics, not pixels:
 | --- | --- | --- | --- |
 | **0.2** ✅ | Signal path | `Camera.expose`, photoelectrons + shot noise, PRNU, `flat_frame`, `bias_frame`, `Frame.truth` | **#1** |
 | **0.3** ✅ | Gain unification + eAPD | unified stochastic gain stage (§3.2), `SensorType.EAPD`, eAPD presets | **#3** |
-| **0.4** | Scene layer | sources, PSF, optics, bandpass/zero points, `Scene`, `Camera.observe` | **#2, #4** |
+| **0.4** ✅ | Scene layer | sources, PSF (Gaussian/Moffat), optics, bandpass/zero points, `Scene`, `Camera.observe` | **#2, #4** |
 | **0.5** | Realism + analysis | nonlinearity, cosmic rays, persistence, sCMOS, `analysis.ptc`, `analysis.apertures` | all, polish |
 | **0.6** | Spectral mode (opt-in) | `QE(λ)`, `SED`, spectral bandpasses; WCS via astropy | accuracy |
 | **1.0** | Stability | API freeze, validated presets, full docs | — |

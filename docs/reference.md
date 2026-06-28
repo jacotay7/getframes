@@ -20,6 +20,20 @@
 
 ::: getframes.presets
 
+## Scene & optics
+
+::: getframes.scene.scene.Scene
+
+::: getframes.scene.sources.PointSource
+
+::: getframes.scene.sources.Sky
+
+::: getframes.scene.optics.Telescope
+
+::: getframes.scene.photometry.Bandpass
+
+::: getframes.scene.psf
+
 ## Noise models
 
 ::: getframes.noise

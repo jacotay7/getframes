@@ -8,6 +8,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Scene/optics layer** (`getframes.scene`) and `Camera.observe(scene, ...)`:
+  render astronomical sources through a PSF and telescope into an incident
+  photon-rate map, then expose it. New public types: `Scene`, `Telescope`,
+  `Bandpass` (Johnson UBVRI zero points), `PointSource`, `Sky`, and the PSFs
+  `GaussianPSF` (exact, flux-conserving) and `MoffatPSF`.
 - **Unified stochastic gain stage** (`noise.apply_gain_stage`): one model for both
   EMCCD electron multiplication and eAPD avalanche gain, parameterised by mean gain
   and excess noise factor `F` via a Gamma model (`alpha = 1/(F^2-1)`). Reproduces

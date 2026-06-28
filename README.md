@@ -76,6 +76,27 @@ cam = gf.Camera(
 frame = cam.dark_frame(exposure=30.0, temperature=-10.0)
 ```
 
+### Observe a simulated star field
+
+Render astronomical sources through a PSF and telescope, then expose them on a
+detector — the full photon → electron → ADU path:
+
+```python
+scene = gf.Scene(
+    shape=(256, 256),
+    optics=gf.Telescope(aperture_diameter_m=2.5, throughput=0.3,
+                        plate_scale_arcsec_per_pixel=0.4, band=gf.Bandpass.johnson("V")),
+    psf=gf.MoffatPSF(fwhm_arcsec=1.1, beta=3.0),
+    sources=[gf.PointSource(x=128, y=128, magnitude=20.0)],
+    sky=gf.Sky(surface_brightness_mag_arcsec2=21.0),
+)
+cam = gf.Camera.from_preset("zwo_asi2600mm").with_config(resolution=(256, 256))
+frame = cam.observe(scene, exposure=300.0, seed=0)   # a realistic science frame
+```
+
+You can also drive the detector directly with a photon-rate map (a scalar for a
+uniform flat, or a per-pixel array): `cam.expose(photon_rate, exposure)`.
+
 ### Browse the preset library
 
 ```python
@@ -123,7 +144,7 @@ wavefront-sensing, and transit photometry).
 - [x] Dark frames (CCD / CMOS / EMCCD)
 - [x] **Photon/signal path** — `Camera.expose`, photoelectrons + shot noise, flats & bias *(v0.2)*
 - [x] **Unified gain stage** — exact EMCCD + eAPD/IR detectors *(v0.3)*
-- [ ] **Scene layer** — sources + PSF + optics → photon maps; `Camera.observe` *(v0.4)*
+- [x] **Scene layer** — sources + PSF + optics → photon maps; `Camera.observe` *(v0.4)*
 - [ ] Nonlinearity, cosmic rays, persistence, sCMOS, analysis helpers *(v0.5)*
 - [ ] Spectral mode: `QE(λ)`, SEDs, WCS *(v0.6)*
 

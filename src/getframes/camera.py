@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from .noise import PhotonRate
+    from .scene import Scene
 
 
 class Camera:
@@ -250,6 +251,37 @@ class Camera:
         """A zero-exposure bias frame (bias pedestal + read noise only)."""
         frame = self.expose(0.0, 0.0, temperature, seed=seed, include_truth=False)
         frame.metadata["frame_type"] = "bias"
+        return frame
+
+    def observe(
+        self,
+        scene: Scene,
+        exposure: float,
+        temperature: float | None = None,
+        *,
+        seed: int | None = None,
+        include_truth: bool = True,
+    ) -> Frame:
+        """Observe a :class:`~getframes.scene.Scene` and return a science frame.
+
+        Renders the scene to an incident photon-rate map, then exposes the sensor
+        to it (adding the scene's sky as a uniform background). The scene's
+        ``shape`` must match this camera's :attr:`resolution`.
+        """
+        if tuple(scene.shape) != self.resolution:
+            raise ValueError(
+                f"scene.shape {tuple(scene.shape)} does not match camera "
+                f"resolution {self.resolution}."
+            )
+        frame = self.expose(
+            scene.photon_rate_map(),
+            exposure,
+            temperature,
+            background=scene.sky_photon_rate(),
+            seed=seed,
+            include_truth=include_truth,
+        )
+        frame.metadata["frame_type"] = "science"
         return frame
 
     def _metadata(

@@ -17,13 +17,31 @@ from .camera import Camera
 from .config import CameraConfig, SensorType
 from .frame import Frame, FrameTruth
 from .presets import available_presets, load_preset
+from .scene import (
+    PSF,
+    Bandpass,
+    GaussianPSF,
+    MoffatPSF,
+    PointSource,
+    Scene,
+    Sky,
+    Telescope,
+)
 
 __all__ = [
+    "PSF",
+    "Bandpass",
     "Camera",
     "CameraConfig",
     "Frame",
     "FrameTruth",
+    "GaussianPSF",
+    "MoffatPSF",
+    "PointSource",
+    "Scene",
     "SensorType",
+    "Sky",
+    "Telescope",
     "__version__",
     "available_presets",
     "load_preset",
