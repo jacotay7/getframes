@@ -1,0 +1,18 @@
+# A plain, well-behaved CCD for testing and teaching.
+name = "Generic CCD"
+sensor_type = "CCD"
+resolution = [512, 512]
+pixel_size_um = 15.0
+quantum_efficiency = 0.85
+full_well_e = 100000.0
+bit_depth = 16
+gain_e_per_adu = 1.5
+bias_offset_adu = 400.0
+read_noise_e = 5.0
+dark_current_e_per_s = 0.1
+dark_current_ref_temp_c = 20.0
+dark_current_doubling_temp_c = 6.3
+dark_current_nonuniformity = 0.05
+hot_pixel_fraction = 0.001
+hot_pixel_factor = 100.0
+notes = "Idealised CCD with typical parameters; good default for examples."

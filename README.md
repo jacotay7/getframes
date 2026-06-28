@@ -1,1 +1,135 @@
 # getframes
+
+[![CI](https://github.com/jacotay7/getframes/actions/workflows/ci.yml/badge.svg)](https://github.com/jacotay7/getframes/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/getframes.svg)](https://pypi.org/project/getframes/)
+[![Python](https://img.shields.io/pypi/pyversions/getframes.svg)](https://pypi.org/project/getframes/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+**Realistic synthetic camera frames for scientific imaging pipelines.**
+
+`getframes` gives you a clean, small API for generating physically realistic frames
+from **CCD**, **CMOS**, and **EMCCD** detectors — with accurate noise properties
+(read noise, dark current, shot noise, fixed-pattern non-uniformity, EM gain,
+clock-induced charge) so you can build and validate image-processing pipelines
+against ground truth.
+
+> **Status:** alpha. Today `getframes` generates **dark frames**. Bias, flat, and
+> illuminated (object) frames are on the [roadmap](#roadmap).
+
+## Install
+
+```bash
+pip install getframes
+```
+
+From source (for development):
+
+```bash
+git clone https://github.com/jacotay7/getframes
+cd getframes
+pip install -e ".[dev]"
+```
+
+## Quick start
+
+```python
+import getframes as gf
+
+# Pick a camera from the built-in preset library...
+cam = gf.Camera.from_preset("andor_ikon_m934")
+
+# ...and generate a reproducible dark frame.
+frame = cam.dark_frame(exposure=60.0, temperature=-60.0, seed=0)
+
+frame.data            # 2-D numpy array of ADU, shape (1024, 1024)
+frame.stats()         # {'mean': ..., 'median': ..., 'std': ..., 'min': ..., 'max': ...}
+frame.metadata        # camera/exposure/temperature provenance
+```
+
+`Frame` is array-like, so it drops straight into NumPy:
+
+```python
+import numpy as np
+master_dark = np.mean([np.asarray(f) for f in cam.dark_series(60.0, n_frames=20, seed=1)], axis=0)
+```
+
+### Define your own camera
+
+```python
+cam = gf.Camera(
+    gf.CameraConfig(
+        name="My Lab CMOS",
+        sensor_type="CMOS",
+        resolution=(2048, 2048),       # (height, width)
+        pixel_size_um=6.5,
+        quantum_efficiency=0.82,
+        full_well_e=30_000,
+        bit_depth=12,
+        gain_e_per_adu=0.8,
+        bias_offset_adu=300,
+        read_noise_e=1.8,
+        dark_current_e_per_s=0.5,      # at the reference temperature
+        dark_current_ref_temp_c=20.0,
+        dark_current_doubling_temp_c=6.0,
+    )
+)
+frame = cam.dark_frame(exposure=30.0, temperature=-10.0)
+```
+
+### Browse the preset library
+
+```python
+from getframes import available_presets
+from getframes.presets import preset_info
+
+available_presets()   # ['andor_ikon_m934', 'andor_ixon_ultra_888', 'generic_ccd', ...]
+preset_info()         # rich descriptors for each preset
+```
+
+| Preset | Sensor | Notes |
+| --- | --- | --- |
+| `andor_ikon_m934` | CCD | Deep-cooled back-illuminated scientific CCD |
+| `andor_ixon_ultra_888` | EMCCD | Single-photon-sensitive EMCCD |
+| `zwo_asi2600mm` | CMOS | Sony IMX571 cooled CMOS |
+| `generic_ccd` / `generic_cmos` / `generic_emccd` | — | Idealised references for teaching/testing |
+
+## How the dark-frame model works
+
+The dark signal chain (see [`getframes/noise.py`](src/getframes/noise.py)):
+
+1. **Dark current vs. temperature** — `D(T) = D_ref · 2^((T − T_ref) / T_double)`
+2. **Fixed-pattern non-uniformity (DSNU)** and **hot pixels** modulate the per-pixel mean
+3. **Shot noise** — Poisson statistics on the dark electrons
+4. **Clock-induced charge** (EMCCD) — small Poisson term
+5. **EM gain** (EMCCD) — stochastic multiplication with realistic excess noise
+6. **Read noise** — Gaussian at the output amplifier
+7. **Digitisation** — gain conversion to ADU, bias pedestal, saturation, quantisation
+
+All randomness flows through a seeded `numpy.random.Generator`, so every frame is
+reproducible.
+
+## Documentation
+
+- [Guides & API reference](docs/) (built with MkDocs)
+- [Runnable examples](examples/)
+
+## Roadmap
+
+- [x] Dark frames (CCD / CMOS / EMCCD)
+- [ ] Bias and flat frames
+- [ ] Illuminated frames from scene/PSF models
+- [ ] Cosmic rays and persistence
+- [ ] Expanded preset library (sCMOS, IR arrays)
+
+## Contributing
+
+Contributions — especially new camera presets — are welcome. See
+[CONTRIBUTING.md](CONTRIBUTING.md). Run the checks locally with:
+
+```bash
+ruff check . && ruff format --check . && mypy && pytest
+```
+
+## License
+
+MIT — see [LICENSE](LICENSE).

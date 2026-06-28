@@ -1,0 +1,22 @@
+# Andor iXon Ultra 888 — back-illuminated EMCCD
+name = "Andor iXon Ultra 888"
+manufacturer = "Andor"
+model = "iXon Ultra 888"
+sensor_type = "EMCCD"
+resolution = [1024, 1024]
+pixel_size_um = 13.0
+quantum_efficiency = 0.95
+full_well_e = 80000.0
+bit_depth = 16
+gain_e_per_adu = 4.0                  # system gain at the ADC
+bias_offset_adu = 500.0
+read_noise_e = 45.0                   # large at the output amplifier; EM gain overcomes it
+dark_current_e_per_s = 0.00025
+dark_current_ref_temp_c = -80.0
+dark_current_doubling_temp_c = 6.3
+em_gain = 300.0
+clock_induced_charge_e = 0.005        # spurious charge per pixel per frame
+dark_current_nonuniformity = 0.04
+hot_pixel_fraction = 0.0003
+hot_pixel_factor = 60.0
+notes = "EMCCD for single-photon-sensitive imaging; effective read noise <1 e- at high EM gain."

@@ -1,0 +1,75 @@
+# Camera presets
+
+`getframes` ships a library of camera configurations so you can start simulating
+without hunting down datasheet numbers.
+
+## Listing presets
+
+```python
+from getframes import available_presets
+from getframes.presets import preset_info
+
+available_presets()
+# ['andor_ikon_m934', 'andor_ixon_ultra_888', 'generic_ccd', ...]
+
+preset_info()
+# [{'preset': 'andor_ikon_m934', 'name': 'Andor iKon-M 934',
+#   'manufacturer': 'Andor', 'model': 'iKon-M 934', 'sensor_type': 'CCD'}, ...]
+```
+
+## Loading a preset
+
+```python
+import getframes as gf
+
+cam = gf.Camera.from_preset("andor_ixon_ultra_888")
+
+# Or get the raw config to tweak it:
+cfg = gf.load_preset("andor_ixon_ultra_888")
+warmer = cfg.replace(em_gain=100.0)
+cam = gf.Camera(warmer)
+```
+
+## Bundled cameras
+
+| Preset | Sensor | Description |
+| --- | --- | --- |
+| `andor_ikon_m934` | CCD | Deep-cooled (−80 °C) back-illuminated scientific CCD |
+| `andor_ixon_ultra_888` | EMCCD | Single-photon-sensitive EMCCD |
+| `zwo_asi2600mm` | CMOS | Sony IMX571 cooled CMOS |
+| `generic_ccd` | CCD | Idealised CCD for teaching/testing |
+| `generic_cmos` | CMOS | Idealised uncooled CMOS |
+| `generic_emccd` | EMCCD | Idealised EMCCD |
+
+!!! warning "Verify before quantitative use"
+    Preset values are representative of published specifications but are not a
+    substitute for characterising your own hardware. Treat them as realistic
+    starting points.
+
+## Adding your own preset
+
+Presets are plain TOML files in `src/getframes/presets/data/`. To add a camera,
+drop in a `<slug>.toml` file whose keys mirror
+[`CameraConfig`][getframes.config.CameraConfig]:
+
+```toml
+name = "My Camera"
+manufacturer = "Acme"
+model = "CAM-9000"
+sensor_type = "CMOS"
+resolution = [2048, 2048]
+pixel_size_um = 5.0
+quantum_efficiency = 0.85
+full_well_e = 20000.0
+bit_depth = 12
+gain_e_per_adu = 1.0
+bias_offset_adu = 250.0
+read_noise_e = 2.0
+dark_current_e_per_s = 0.3
+dark_current_ref_temp_c = 20.0
+dark_current_doubling_temp_c = 6.0
+notes = "Where these numbers came from."
+```
+
+The loader discovers the file automatically — no code changes required. If you are
+working from a clone, the preset test suite will validate it loads correctly.

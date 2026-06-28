@@ -1,0 +1,20 @@
+# ZWO ASI2600MM Pro — Sony IMX571 back-illuminated CMOS
+name = "ZWO ASI2600MM Pro"
+manufacturer = "ZWO"
+model = "ASI2600MM Pro (IMX571)"
+sensor_type = "CMOS"
+resolution = [4176, 6248]
+pixel_size_um = 3.76
+quantum_efficiency = 0.91
+full_well_e = 50000.0
+bit_depth = 16
+gain_e_per_adu = 0.25                 # unity-gain regime; low-noise mode
+bias_offset_adu = 500.0
+read_noise_e = 1.5                    # at high conversion gain
+dark_current_e_per_s = 0.0022
+dark_current_ref_temp_c = -10.0
+dark_current_doubling_temp_c = 6.0
+dark_current_nonuniformity = 0.02
+hot_pixel_fraction = 0.0005
+hot_pixel_factor = 120.0
+notes = "Popular cooled astrophotography/scientific CMOS; very low read noise."

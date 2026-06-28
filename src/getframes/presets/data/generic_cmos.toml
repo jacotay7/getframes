@@ -1,0 +1,18 @@
+# A plain, well-behaved CMOS for testing and teaching.
+name = "Generic CMOS"
+sensor_type = "CMOS"
+resolution = [1080, 1920]
+pixel_size_um = 5.0
+quantum_efficiency = 0.80
+full_well_e = 15000.0
+bit_depth = 12
+gain_e_per_adu = 1.0
+bias_offset_adu = 200.0
+read_noise_e = 2.0
+dark_current_e_per_s = 2.0
+dark_current_ref_temp_c = 20.0
+dark_current_doubling_temp_c = 6.0
+dark_current_nonuniformity = 0.04
+hot_pixel_fraction = 0.002
+hot_pixel_factor = 150.0
+notes = "Idealised uncooled CMOS; higher dark current and lower full well than the CCD."

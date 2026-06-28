@@ -1,0 +1,22 @@
+# Andor iKon-M 934 — deep-cooled scientific CCD
+# Values are representative of published specifications; verify against your
+# own characterisation for quantitative work.
+name = "Andor iKon-M 934"
+manufacturer = "Andor"
+model = "iKon-M 934"
+sensor_type = "CCD"
+resolution = [1024, 1024]            # (height, width) in pixels
+pixel_size_um = 13.0
+quantum_efficiency = 0.95            # peak QE (BV coating)
+full_well_e = 130000.0
+bit_depth = 16
+gain_e_per_adu = 2.0
+bias_offset_adu = 500.0
+read_noise_e = 2.9                   # at slow readout
+dark_current_e_per_s = 0.00012       # at the reference temperature below
+dark_current_ref_temp_c = -80.0
+dark_current_doubling_temp_c = 6.3
+dark_current_nonuniformity = 0.03
+hot_pixel_fraction = 0.0002
+hot_pixel_factor = 80.0
+notes = "Deep-cooled (-80 C) back-illuminated CCD for low-light spectroscopy/imaging."

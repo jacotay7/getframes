@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: MIT
+"""getframes: realistic synthetic camera frames for scientific imaging pipelines.
+
+Quick start
+-----------
+>>> import getframes as gf
+>>> cam = gf.Camera.from_preset("andor_ikon_m934")
+>>> frame = cam.dark_frame(exposure=10.0, temperature=-60.0)
+>>> frame.data.shape
+(1024, 1024)
+"""
+
+from __future__ import annotations
+
+from .__about__ import __version__
+from .camera import Camera
+from .config import CameraConfig, SensorType
+from .frame import Frame
+from .presets import available_presets, load_preset
+
+__all__ = [
+    "Camera",
+    "CameraConfig",
+    "Frame",
+    "SensorType",
+    "__version__",
+    "available_presets",
+    "load_preset",
+]

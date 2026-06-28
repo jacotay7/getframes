@@ -206,6 +206,12 @@ tempCodeRunnerFile.py
 # Ruff stuff:
 .ruff_cache/
 
+# macOS
+.DS_Store
+
+# Generated frames
+*.fits
+
 # PyPI configuration file
 .pypirc
 
