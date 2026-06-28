@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "getframes"
-description = "Generate realistic synthetic camera frames (CCD/CMOS/EMCCD) with accurate noise properties for scientific imaging pipelines."
+description = "Generate physically realistic synthetic camera frames (CCD/CMOS/EMCCD/eAPD/sCMOS) — dark, bias, flat, and rendered star fields — with auditable noise physics for scientific imaging pipelines."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -21,7 +21,7 @@ keywords = [
     "imaging",
 ]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
@@ -61,7 +61,7 @@ examples = [
 
 [project.urls]
 Homepage = "https://github.com/jacotay7/getframes"
-Documentation = "https://github.com/jacotay7/getframes#readme"
+Documentation = "https://jacotay7.github.io/getframes/"
 Repository = "https://github.com/jacotay7/getframes"
 Issues = "https://github.com/jacotay7/getframes/issues"
 Changelog = "https://github.com/jacotay7/getframes/blob/main/CHANGELOG.md"

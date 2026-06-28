@@ -16,6 +16,8 @@
 
 ::: getframes.frame.Frame
 
+::: getframes.frame.FrameTruth
+
 ## Presets
 
 ::: getframes.presets

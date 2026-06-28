@@ -8,13 +8,19 @@
 **Realistic synthetic camera frames for scientific imaging pipelines.**
 
 `getframes` gives you a clean, small API for generating physically realistic frames
-from **CCD**, **CMOS**, and **EMCCD** detectors — with accurate noise properties
-(read noise, dark current, shot noise, fixed-pattern non-uniformity, EM gain,
-clock-induced charge) so you can build and validate image-processing pipelines
-against ground truth.
+from **CCD**, **CMOS**, **EMCCD**, **eAPD**, and **sCMOS** detectors — with
+accurate, auditable noise physics (read noise, dark current, shot noise,
+fixed-pattern non-uniformity, a unified stochastic gain stage, clock-induced
+charge, nonlinearity, and cosmic rays) so you can build and validate
+image-processing pipelines against ground truth.
 
-> **Status:** alpha. Today `getframes` generates **dark frames**. Bias, flat, and
-> illuminated (object) frames are on the [roadmap](#roadmap).
+It generates **dark**, **bias**, and **flat** frames, and renders **star fields**
+through a PSF and telescope into a realistic science frame — the full
+photon → electron → ADU signal path, with optional opt-in spectral mode.
+
+> **Status:** stable. `getframes` 1.0 freezes the public API under
+> [Semantic Versioning](https://semver.org/spec/v2.0.0.html); see
+> [API stability](docs/stability.md).
 
 ## Install
 
@@ -133,8 +139,11 @@ reproducible.
 
 ## Documentation
 
-- [Guides & API reference](docs/) (built with MkDocs)
-- [Runnable examples](examples/)
+- [Guides & API reference](docs/) (built with MkDocs) — getting started, the
+  noise model, observing scenes, spectral mode, and presets
+- [API stability & versioning](docs/stability.md)
+- [Runnable examples](examples/) — PTC, star-field exposure planning, AO limiting
+  magnitude, transit photometry, detector realism
 
 ## Roadmap
 
@@ -148,8 +157,9 @@ wavefront-sensing, and transit photometry).
 - [x] **Scene layer** — sources + PSF + optics → photon maps; `Camera.observe` *(v0.4)*
 - [x] **Analysis helpers** — aperture photometry, centroiding, photon-transfer curve *(v0.5a)*
 - [x] **Detector realism** — nonlinearity, cosmic rays, sCMOS per-pixel read noise *(v0.5b)*
+- [x] **Spectral mode** — `QE(λ)`, SEDs, spectral bandpasses, WCS tagging *(v0.6)*
+- [x] **1.0** — API freeze, validated presets, full docs
 - [ ] Persistence/latent images (needs cross-frame state)
-- [ ] Spectral mode: `QE(λ)`, SEDs, WCS *(v0.6)*
 
 ## Contributing
 

@@ -2,10 +2,13 @@
 
 **Realistic synthetic camera frames for scientific imaging pipelines.**
 
-`getframes` generates physically realistic frames from **CCD**, **CMOS**, and
-**EMCCD** detectors, with accurate noise properties — read noise, dark current,
-shot noise, fixed-pattern non-uniformity, EM gain, and clock-induced charge. Use it
-to build, test, and validate image-processing pipelines against ground truth.
+`getframes` generates physically realistic frames from **CCD**, **CMOS**,
+**EMCCD**, **eAPD**, and **sCMOS** detectors, with accurate, auditable noise
+physics — read noise, dark current, shot noise, fixed-pattern non-uniformity, a
+unified stochastic gain stage, clock-induced charge, nonlinearity, and cosmic
+rays. Generate dark, bias, and flat frames, or render a star field through a PSF
+and telescope into a science frame. Use it to build, test, and validate
+image-processing pipelines against ground truth.
 
 ```python
 import getframes as gf
@@ -26,9 +29,12 @@ pip install getframes
 
 - **[Getting started](guides/getting-started.md)** — your first frames.
 - **[The noise model](guides/noise-model.md)** — the physics, step by step.
+- **[Observing scenes](guides/scenes.md)** — sources, PSFs, and telescopes.
+- **[Spectral mode](guides/spectral.md)** — wavelength-resolved QE and SEDs.
 - **[Camera presets](guides/presets.md)** — the built-in library and adding your own.
 - **[API reference](reference.md)** — every public class and function.
+- **[API stability](stability.md)** — what 1.0 guarantees.
 
 !!! note "Status"
-    `getframes` is in alpha and currently generates **dark frames**. Bias, flat, and
-    illuminated frames are planned.
+    `getframes` 1.0 is stable: the public API is frozen under [Semantic
+    Versioning](https://semver.org/spec/v2.0.0.html). See [API stability](stability.md).

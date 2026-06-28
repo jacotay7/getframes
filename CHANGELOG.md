@@ -6,6 +6,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-06-28
+
+First stable release. The public API is now frozen under
+[Semantic Versioning](https://semver.org/spec/v2.0.0.html): the names exported
+from `import getframes` (and `getframes.analysis`) will not change incompatibly
+without a major-version bump. See [API stability](docs/stability.md).
+
+This release consolidates the work from the 0.2–0.6 development series — the
+photon/signal path, the unified gain stage, the scene/optics layer, analysis
+helpers, detector-realism effects, and opt-in spectral mode — into a supported,
+documented surface. Everything below was developed across those phases and ships
+together in 1.0.
+
 ### Added
 
 - **Spectral mode** (opt-in, additive): a new `getframes.spectral` module with
@@ -74,5 +87,6 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Documentation, runnable examples, and CI (lint, type-check, test matrix, PyPI
   release via Trusted Publishing).
 
-[Unreleased]: https://github.com/jacotay7/getframes/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/jacotay7/getframes/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/jacotay7/getframes/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/jacotay7/getframes/releases/tag/v0.1.0

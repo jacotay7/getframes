@@ -8,8 +8,8 @@ This guide walks you from install to your first reproducible dark frame.
 pip install getframes
 ```
 
-The core install pulls in only NumPy. For the plotting example and FITS export,
-add the optional extras:
+The core install depends only on NumPy and SciPy. For the plotting examples and
+FITS export, add the optional extras (`matplotlib` + `astropy`):
 
 ```bash
 pip install "getframes[examples]"
@@ -96,3 +96,30 @@ frame.to_fits("dark.fits", overwrite=True)
 ```
 
 The metadata is written to the FITS header where it fits the keyword constraints.
+
+## Beyond dark frames
+
+Dark frames are the `photon_rate = 0` special case of the general signal path.
+The same `Camera` also produces illuminated frames and rendered scenes:
+
+```python
+# Drive the detector with an incident photon rate (scalar or per-pixel array):
+flat = cam.expose(photon_rate=5_000.0, exposure=1.0, seed=0)
+bias = cam.bias_frame(seed=0)
+
+# Or render astronomical sources through a PSF and telescope:
+scene = gf.Scene(
+    shape=cam.resolution,
+    optics=gf.Telescope(aperture_diameter_m=2.5, throughput=0.3,
+                        plate_scale_arcsec_per_pixel=0.4, band=gf.Bandpass.johnson("V")),
+    psf=gf.MoffatPSF(fwhm_arcsec=1.1, beta=3.0),
+    sources=[gf.PointSource(x=512, y=512, magnitude=20.0)],
+    sky=gf.Sky(surface_brightness_mag_arcsec2=21.0),
+)
+frame = cam.observe(scene, exposure=300.0, seed=0)
+```
+
+Every illuminated frame can carry the noise-free ground truth it was generated
+from (`frame.truth`), which is what makes `getframes` useful for validating a
+pipeline. See **[Observing scenes](scenes.md)** and **[Spectral mode](spectral.md)**
+for the full story.

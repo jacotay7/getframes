@@ -5,10 +5,13 @@ Guidance for AI agents (and humans) working in the `getframes` repository.
 ## What this project is
 
 `getframes` is a Python library that generates **physically realistic synthetic
-camera frames** (CCD / CMOS / EMCCD) for scientists building image-processing and
-simulation pipelines. The priority is a **clean, small, well-documented API** with
-**accurate, auditable noise physics**. Currently it produces dark frames; bias,
-flat, and illuminated frames are planned.
+camera frames** (CCD / CMOS / EMCCD / eAPD / sCMOS) for scientists building
+image-processing and simulation pipelines. The priority is a **clean, small,
+well-documented API** with **accurate, auditable noise physics**. It produces
+dark, bias, and flat frames, and renders star fields through a PSF and telescope
+(`Camera.observe`) — the full photon → electron → ADU path, with opt-in spectral
+mode. As of 1.0 the public API is frozen under SemVer; keep it backwards
+compatible.
 
 ## Architecture
 
