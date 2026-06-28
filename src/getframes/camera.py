@@ -166,6 +166,7 @@ class Camera:
         temperature: float | None = None,
         *,
         background: PhotonRate = 0.0,
+        quantum_efficiency: float | None = None,
         seed: int | None = None,
         include_truth: bool = True,
     ) -> Frame:
@@ -186,6 +187,10 @@ class Camera:
             :attr:`default_temperature_c`.
         background:
             Additive background (sky/thermal) photon rate in photons/s/pixel.
+        quantum_efficiency:
+            Overrides the config's scalar QE for this exposure. Spectral mode uses
+            this with an already-photoelectron map and ``1.0``; most callers leave
+            it ``None``.
         seed:
             If given, use a fresh generator seeded with this value for a fully
             reproducible frame.
@@ -201,6 +206,7 @@ class Camera:
             exposure,
             temperature_c=temp,
             background_photon_rate=background,
+            quantum_efficiency=quantum_efficiency,
             rng=rng,
         )
         truth = (
@@ -267,21 +273,42 @@ class Camera:
         Renders the scene to an incident photon-rate map, then exposes the sensor
         to it (adding the scene's sky as a uniform background). The scene's
         ``shape`` must match this camera's :attr:`resolution`.
+
+        **Spectral mode** activates automatically when this camera's config has a
+        :attr:`~getframes.config.CameraConfig.qe_curve` *and* the scene's band
+        carries a spectral response: each source then gets a colour-dependent
+        effective QE from its SED, instead of the scalar ``quantum_efficiency``.
         """
         if tuple(scene.shape) != self.resolution:
             raise ValueError(
                 f"scene.shape {tuple(scene.shape)} does not match camera "
                 f"resolution {self.resolution}."
             )
-        frame = self.expose(
-            scene.photon_rate_map(),
-            exposure,
-            temperature,
-            background=scene.sky_photon_rate(),
-            seed=seed,
-            include_truth=include_truth,
-        )
+        spectral = self.config.qe_curve is not None and scene.is_spectral_capable
+        if spectral:
+            assert self.config.qe_curve is not None  # narrowed by `spectral`
+            frame = self.expose(
+                scene.photoelectron_rate_map(self.config.qe_curve),
+                exposure,
+                temperature,
+                background=scene.sky_electron_rate(self.config.qe_curve),
+                quantum_efficiency=1.0,
+                seed=seed,
+                include_truth=include_truth,
+            )
+        else:
+            frame = self.expose(
+                scene.photon_rate_map(),
+                exposure,
+                temperature,
+                background=scene.sky_photon_rate(),
+                seed=seed,
+                include_truth=include_truth,
+            )
         frame.metadata["frame_type"] = "science"
+        frame.metadata["spectral"] = spectral
+        if scene.wcs is not None:
+            frame.metadata.update(scene.wcs.header_cards())
         return frame
 
     def _metadata(

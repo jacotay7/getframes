@@ -71,6 +71,7 @@ def photo_signal_map(
     exposure_s: float,
     background_photon_rate: PhotonRate,
     rng: np.random.Generator,
+    quantum_efficiency: float | None = None,
 ) -> NDArray[np.float64]:
     """Per-pixel *mean* photo-generated signal in electrons (noise-free).
 
@@ -78,8 +79,13 @@ def photo_signal_map(
     background) to photoelectrons via the quantum efficiency, then imprints a
     fixed multiplicative PRNU pattern. ``photon_rate`` may be a scalar (uniform
     illumination) or a 2-D array matching the sensor resolution.
+
+    ``quantum_efficiency`` overrides ``config.quantum_efficiency`` when given. The
+    spectral path uses this with a pre-multiplied (already-photoelectron) map and
+    ``quantum_efficiency = 1.0``.
     """
     height, width = config.resolution
+    qe = config.quantum_efficiency if quantum_efficiency is None else quantum_efficiency
     rate = np.asarray(photon_rate, dtype=np.float64)
     background = np.asarray(background_photon_rate, dtype=np.float64)
     if rate.ndim not in (0, 2) or background.ndim not in (0, 2):
@@ -87,7 +93,7 @@ def photo_signal_map(
 
     mean_photo = np.zeros((height, width), dtype=np.float64)
     # Broadcasts a scalar or an (h, w) array; a mismatched array shape raises here.
-    mean_photo += (rate + background) * exposure_s * config.quantum_efficiency
+    mean_photo += (rate + background) * exposure_s * qe
 
     # Photo-response non-uniformity: log-normal multiplier with unit mean, applied
     # only where there is light (keeps the dark path's random stream untouched).
@@ -273,6 +279,7 @@ def simulate_frame(
     *,
     temperature_c: float,
     background_photon_rate: PhotonRate = 0.0,
+    quantum_efficiency: float | None = None,
     rng: np.random.Generator | None = None,
     seed: int | None = None,
 ) -> SimulationResult:
@@ -291,6 +298,9 @@ def simulate_frame(
         Sensor temperature in degrees Celsius.
     background_photon_rate:
         Additive background (sky/thermal) photon rate in photons/s/pixel.
+    quantum_efficiency:
+        Overrides ``config.quantum_efficiency`` for the photon-to-electron step
+        (used by spectral mode with a pre-converted electron map and ``1.0``).
     rng, seed:
         Provide an existing generator, or a seed to build a fresh one.
     """
@@ -299,7 +309,9 @@ def simulate_frame(
     if rng is None:
         rng = np.random.default_rng(seed)
 
-    mean_photo = photo_signal_map(config, photon_rate, exposure_s, background_photon_rate, rng)
+    mean_photo = photo_signal_map(
+        config, photon_rate, exposure_s, background_photon_rate, rng, quantum_efficiency
+    )
     mean_dark = dark_signal_map(config, exposure_s, temperature_c, rng)
     electrons = frame_electrons(config, mean_photo + mean_dark, rng, exposure_s)
     adu = digitize(electrons, config, rng)

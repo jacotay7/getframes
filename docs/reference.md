@@ -32,7 +32,13 @@
 
 ::: getframes.scene.photometry.Bandpass
 
+::: getframes.scene.wcs.WCSInfo
+
 ::: getframes.scene.psf
+
+## Spectral mode
+
+::: getframes.spectral
 
 ## Analysis helpers
 

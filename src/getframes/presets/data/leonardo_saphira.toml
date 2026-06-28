@@ -23,3 +23,10 @@ dark_current_nonuniformity = 0.05
 hot_pixel_fraction = 0.0005
 hot_pixel_factor = 50.0
 notes = "Sub-electron effective read noise at high avalanche gain; near-unity excess noise."
+
+# Wavelength-resolved quantum efficiency (HgCdTe, ~2.5 um cutoff). Optional; only
+# used in spectral mode (Camera.observe with a band that has a spectral response).
+# Representative shape --- supply a measured curve for quantitative IR work.
+[qe_curve]
+wavelength_nm = [800.0, 1000.0, 1500.0, 2000.0, 2400.0, 2500.0]
+qe = [0.45, 0.85, 0.90, 0.90, 0.80, 0.30]

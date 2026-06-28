@@ -13,6 +13,8 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any
 
+from .spectral import QE
+
 
 class SensorType(str, Enum):
     """The detector architecture, which selects the noise model used."""
@@ -55,8 +57,14 @@ class CameraConfig:
     pixel_size_um:
         Physical pixel pitch in microns. Informational; not used for dark frames.
     quantum_efficiency:
-        Peak quantum efficiency in ``[0, 1]``. Informational for dark frames;
-        used by future illuminated-frame models.
+        Band-averaged quantum efficiency in ``[0, 1]``. Used by the signal path to
+        convert photons to photoelectrons. Ignored for dark frames.
+    qe_curve:
+        Optional wavelength-resolved quantum efficiency
+        (:class:`~getframes.spectral.QE`). When set, :meth:`Camera.observe`
+        switches to spectral mode and computes a colour-dependent effective QE from
+        each source's SED and the band's spectral response, instead of the scalar
+        ``quantum_efficiency``. ``None`` keeps the band-averaged model.
     full_well_e:
         Full-well capacity in electrons. Signal saturates here before digitization.
     bit_depth:
@@ -130,6 +138,7 @@ class CameraConfig:
     bias_offset_adu: float
     read_noise_e: float
     dark_current_e_per_s: float
+    qe_curve: QE | None = None
     prnu: float = 0.0
     read_noise_nonuniformity: float = 0.0
     nonlinearity: float = 0.0
@@ -184,6 +193,8 @@ class CameraConfig:
             raise ValueError("full_well_e must be positive.")
         if not 0.0 <= self.hot_pixel_fraction <= 1.0:
             raise ValueError("hot_pixel_fraction must be in [0, 1].")
+        if self.qe_curve is not None and not isinstance(self.qe_curve, QE):
+            raise ValueError("qe_curve must be a getframes.spectral.QE instance or None.")
 
     @property
     def max_adu(self) -> int:
@@ -231,16 +242,47 @@ class CameraConfig:
         data = asdict(self)
         data["sensor_type"] = self.sensor_type.value
         data["resolution"] = list(self.resolution)
+        data["qe_curve"] = _serialize_qe_curve(self.qe_curve)
         return data
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> CameraConfig:
-        """Build a config from a dict, ignoring unknown keys (stashed in ``extra``)."""
+        """Build a config from a dict, ignoring unknown keys (stashed in ``extra``).
+
+        A ``qe_curve`` may be given as a :class:`~getframes.spectral.QE` or as a
+        mapping ``{"wavelength_nm": [...], "qe": [...]}`` (the form used in preset
+        TOML files).
+        """
         known = {f for f in cls.__dataclass_fields__ if f != "extra"}
         kwargs = {k: v for k, v in data.items() if k in known}
+        if "qe_curve" in kwargs:
+            kwargs["qe_curve"] = _parse_qe_curve(kwargs["qe_curve"])
         passthrough = dict(data.get("extra", {}))
         unknown = {k: v for k, v in data.items() if k not in known and k != "extra"}
         merged = {**passthrough, **unknown}
         if merged:
             kwargs["extra"] = merged
         return cls(**kwargs)
+
+
+def _serialize_qe_curve(qe_curve: QE | None) -> dict[str, list[float]] | None:
+    """Render a QE curve to a plain ``{wavelength_nm, qe}`` mapping (or ``None``)."""
+    if qe_curve is None:
+        return None
+    return {
+        "wavelength_nm": [float(w) for w in qe_curve.wavelength_nm],
+        "qe": [float(v) for v in qe_curve.value],
+    }
+
+
+def _parse_qe_curve(value: QE | dict[str, Any] | None) -> QE | None:
+    """Coerce a QE curve given as a :class:`QE`, a mapping, or ``None``."""
+    if value is None or isinstance(value, QE):
+        return value
+    if isinstance(value, dict):
+        wl = value.get("wavelength_nm")
+        qe = value.get("qe", value.get("value"))
+        if wl is None or qe is None:
+            raise ValueError("qe_curve mapping needs 'wavelength_nm' and 'qe' keys.")
+        return QE.from_arrays(wl, qe)
+    raise ValueError("qe_curve must be a QE, a mapping, or None.")

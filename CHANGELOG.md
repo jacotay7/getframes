@@ -8,6 +8,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Spectral mode** (opt-in, additive): a new `getframes.spectral` module with
+  `Spectrum`, `SED` (flat/blackbody/power-law shapes), `QE` (wavelength-resolved
+  quantum efficiency), and `SpectralBandpass` (tophat / Johnson responses).
+  `Bandpass.johnson` now ships a spectral `response` by default and gains
+  `Bandpass.effective_qe`. Setting `CameraConfig.qe_curve` makes `Camera.observe`
+  switch to a colour-dependent **effective QE**, folding each source's SED with the
+  band response and the detector QE curve; the magnitude-to-photon-rate conversion
+  is unchanged (the SED shape only affects the photon-to-electron step). Presets
+  may carry a `[qe_curve]` table (added to `leonardo_saphira`).
+- **WCS tagging** via `WCSInfo` (TAN projection): emits FITS WCS header cards with
+  no third-party dependency (written into the observed `Frame` metadata and FITS
+  output) and offers astropy-backed `pixel_to_world` / `world_to_pixel`. A `Scene`
+  may carry an optional `wcs`.
+- `PointSource.sed` and `Sky.sed` optional spectral energy distributions; an
+  optional `quantum_efficiency` override on `Camera.expose` / `noise.simulate_frame`.
 - **Detector-realism effects**, all off by default: nonlinearity (`nonlinearity`),
   cosmic rays (`cosmic_ray_rate_per_cm2_s`), and per-pixel sCMOS read noise
   (`read_noise_nonuniformity`). New `SensorType.SCMOS` and presets

@@ -13,6 +13,7 @@ from .photometry import Bandpass
 from .psf import PSF, GaussianPSF, MoffatPSF
 from .scene import Scene
 from .sources import PointSource, Sky
+from .wcs import WCSInfo
 
 __all__ = [
     "PSF",
@@ -23,4 +24,5 @@ __all__ = [
     "Scene",
     "Sky",
     "Telescope",
+    "WCSInfo",
 ]

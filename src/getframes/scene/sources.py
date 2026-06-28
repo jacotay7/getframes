@@ -4,6 +4,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from ..spectral import SED
 
 
 @dataclass(frozen=True)
@@ -18,12 +22,18 @@ class PointSource:
       sub-aperture).
 
     ``x`` is the column and ``y`` the row, in pixels; sub-pixel positions are fine.
+
+    ``sed`` is an optional spectral energy distribution
+    (:class:`~getframes.spectral.SED`). It is used only in spectral mode, to give
+    the source a colour-dependent effective QE; it has no effect on the integrated
+    photon rate (the magnitude sets that). Defaults to a flat photon spectrum.
     """
 
     x: float
     y: float
     magnitude: float | None = None
     photon_rate: float | None = None
+    sed: SED | None = None
 
     def __post_init__(self) -> None:
         if (self.magnitude is None) == (self.photon_rate is None):
@@ -40,6 +50,10 @@ class Sky:
     ----------
     surface_brightness_mag_arcsec2:
         Sky brightness in magnitudes per square arcsecond (fainter = larger).
+    sed:
+        Optional spectral energy distribution for the sky, used only in spectral
+        mode for the sky's effective QE. Defaults to a flat photon spectrum.
     """
 
     surface_brightness_mag_arcsec2: float
+    sed: SED | None = None

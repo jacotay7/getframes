@@ -50,9 +50,10 @@ A [`PointSource`][getframes.scene.sources.PointSource] is given **either** a
   pre-quantum-efficiency) --- convenient when you know the flux directly, e.g. an
   adaptive-optics sub-aperture. This path ignores the bandpass entirely.
 
-The conversion is band-integrated (not spectral): each band carries one photon
-zero point. This is accurate enough for exposure planning; a spectral mode is on
-the [roadmap](../roadmap.md).
+The conversion is band-integrated by default: each band carries one photon zero
+point, accurate enough for exposure planning. For colour-dependent quantum
+efficiency, opt into [spectral mode](spectral.md) by giving sources an `SED` and
+the camera a `qe_curve`.
 
 ## Point-spread functions
 

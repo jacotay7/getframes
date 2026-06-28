@@ -27,10 +27,14 @@ from .scene import (
     Scene,
     Sky,
     Telescope,
+    WCSInfo,
 )
+from .spectral import QE, SED, SpectralBandpass, Spectrum
 
 __all__ = [
     "PSF",
+    "QE",
+    "SED",
     "Bandpass",
     "Camera",
     "CameraConfig",
@@ -42,7 +46,10 @@ __all__ = [
     "Scene",
     "SensorType",
     "Sky",
+    "SpectralBandpass",
+    "Spectrum",
     "Telescope",
+    "WCSInfo",
     "__version__",
     "analysis",
     "available_presets",

@@ -275,7 +275,7 @@ The library's promise is *accuracy*, so tests assert physics, not pixels:
 | **0.4** ✅ | Scene layer | sources, PSF (Gaussian/Moffat), optics, bandpass/zero points, `Scene`, `Camera.observe` | **#2, #4** |
 | **0.5a** ✅ | Analysis helpers | `analysis.aperture_sum`, `analysis.centroid`, `analysis.photon_transfer_curve` | all 4 examples |
 | **0.5b** ✅ | Detector realism | nonlinearity, cosmic rays, sCMOS per-pixel read noise (persistence deferred --- needs cross-frame state) | accuracy, polish |
-| **0.6** | Spectral mode (opt-in) | `QE(λ)`, `SED`, spectral bandpasses; WCS via astropy | accuracy |
+| **0.6** ✅ | Spectral mode (opt-in) | `QE(λ)`, `SED`, spectral bandpasses, colour-dependent effective QE; `WCSInfo` (FITS WCS + astropy pixel↔world) | accuracy |
 | **1.0** | Stability | API freeze, validated presets, full docs | — |
 
 Each phase is independently shippable and leaves existing APIs working.
