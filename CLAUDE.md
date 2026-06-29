@@ -16,9 +16,11 @@ compatible.
 The library is mid-way through its **1.x → 2.0 arc** (see `docs/roadmap.md`),
 whose theme is the *observation*: sequences of structured, time-varying scenes,
 reduced against ground truth. Phases 1.1 (calibration loop), 1.2 (time series +
-persistence), 1.3 (richer scenes), and 1.4 (detector depth: CTI, blooming, IPC,
+persistence), 1.3 (richer scenes), 1.4 (detector depth: CTI, blooming, IPC,
 kTC/reset noise, multi-amplifier readout, cosmic-ray tracks, defect/bias maps,
-polynomial nonlinearity) have shipped; 1.5–1.6 + 2.0 remain. Every 1.x change is
+polynomial nonlinearity), and 1.5 (radiometry & IR: AB system, ugriz/Gaia/2MASS
+bands, transmission products, extinction, spectral flux integration, thermal
+background + detector glow) have shipped; 1.6 + 2.0 remain. Every 1.x change is
 **additive**; breaking changes are deprecated through 1.x and only land at the 2.0
 cut.
 
@@ -34,8 +36,8 @@ cut.
 | `camera.py` | `Camera`, the main user-facing object. Orchestrates config + scene + noise into `Frame`s. Holds the RNG and high-level methods (`dark_frame`, `dark_series`, `expose`, `observe`, `*_series`, `master_*`). |
 | `calibrate.py` | Master-frame builders (`combine`) and `calibrate` reduction — the raw → reduced → truth loop (phase 1.1). |
 | `observation.py` | `Observation` / `ObservationTruth` / `Pointing`: the time-series driver, jitter/drift/dither, per-frame truth (phase 1.2). |
-| `spectral.py` | Opt-in spectral mode: `QE`, `SED`, `Spectrum`, `SpectralBandpass`, effective-QE folding. |
-| `scene/` | The scene/optics layer (phase 1.3): `Scene`, `Source` hierarchy (`PointSource`, `ExtendedSource`, `UniformIllumination`, `Catalog`), PSFs (`GaussianPSF`/`MoffatPSF`/`AiryPSF`/`ArrayPSF`/`EllipticalGaussianPSF`), `Telescope` (+ `Vignetting`/`RadialDistortion`), `Bandpass`, `WCSInfo`, `LightCurve`. Renders a photon-rate map; no randomness. |
+| `spectral.py` | Opt-in spectral mode: `QE`, `SED` (relative or absolute via `from_flux_density`), `Spectrum`, `SpectralBandpass`, effective-QE folding, transmission-product helpers (`product`, `from_file`/`from_product`), optional `astropy.units` coercion. |
+| `scene/` | The scene/optics layer: `Scene`, `Source` hierarchy (`PointSource`, `ExtendedSource`, `UniformIllumination`, `Catalog`; point/extended sources accept a `flux_sed` absolute SED), PSFs (`GaussianPSF`/`MoffatPSF`/`AiryPSF`/`ArrayPSF`/`EllipticalGaussianPSF`), `Telescope` (+ `Vignetting`/`RadialDistortion`), `Bandpass` (Vega `johnson` / AB `ab` ugriz·Gaia·2MASS + `Extinction`) in `photometry.py`, `Thermal` graybody background in `thermal.py`, `WCSInfo`, `LightCurve`. Renders a photon-rate map; no randomness. |
 | `analysis/` | Measurement helpers: `apertures.py` (`aperture_sum`, `centroid`), `ptc.py` (`photon_transfer_curve`). |
 | `presets/` | Preset library. TOML data files in `presets/data/`, loaded via `importlib.resources`. `load_preset`, `available_presets`, `preset_info`. |
 

@@ -176,19 +176,42 @@ def _brightness_scale(brightness: LightCurve | None, time_s: float | None) -> fl
     return 1.0
 
 
-def _resolve_rate(magnitude: float | None, photon_rate: float | None, optics: Telescope) -> float:
-    """Baseline photons/s reaching the detector, from a magnitude or an explicit rate."""
+def _color_sed(source: Source) -> SED | None:
+    """The SED used to colour-weight the effective QE: ``flux_sed`` if set, else ``sed``."""
+    flux_sed = getattr(source, "flux_sed", None)
+    return flux_sed if flux_sed is not None else source.sed
+
+
+def _resolve_rate(
+    magnitude: float | None,
+    photon_rate: float | None,
+    optics: Telescope,
+    flux_sed: SED | None = None,
+) -> float:
+    """Baseline photons/s reaching the detector.
+
+    From an explicit ``photon_rate``, an absolute ``flux_sed`` integrated over the
+    band (spectral flux integration), or a ``magnitude`` via the band zero point.
+    """
     if photon_rate is not None:
         return photon_rate
+    if flux_sed is not None:
+        return optics.photon_rate_from_sed(flux_sed)
     assert magnitude is not None  # guaranteed by the source's validation
     return optics.photon_rate_from_magnitude(magnitude)
 
 
-def _check_one_brightness(magnitude: float | None, photon_rate: float | None) -> None:
-    if (magnitude is None) == (photon_rate is None):
-        raise ValueError("Specify exactly one of `magnitude` or `photon_rate`.")
+def _check_one_brightness(
+    magnitude: float | None,
+    photon_rate: float | None,
+    flux_sed: SED | None = None,
+) -> None:
+    if sum(x is not None for x in (magnitude, photon_rate, flux_sed)) != 1:
+        raise ValueError("Specify exactly one of `magnitude`, `photon_rate`, or `flux_sed`.")
     if photon_rate is not None and photon_rate < 0:
         raise ValueError("photon_rate must be non-negative.")
+    if flux_sed is not None and not flux_sed.is_absolute:
+        raise ValueError("flux_sed must be an absolute SED (build it with SED.from_flux_density).")
 
 
 class Source:
@@ -238,6 +261,11 @@ class PointSource(Source):
 
     ``name`` is an optional label used to key the source in an observation's
     per-frame truth light curve.
+
+    ``flux_sed`` is an alternative to ``magnitude``/``photon_rate``: an *absolute*
+    :class:`~getframes.spectral.SED` (``SED.from_flux_density``) whose integral over
+    the band sets the photon rate directly (true spectral flux integration). When
+    given it also serves as the colour SED for spectral mode.
     """
 
     x: float
@@ -247,16 +275,17 @@ class PointSource(Source):
     sed: SED | None = None
     brightness: LightCurve | None = None
     name: str | None = None
+    flux_sed: SED | None = None
 
     def __post_init__(self) -> None:
-        _check_one_brightness(self.magnitude, self.photon_rate)
+        _check_one_brightness(self.magnitude, self.photon_rate, self.flux_sed)
 
     def total_photon_rate(self, optics: Telescope, time_s: float | None = None) -> float:
-        rate = _resolve_rate(self.magnitude, self.photon_rate, optics)
+        rate = _resolve_rate(self.magnitude, self.photon_rate, optics, self.flux_sed)
         return rate * _brightness_scale(self.brightness, time_s)
 
     def deposit(self, image: NDArray[np.float64], ctx: RenderContext) -> None:
-        rate = self.total_photon_rate(ctx.optics, ctx.time_s) * ctx.qe_scale(self.sed)
+        rate = self.total_photon_rate(ctx.optics, ctx.time_s) * ctx.qe_scale(_color_sed(self))
         if rate <= 0:
             return
         px, py = ctx.place(self.x, self.y, None, None)
@@ -293,9 +322,10 @@ class ExtendedSource(Source):
     sed: SED | None = None
     brightness: LightCurve | None = None
     name: str | None = None
+    flux_sed: SED | None = None
 
     def __post_init__(self) -> None:
-        _check_one_brightness(self.magnitude, self.photon_rate)
+        _check_one_brightness(self.magnitude, self.photon_rate, self.flux_sed)
         if (self.profile is None) == (self.sersic_n is None):
             raise ValueError("ExtendedSource needs exactly one of a `profile` or Sersic params.")
         if not 0.0 <= self.ellipticity < 1.0:
@@ -323,6 +353,7 @@ class ExtendedSource(Source):
         sed: SED | None = None,
         brightness: LightCurve | None = None,
         name: str | None = None,
+        flux_sed: SED | None = None,
     ) -> ExtendedSource:
         """A Sersic profile ``I(r) ~ exp(-b_n[(r/r_eff)^(1/n) - 1])``.
 
@@ -344,6 +375,7 @@ class ExtendedSource(Source):
             sed=sed,
             brightness=brightness,
             name=name,
+            flux_sed=flux_sed,
         )
 
     @classmethod
@@ -360,6 +392,7 @@ class ExtendedSource(Source):
         sed: SED | None = None,
         brightness: LightCurve | None = None,
         name: str | None = None,
+        flux_sed: SED | None = None,
     ) -> ExtendedSource:
         """An arbitrary 2D ``image`` (e.g. a galaxy cutout) used as the profile.
 
@@ -383,14 +416,15 @@ class ExtendedSource(Source):
             sed=sed,
             brightness=brightness,
             name=name,
+            flux_sed=flux_sed,
         )
 
     def total_photon_rate(self, optics: Telescope, time_s: float | None = None) -> float:
-        rate = _resolve_rate(self.magnitude, self.photon_rate, optics)
+        rate = _resolve_rate(self.magnitude, self.photon_rate, optics, self.flux_sed)
         return rate * _brightness_scale(self.brightness, time_s)
 
     def deposit(self, image: NDArray[np.float64], ctx: RenderContext) -> None:
-        flux = self.total_photon_rate(ctx.optics, ctx.time_s) * ctx.qe_scale(self.sed)
+        flux = self.total_photon_rate(ctx.optics, ctx.time_s) * ctx.qe_scale(_color_sed(self))
         if flux <= 0:
             return
         px, py = ctx.place(self.x, self.y, self.ra_deg, self.dec_deg)

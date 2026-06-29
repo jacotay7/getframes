@@ -9,7 +9,7 @@ then either call :meth:`Scene.photon_rate_map` yourself or hand the scene to
 from __future__ import annotations
 
 from .optics import RadialDistortion, Telescope, Vignetting
-from .photometry import Bandpass
+from .photometry import Bandpass, Extinction
 from .psf import PSF, AiryPSF, ArrayPSF, EllipticalGaussianPSF, GaussianPSF, MoffatPSF
 from .scene import Scene
 from .sources import (
@@ -22,6 +22,7 @@ from .sources import (
     Source,
     UniformIllumination,
 )
+from .thermal import Thermal
 from .wcs import WCSInfo
 
 __all__ = [
@@ -33,6 +34,7 @@ __all__ = [
     "CatalogEntry",
     "EllipticalGaussianPSF",
     "ExtendedSource",
+    "Extinction",
     "GaussianPSF",
     "LightCurve",
     "MoffatPSF",
@@ -42,6 +44,7 @@ __all__ = [
     "Sky",
     "Source",
     "Telescope",
+    "Thermal",
     "UniformIllumination",
     "Vignetting",
     "WCSInfo",

@@ -125,7 +125,7 @@ src/getframes/
 | ✅ | **1.2** | Add time | `Observation` time-series driver, time-varying source brightness, pointing jitter / drift / dither, image motion; **persistence/latent images** | **#3, #4** |
 | ✅ | **1.3** | Enrich scenes | `ExtendedSource` (Sersic/array), `UniformIllumination`, `Catalog.from_table` with RA/Dec→pixel, `AiryPSF`/`ArrayPSF`, elliptical PSF | **#2** |
 | ✅ | **1.4** | Detector depth | CTI, blooming/bleed, IPC, kTC/reset noise, multi-amplifier readout, cosmic-ray tracks, defect/bad-column maps, structured bias, polynomial nonlinearity | accuracy |
-| ☐ | **1.5** | Radiometry & IR | AB system, ugriz/Gaia/2MASS bands, transmission-product loading, extinction, true spectral flux integration, **IR thermal background + glow** | quantitative photometry, honest IR |
+| ✅ | **1.5** | Radiometry & IR | AB system, ugriz/Gaia/2MASS bands, transmission-product loading, extinction, true spectral flux integration, **IR thermal background + glow** | quantitative photometry, honest IR |
 | ☐ | **1.6** | Scale & datasets | float32 path, chunked/vectorised rendering, `dataset` generator for raw+truth pairs at scale, a `getframes` CLI, benchmarks | ML training data, large detectors |
 | ☐ | **2.0** | Stability | promote new APIs to stable, land deprecated breaking changes, validation/benchmark suite vs. published characterisations, JOSS paper + citation, full docs | — |
 
@@ -189,16 +189,16 @@ The artifacts a calibration pipeline must survive:
 - [x] **Defect/bad-column maps** and traps, and **structured bias**.
 - [x] Nonlinearity generalises to a polynomial / lookup.
 
-### 1.5 — Radiometry & IR
-- [ ] **AB** alongside Vega.
-- [ ] **SDSS ugriz, Gaia, 2MASS** bands.
-- [ ] Loading real filter × QE × atmosphere **transmission products**.
-- [ ] Interstellar **extinction**.
-- [ ] True spectral **flux integration** (an `SED` can set the integrated rate, not
+### 1.5 — Radiometry & IR ✅
+- [x] **AB** alongside Vega.
+- [x] **SDSS ugriz, Gaia, 2MASS** bands.
+- [x] Loading real filter × QE × atmosphere **transmission products**.
+- [x] Interstellar **extinction**.
+- [x] True spectral **flux integration** (an `SED` can set the integrated rate, not
   only the effective QE).
-- [ ] For IR/eAPD honesty: a **thermal background + detector glow** model (resolving
+- [x] For IR/eAPD honesty: a **thermal background + detector glow** model (resolving
   1.0 open decision #4).
-- [ ] Optional `astropy.units` interop.
+- [x] Optional `astropy.units` interop.
 
 ### 1.6 — Scale & datasets
 - [ ] A **float32** fast path.

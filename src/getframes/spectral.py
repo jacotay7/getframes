@@ -34,7 +34,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import ClassVar
+from typing import Any, ClassVar
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -50,6 +50,24 @@ _K_BOLTZMANN = 1.380649e-23  # J / K
 # A generous default optical/near-IR window for synthesised curves (nm).
 _DEFAULT_WL_MIN_NM = 300.0
 _DEFAULT_WL_MAX_NM = 1100.0
+
+
+def _to_nm(wavelength: ArrayLike) -> NDArray[np.float64]:
+    """Coerce a wavelength array to nanometres, honouring ``astropy.units``.
+
+    Optional ``astropy.units`` interop: an :class:`astropy.units.Quantity` is
+    converted to nm; a plain array/sequence is taken to already be in nanometres.
+    """
+    if hasattr(wavelength, "unit") and hasattr(wavelength, "to"):
+        return np.asarray(wavelength.to("nm").value, dtype=np.float64)
+    return np.asarray(wavelength, dtype=np.float64)
+
+
+def _strip_units(value: ArrayLike) -> NDArray[np.float64]:
+    """Drop an ``astropy.units`` wrapper (if any), returning a plain float array."""
+    if hasattr(value, "unit") and hasattr(value, "value"):
+        return np.asarray(value.value, dtype=np.float64)
+    return np.asarray(value, dtype=np.float64)
 
 
 def _as_grid(
@@ -96,6 +114,29 @@ class Spectrum:
         wl = np.asarray(wavelength_nm, dtype=np.float64)
         return np.interp(wl, self.wavelength_nm, self.value, left=0.0, right=0.0)
 
+    @classmethod
+    def from_file(
+        cls,
+        path: str,
+        *,
+        wavelength_to_nm: float = 1.0,
+        delimiter: str | None = None,
+        skiprows: int = 0,
+        usecols: tuple[int, int] = (0, 1),
+    ) -> Spectrum:
+        """Load a two-column ``(wavelength, value)`` curve from a text file.
+
+        Reads ``path`` with :func:`numpy.loadtxt`. The first column is scaled by
+        ``wavelength_to_nm`` to nanometres (e.g. ``0.1`` for angstroms, ``1000`` for
+        microns); the second is taken verbatim. Handy for measured filter, QE, or
+        atmospheric-transmission curves --- combine several with :func:`product` or
+        :meth:`SpectralBandpass.from_product`.
+        """
+        data = np.loadtxt(path, delimiter=delimiter, skiprows=skiprows, usecols=usecols)
+        wl = np.asarray(data[:, 0], dtype=np.float64) * float(wavelength_to_nm)
+        val = np.asarray(data[:, 1], dtype=np.float64)
+        return cls(wl, val)
+
     def integrate(self) -> float:
         """Trapezoidal integral of the curve over wavelength (nm)."""
         return float(_trapezoid(self.value, self.wavelength_nm))
@@ -135,28 +176,66 @@ def overlap_integral(*spectra: Spectrum) -> float:
     grid = _common_grid(*spectra)
     if grid.size < 2:
         return 0.0
-    product = np.ones_like(grid)
+    values = np.ones_like(grid)
     for s in spectra:
-        product = product * s(grid)
-    return float(_trapezoid(product, grid))
+        values = values * s(grid)
+    return float(_trapezoid(values, grid))
 
 
-class SED(Spectrum):
-    """A source's spectral *photon* flux density, in arbitrary (relative) units.
+def product(*spectra: Spectrum) -> Spectrum:
+    """Pointwise product of several spectra as a new :class:`Spectrum`.
 
-    Only the *shape* matters: spectral mode uses the SED to colour-weight the
-    quantum efficiency, a calculation invariant to overall scale (the source
-    magnitude still sets the absolute photon rate). Construct one from data with
-    :meth:`from_arrays`, or use a parametric shape.
+    The result is sampled on the union of the inputs' knots within their common
+    wavelength support, where the product of piecewise-linear curves is exact ---
+    outside that support at least one factor is zero. The natural way to fold a
+    measured filter transmission, detector QE, and atmospheric transmission into a
+    single response curve. Raises if the inputs do not overlap.
     """
+    grid = _common_grid(*spectra)
+    if grid.size < 2:
+        raise ValueError("spectra do not overlap; their product is empty.")
+    values = np.ones_like(grid)
+    for s in spectra:
+        values = values * s(grid)
+    return Spectrum(grid, values)
+
+
+@dataclass(frozen=True)
+class SED(Spectrum):
+    """A source's spectral *photon* flux density.
+
+    Two flavours, distinguished by :attr:`is_absolute`:
+
+    * **Relative** (the default; :meth:`from_arrays` and the parametric shapes).
+      Only the *shape* matters: spectral mode uses it to colour-weight the quantum
+      efficiency, a calculation invariant to overall scale (the source magnitude
+      still sets the absolute photon rate).
+    * **Absolute** (:meth:`from_flux_density`): values are a true photon flux density
+      in ``photons/s/m^2/nm`` above the atmosphere. Such an SED can *set the
+      integrated photon rate* directly --- pass it to a source as ``flux_sed`` and
+      the telescope integrates it over the band (see
+      :meth:`getframes.scene.photometry.Bandpass.photon_flux_from_sed`), instead of
+      deriving the rate from a magnitude.
+    """
+
+    is_absolute: bool = False
 
     @classmethod
     def from_arrays(cls, wavelength_nm: ArrayLike, photon_flux: ArrayLike) -> SED:
-        """An SED sampled at ``wavelength_nm`` with relative photon flux density."""
-        return cls(
-            np.asarray(wavelength_nm, dtype=np.float64),
-            np.asarray(photon_flux, dtype=np.float64),
-        )
+        """A *relative* SED sampled at ``wavelength_nm`` with photon flux density (shape only)."""
+        return cls(_to_nm(wavelength_nm), _strip_units(photon_flux))
+
+    @classmethod
+    def from_flux_density(cls, wavelength_nm: ArrayLike, photon_flux_density: ArrayLike) -> SED:
+        """An *absolute* SED: ``photon_flux_density`` in ``photons/s/m^2/nm``.
+
+        Unlike :meth:`from_arrays`, the absolute scale is meaningful: integrated over
+        a band it yields a photon rate, so a source carrying this as ``flux_sed`` has
+        its brightness set by the spectrum itself (no magnitude needed). Wavelengths
+        and flux may be plain arrays (nm and photons/s/m^2/nm) or ``astropy.units``
+        quantities, which are converted.
+        """
+        return cls(_to_nm(wavelength_nm), _strip_units(photon_flux_density), is_absolute=True)
 
     @classmethod
     def flat(
@@ -221,7 +300,7 @@ class QE(Spectrum):
     @classmethod
     def from_arrays(cls, wavelength_nm: ArrayLike, qe: ArrayLike) -> QE:
         """A QE curve sampled at ``wavelength_nm`` with values in ``[0, 1]``."""
-        return cls(np.asarray(wavelength_nm, dtype=np.float64), np.asarray(qe, dtype=np.float64))
+        return cls(_to_nm(wavelength_nm), _strip_units(qe))
 
     @classmethod
     def constant(
@@ -252,12 +331,38 @@ class SpectralBandpass:
     @classmethod
     def from_arrays(cls, wavelength_nm: ArrayLike, throughput: ArrayLike) -> SpectralBandpass:
         """A response curve sampled at ``wavelength_nm`` with throughput in ``[0, 1]``."""
-        spec = Spectrum(
-            np.asarray(wavelength_nm, dtype=np.float64), np.asarray(throughput, dtype=np.float64)
-        )
+        spec = Spectrum(_to_nm(wavelength_nm), _strip_units(throughput))
         if np.any(spec.value > 1.0):
             raise ValueError("bandpass throughput must be in [0, 1].")
         return cls(spec)
+
+    @classmethod
+    def from_file(cls, path: str, **kwargs: Any) -> SpectralBandpass:
+        """Load a two-column ``(wavelength, throughput)`` response from a text file.
+
+        Thin wrapper over :meth:`Spectrum.from_file` (same ``wavelength_to_nm``,
+        ``delimiter``, ``skiprows``, ``usecols`` options); throughput must be in
+        ``[0, 1]``.
+        """
+        spec = Spectrum.from_file(path, **kwargs)
+        if np.any(spec.value > 1.0):
+            raise ValueError("bandpass throughput must be in [0, 1].")
+        return cls(spec)
+
+    @classmethod
+    def from_product(cls, *items: SpectralBandpass | Spectrum) -> SpectralBandpass:
+        """Fold several transmission curves into one combined band response.
+
+        Each item is a :class:`SpectralBandpass` or a bare :class:`Spectrum` (e.g. a
+        :class:`QE` curve or an atmospheric-transmission curve); their pointwise
+        product over the common wavelength support becomes the new response. This is
+        how a *real* filter x QE x atmosphere transmission product is assembled.
+        """
+        specs = [it.response if isinstance(it, SpectralBandpass) else it for it in items]
+        combined = product(*specs)
+        if np.any(combined.value > 1.0):
+            raise ValueError("combined throughput exceeds 1; check the input curves.")
+        return cls(combined)
 
     @classmethod
     def tophat(cls, center_nm: float, width_nm: float, peak: float = 1.0) -> SpectralBandpass:
@@ -340,4 +445,5 @@ __all__ = [
     "Spectrum",
     "effective_qe",
     "overlap_integral",
+    "product",
 ]

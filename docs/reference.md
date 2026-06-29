@@ -40,6 +40,8 @@
 
 ::: getframes.scene.sources.Sky
 
+::: getframes.scene.thermal.Thermal
+
 ::: getframes.scene.optics.Telescope
 
 ::: getframes.scene.optics.Vignetting
@@ -47,6 +49,8 @@
 ::: getframes.scene.optics.RadialDistortion
 
 ::: getframes.scene.photometry.Bandpass
+
+::: getframes.scene.photometry.Extinction
 
 ::: getframes.scene.wcs.WCSInfo
 

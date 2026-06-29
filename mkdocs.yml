@@ -33,6 +33,7 @@ nav:
       - Observing scenes: guides/scenes.md
       - Time series & observations: guides/time-series.md
       - Spectral mode: guides/spectral.md
+      - Radiometry & the infrared: guides/radiometry.md
       - Camera presets: guides/presets.md
   - API reference: reference.md
   - API stability: stability.md

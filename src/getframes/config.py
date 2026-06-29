@@ -154,6 +154,11 @@ class CameraConfig:
     dark_current_e_per_s:
         Dark current in electrons per pixel per second, specified at
         ``dark_current_ref_temp_c``.
+    detector_glow_e_per_s:
+        Detector self-emission ("glow") in electrons per pixel per second, added to
+        the dark signal (it scales with exposure and so is removed by an
+        exposure-matched master dark). A uniform model of amplifier/array glow,
+        relevant for IR arrays alongside the thermal background. ``0`` disables it.
     dark_current_ref_temp_c:
         Temperature (deg C) at which ``dark_current_e_per_s`` is quoted.
     dark_current_doubling_temp_c:
@@ -212,6 +217,7 @@ class CameraConfig:
     read_noise_e: float
     dark_current_e_per_s: float
     qe_curve: QE | None = None
+    detector_glow_e_per_s: float = 0.0
     prnu: float = 0.0
     read_noise_nonuniformity: float = 0.0
     nonlinearity: float = 0.0
@@ -300,6 +306,8 @@ class CameraConfig:
             raise ValueError("cosmic_ray_rate_per_cm2_s must be non-negative.")
         if self.dark_current_e_per_s < 0:
             raise ValueError("dark_current_e_per_s must be non-negative.")
+        if self.detector_glow_e_per_s < 0:
+            raise ValueError("detector_glow_e_per_s must be non-negative.")
         if self.dark_current_doubling_temp_c <= 0:
             raise ValueError("dark_current_doubling_temp_c must be positive.")
         if self.em_gain < 1.0:

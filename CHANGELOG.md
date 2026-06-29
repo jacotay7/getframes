@@ -8,6 +8,29 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Radiometry & the infrared** (roadmap phase 1.5): quantitative photometry and
+  honest IR backgrounds, all additive.
+  - **AB system**: `Bandpass.ab(band)` alongside the Vega-system `Bandpass.johnson`,
+    with the zero point computed from the band's transmission shape (3631 Jy
+    reference). Ships **SDSS ugriz**, **Gaia** (`gaia_g`/`gaia_bp`/`gaia_rp`), and
+    **2MASS** (`J`/`H`/`Ks`) bands as tophat responses.
+  - **Real transmission products**: `SpectralBandpass.from_file` /
+    `Spectrum.from_file` / `QE.from_file` load measured curves; `product(...)` and
+    `SpectralBandpass.from_product(...)` fold filter x QE x atmosphere into one
+    response.
+  - **Extinction**: `Extinction(a_v, r_v)` applies a Cardelli–Clayton–Mathis (1989)
+    interstellar extinction curve — `transmission`, `redden(sed)`,
+    `band_attenuation_mag(band)`.
+  - **Spectral flux integration**: `SED.from_flux_density(...)` builds an *absolute*
+    SED (photons/s/m²/nm). Sources gain a `flux_sed` brightness option (alongside
+    `magnitude`/`photon_rate`) whose integral over the band sets the rate, via
+    `Telescope.photon_rate_from_sed` / `Bandpass.photon_flux_from_sed`.
+  - **Thermal background & glow**: `Thermal(temperature_k, emissivity)` is a graybody
+    background (the IR analogue of `Sky`) attached to a `Scene`;
+    `CameraConfig.detector_glow_e_per_s` adds exposure-scaled, dark-removable
+    detector self-emission.
+  - **astropy.units interop**: the spectral constructors accept `astropy.units`
+    quantities for wavelength/flux (optional; plain arrays assumed to be nm).
 - **Detector depth** (roadmap phase 1.4): the artifacts a real calibration
   pipeline must survive, all off by default and additive on `CameraConfig`.
   - **CTI**: `cti` smears charge by a CCD's charge-transfer inefficiency, deferring

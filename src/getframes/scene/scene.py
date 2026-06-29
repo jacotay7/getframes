@@ -13,6 +13,7 @@ from numpy.typing import NDArray
 from .optics import Telescope
 from .psf import PSF
 from .sources import RenderContext, Sky, Source
+from .thermal import Thermal
 from .wcs import WCSInfo
 
 if TYPE_CHECKING:
@@ -39,6 +40,10 @@ class Scene:
         The sources in the field (point, extended, catalog, or uniform).
     sky:
         Optional uniform sky background.
+    thermal:
+        Optional :class:`~getframes.scene.thermal.Thermal` graybody background (warm
+        optics / enclosure emission), added as a uniform background like the sky.
+        Dominant in the thermal infrared; needs a band with a spectral response.
     wcs:
         Optional :class:`~getframes.scene.wcs.WCSInfo` tagging the frame with sky
         coordinates; its FITS header cards are copied into the observed frame's
@@ -50,6 +55,7 @@ class Scene:
     psf: PSF
     sources: Sequence[Source] = field(default_factory=tuple)
     sky: Sky | None = None
+    thermal: Thermal | None = None
     wcs: WCSInfo | None = None
 
     def __post_init__(self) -> None:
@@ -131,6 +137,12 @@ class Scene:
             return 0.0
         return self.optics.surface_brightness_photon_rate(self.sky.surface_brightness_mag_arcsec2)
 
+    def thermal_photon_rate(self) -> float:
+        """Uniform thermal (graybody) background in photons/s/pixel (``0`` if unset)."""
+        if self.thermal is None:
+            return 0.0
+        return self.thermal.photon_rate(self.optics)
+
     @property
     def is_spectral_capable(self) -> bool:
         """Whether this scene's band carries a spectral response for spectral mode."""
@@ -166,3 +178,20 @@ class Scene:
         if band is None or band.response is None:
             raise ValueError("sky_electron_rate requires a band with a spectral response.")
         return self.sky_photon_rate() * band.effective_qe(qe_curve, self.sky.sed)
+
+    def thermal_electron_rate(self, qe_curve: QE) -> float:
+        """Uniform thermal background in photoelectrons/s/pixel for spectral mode."""
+        if self.thermal is None:
+            return 0.0
+        band = self.optics.band
+        if band is None or band.response is None:
+            raise ValueError("thermal_electron_rate requires a band with a spectral response.")
+        return self.thermal_photon_rate() * band.effective_qe(qe_curve, self.thermal.photon_sed())
+
+    def background_photon_rate(self) -> float:
+        """Total uniform background (sky + thermal) in photons/s/pixel."""
+        return self.sky_photon_rate() + self.thermal_photon_rate()
+
+    def background_electron_rate(self, qe_curve: QE) -> float:
+        """Total uniform background (sky + thermal) in photoelectrons/s/pixel (spectral)."""
+        return self.sky_electron_rate(qe_curve) + self.thermal_electron_rate(qe_curve)

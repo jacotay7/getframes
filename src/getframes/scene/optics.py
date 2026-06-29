@@ -6,11 +6,15 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import NDArray
 
 from .photometry import Bandpass
+
+if TYPE_CHECKING:
+    from ..spectral import SED
 
 
 @dataclass(frozen=True)
@@ -152,6 +156,23 @@ class Telescope:
                 "specify sources by photon_rate instead."
             )
         return self.band.photon_flux(magnitude) * self.collecting_area_m2 * self.throughput
+
+    def photon_rate_from_sed(self, sed: SED) -> float:
+        """Photons/s at the detector from a source described by an *absolute* SED.
+
+        Integrates the SED over the band's spectral response
+        (:meth:`~getframes.scene.photometry.Bandpass.photon_flux_from_sed`) and
+        scales by collecting area and throughput --- the spectral-flux-integration
+        counterpart of :meth:`photon_rate_from_magnitude`. Requires a band with a
+        spectral response and an absolute SED
+        (:meth:`getframes.spectral.SED.from_flux_density`).
+        """
+        if self.band is None:
+            raise ValueError(
+                "Telescope.band is required to integrate an SED; set a Bandpass with "
+                "a spectral response."
+            )
+        return self.band.photon_flux_from_sed(sed) * self.collecting_area_m2 * self.throughput
 
     def surface_brightness_photon_rate(self, surface_brightness_mag_arcsec2: float) -> float:
         """Photons/s/pixel from a uniform sky of the given surface brightness."""

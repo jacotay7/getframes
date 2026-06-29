@@ -73,7 +73,9 @@ def dark_signal_map(
     This is the noise-free expectation per pixel; shot noise is applied separately.
     The fixed-pattern structure (DSNU and hot pixels) is deterministic for a given
     sensor (keyed on :attr:`~getframes.config.CameraConfig.fixed_pattern_seed`), so
-    it repeats across frames and can be calibrated out with a master dark.
+    it repeats across frames and can be calibrated out with a master dark. A uniform
+    detector-glow term (``detector_glow_e_per_s``) is added on top, also
+    exposure-scaled and dark-removable.
     """
     height, width = config.resolution
     mean_dark = config.dark_current_at(temperature_c) * exposure_s
@@ -92,6 +94,12 @@ def dark_signal_map(
         rng = _fixed_pattern_rng(config, _FPN_STREAM_HOT)
         hot_mask = rng.random(signal.shape) < config.hot_pixel_fraction
         signal[hot_mask] *= config.hot_pixel_factor
+
+    # Detector glow: a uniform self-emission term that scales with exposure (and so
+    # is removed by an exposure-matched master dark). Added after DSNU/hot pixels,
+    # which describe the dark *current*, not the glow.
+    if config.detector_glow_e_per_s > 0 and exposure_s > 0:
+        signal = signal + config.detector_glow_e_per_s * exposure_s
 
     return signal
 

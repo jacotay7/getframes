@@ -336,8 +336,8 @@ class Camera:
         if spectral:
             assert self.config.qe_curve is not None  # narrowed by `spectral`
             rate = scene.photoelectron_rate_map(self.config.qe_curve, time_s, offset_xy)
-            return rate, scene.sky_electron_rate(self.config.qe_curve), 1.0, True
-        return scene.photon_rate_map(time_s, offset_xy), scene.sky_photon_rate(), None, False
+            return rate, scene.background_electron_rate(self.config.qe_curve), 1.0, True
+        return scene.photon_rate_map(time_s, offset_xy), scene.background_photon_rate(), None, False
 
     @staticmethod
     def _tag_science(frame: Frame, scene: Scene, spectral: bool) -> None:
