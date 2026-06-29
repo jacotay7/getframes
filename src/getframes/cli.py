@@ -74,10 +74,11 @@ def _write_frame(frame: Frame, path: str) -> None:
     elif suffix == ".npy":
         np.save(path, np.asarray(frame.data))
     elif suffix == ".npz":
-        arrays = {"raw": np.asarray(frame.data)}
+        raw = np.asarray(frame.data)
         if frame.truth is not None:
-            arrays["truth"] = np.asarray(frame.truth.mean_electrons)
-        np.savez(path, **arrays)
+            np.savez(path, raw=raw, truth=np.asarray(frame.truth.mean_electrons))
+        else:
+            np.savez(path, raw=raw)
     else:
         raise ValueError(f"Unsupported output extension {suffix!r} (use .fits, .npy, or .npz).")
 
