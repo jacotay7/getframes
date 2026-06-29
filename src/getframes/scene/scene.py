@@ -12,11 +12,13 @@ from numpy.typing import NDArray
 
 from .optics import Telescope
 from .psf import PSF
-from .sources import PointSource, Sky
+from .sources import RenderContext, Sky, Source
 from .wcs import WCSInfo
 
 if TYPE_CHECKING:
-    from ..spectral import QE
+    from collections.abc import Callable
+
+    from ..spectral import QE, SED
 
 
 @dataclass
@@ -34,19 +36,19 @@ class Scene:
     psf:
         The :class:`~getframes.scene.psf.PSF` used to spread each source.
     sources:
-        The point sources in the field.
+        The sources in the field (point, extended, catalog, or uniform).
     sky:
         Optional uniform sky background.
     wcs:
         Optional :class:`~getframes.scene.wcs.WCSInfo` tagging the frame with sky
         coordinates; its FITS header cards are copied into the observed frame's
-        metadata.
+        metadata, and sources placed by RA/Dec are projected through it.
     """
 
     shape: tuple[int, int]
     optics: Telescope
     psf: PSF
-    sources: Sequence[PointSource] = field(default_factory=tuple)
+    sources: Sequence[Source] = field(default_factory=tuple)
     sky: Sky | None = None
     wcs: WCSInfo | None = None
 
@@ -55,21 +57,51 @@ class Scene:
         if len(self.shape) != 2 or any(n <= 0 for n in self.shape):
             raise ValueError(f"shape must be two positive ints, got {self.shape!r}.")
 
-    def _source_photon_rate(self, source: PointSource, time_s: float | None = None) -> float:
-        """Photons/s reaching the detector from a single source.
+    def add(self, *sources: Source) -> None:
+        """Append one or more sources to the scene."""
+        self.sources = [*self.sources, *sources]
+
+    def _source_photon_rate(self, source: Source, time_s: float | None = None) -> float:
+        """Total photons/s reaching the detector from a single source.
 
         When ``time_s`` is given and the source carries a
         :class:`~getframes.scene.sources.LightCurve`, the baseline rate is scaled by
         ``brightness(time_s)`` so the source varies in time.
         """
-        if source.photon_rate is not None:
-            rate = source.photon_rate
-        else:
-            assert source.magnitude is not None  # guaranteed by PointSource validation
-            rate = self.optics.photon_rate_from_magnitude(source.magnitude)
-        if time_s is not None and source.brightness is not None:
-            rate *= source.brightness(time_s)
-        return rate
+        return source.total_photon_rate(self.optics, time_s)
+
+    def _pixel_transform(self) -> Callable[[float, float], tuple[float, float]] | None:
+        """The distortion remap for source positions (``None`` if no distortion)."""
+        distortion = self.optics.distortion
+        if distortion is None:
+            return None
+        height, width = self.shape
+        cx, cy = (width - 1) / 2.0, (height - 1) / 2.0
+        return lambda x, y: distortion.apply(x, y, cx, cy)
+
+    def _render(
+        self,
+        qe_scale: Callable[[SED | None], float],
+        time_s: float | None,
+        offset_xy: tuple[float, float],
+    ) -> NDArray[np.float64]:
+        """Deposit every source into a fresh map and apply vignetting."""
+        ctx = RenderContext(
+            optics=self.optics,
+            psf=self.psf,
+            wcs=self.wcs,
+            time_s=time_s,
+            offset_xy=offset_xy,
+            qe_scale=qe_scale,
+            pixel_transform=self._pixel_transform(),
+        )
+        image = np.zeros(self.shape, dtype=np.float64)
+        for source in self.sources:
+            source.deposit(image, ctx)
+        illumination = self.optics.illumination_map(self.shape)
+        if illumination is not None:
+            image *= illumination
+        return image
 
     def photon_rate_map(
         self,
@@ -91,13 +123,7 @@ class Scene:
             A whole-field pointing offset ``(dx, dy)`` in pixels added to every
             source position (models jitter / drift / dither). Defaults to no shift.
         """
-        image = np.zeros(self.shape, dtype=np.float64)
-        plate_scale = self.optics.plate_scale_arcsec_per_pixel
-        dx, dy = offset_xy
-        for source in self.sources:
-            rate = self._source_photon_rate(source, time_s)
-            self.psf.add_source(image, source.x + dx, source.y + dy, rate, plate_scale)
-        return image
+        return self._render(lambda _sed: 1.0, time_s, offset_xy)
 
     def sky_photon_rate(self) -> float:
         """Uniform sky background in photons/s/pixel (``0`` if no sky is set)."""
@@ -130,14 +156,7 @@ class Scene:
         band = self.optics.band
         if band is None or band.response is None:
             raise ValueError("photoelectron_rate_map requires a band with a spectral response.")
-        image = np.zeros(self.shape, dtype=np.float64)
-        plate_scale = self.optics.plate_scale_arcsec_per_pixel
-        dx, dy = offset_xy
-        for source in self.sources:
-            rate = self._source_photon_rate(source, time_s)
-            eff_qe = band.effective_qe(qe_curve, source.sed)
-            self.psf.add_source(image, source.x + dx, source.y + dy, rate * eff_qe, plate_scale)
-        return image
+        return self._render(lambda sed: band.effective_qe(qe_curve, sed), time_s, offset_xy)
 
     def sky_electron_rate(self, qe_curve: QE) -> float:
         """Uniform sky background in photoelectrons/s/pixel for spectral mode."""

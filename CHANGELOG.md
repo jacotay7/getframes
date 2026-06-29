@@ -8,6 +8,25 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Richer scenes** (roadmap phase 1.3): build crowded, structured fields beyond
+  point sources on a flat sky.
+  - `ExtendedSource` for resolved sources: `ExtendedSource.sersic(...)` (a Sersic
+    surface-brightness profile, optionally elliptical with a position angle) and
+    `ExtendedSource.from_array(image, ...)` (an arbitrary normalised cutout).
+  - `UniformIllumination`: a spatially flat, PSF-free illumination — a clean flat
+    field for photon-transfer-curve work.
+  - `Catalog.from_table(table, ...)` places many sources at once from any
+    column-indexable table (astropy `Table`, pandas, or a dict). Entries may be
+    given by pixel `(x, y)` or sky `(ra, dec)`; with a scene `WCSInfo`, RA/Dec is
+    projected to pixels (the WCS now *does* something, not just tags).
+  - New PSFs: `AiryPSF` (diffraction-limited, with optional central obstruction),
+    `ArrayPSF` (a user kernel, e.g. from an AO simulation, with sub-pixel shifting),
+    and `EllipticalGaussianPSF` (independent major/minor widths and a position
+    angle).
+  - `Telescope` gains optional `vignetting` (`Vignetting` illumination falloff) and
+    `distortion` (`RadialDistortion` barrel/pincushion) models.
+  - `Scene.add(*sources)` appends sources; `Scene.sources` now accepts any
+    `Source` (point, extended, catalog, or uniform).
 - **Time as a first-class dimension** (roadmap phase 1.2): observe a scene over
   time and validate the result against a ground-truth light curve.
   - `getframes.Observation` (and `ObservationTruth`): the iterable stack returned

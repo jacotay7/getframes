@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from .noise import PhotonRate
     from .scene import Scene
-    from .scene.sources import PointSource
+    from .scene.sources import Source
 
 # Sub-stream salt for the pointing RNG, kept distinct from per-frame noise seeds.
 _POINTING_STREAM = 0x504F494E54  # "POINT"
@@ -520,7 +520,7 @@ class Camera:
         return updated
 
     @staticmethod
-    def _source_names(sources: Sequence[PointSource]) -> list[str]:
+    def _source_names(sources: Sequence[Source]) -> list[str]:
         """A stable, unique name per source (falling back to ``source_{i}``)."""
         names: list[str] = []
         seen: set[str] = set()

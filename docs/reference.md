@@ -32,9 +32,19 @@
 
 ::: getframes.scene.sources.PointSource
 
+::: getframes.scene.sources.ExtendedSource
+
+::: getframes.scene.sources.UniformIllumination
+
+::: getframes.scene.sources.Catalog
+
 ::: getframes.scene.sources.Sky
 
 ::: getframes.scene.optics.Telescope
+
+::: getframes.scene.optics.Vignetting
+
+::: getframes.scene.optics.RadialDistortion
 
 ::: getframes.scene.photometry.Bandpass
 

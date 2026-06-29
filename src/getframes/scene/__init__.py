@@ -8,22 +8,41 @@ then either call :meth:`Scene.photon_rate_map` yourself or hand the scene to
 
 from __future__ import annotations
 
-from .optics import Telescope
+from .optics import RadialDistortion, Telescope, Vignetting
 from .photometry import Bandpass
-from .psf import PSF, GaussianPSF, MoffatPSF
+from .psf import PSF, AiryPSF, ArrayPSF, EllipticalGaussianPSF, GaussianPSF, MoffatPSF
 from .scene import Scene
-from .sources import LightCurve, PointSource, Sky
+from .sources import (
+    Catalog,
+    CatalogEntry,
+    ExtendedSource,
+    LightCurve,
+    PointSource,
+    Sky,
+    Source,
+    UniformIllumination,
+)
 from .wcs import WCSInfo
 
 __all__ = [
     "PSF",
+    "AiryPSF",
+    "ArrayPSF",
     "Bandpass",
+    "Catalog",
+    "CatalogEntry",
+    "EllipticalGaussianPSF",
+    "ExtendedSource",
     "GaussianPSF",
     "LightCurve",
     "MoffatPSF",
     "PointSource",
+    "RadialDistortion",
     "Scene",
     "Sky",
+    "Source",
     "Telescope",
+    "UniformIllumination",
+    "Vignetting",
     "WCSInfo",
 ]

@@ -123,7 +123,7 @@ src/getframes/
 | --- | --- | --- | --- | --- |
 | ✅ | **1.1** | Close the loop | master bias/dark/flat builders, `calibrate()`, `expose_series`/`observe_series`, richer FITS I/O + config save/load | the validation workflow for **all 4** |
 | ✅ | **1.2** | Add time | `Observation` time-series driver, time-varying source brightness, pointing jitter / drift / dither, image motion; **persistence/latent images** | **#3, #4** |
-| ☐ | **1.3** | Enrich scenes | `ExtendedSource` (Sersic/array), `UniformIllumination`, `Catalog.from_table` with RA/Dec→pixel, `AiryPSF`/`ArrayPSF`, elliptical PSF | **#2** |
+| ✅ | **1.3** | Enrich scenes | `ExtendedSource` (Sersic/array), `UniformIllumination`, `Catalog.from_table` with RA/Dec→pixel, `AiryPSF`/`ArrayPSF`, elliptical PSF | **#2** |
 | ☐ | **1.4** | Detector depth | CTI, blooming/bleed, IPC, kTC/reset noise, multi-amplifier readout, cosmic-ray tracks, defect/bad-column maps, structured bias, polynomial nonlinearity | accuracy |
 | ☐ | **1.5** | Radiometry & IR | AB system, ugriz/Gaia/2MASS bands, transmission-product loading, extinction, true spectral flux integration, **IR thermal background + glow** | quantitative photometry, honest IR |
 | ☐ | **1.6** | Scale & datasets | float32 path, chunked/vectorised rendering, `dataset` generator for raw+truth pairs at scale, a `getframes` CLI, benchmarks | ML training data, large detectors |
@@ -166,16 +166,16 @@ already half-supports.
   (`persistence_fraction` / `persistence_decay`), carried on the `Observation`
   driver — the deferred 1.0 item.
 
-### 1.3 — Enrich scenes
-- [ ] **Sources.** `ExtendedSource` (Sersic profile + arbitrary image/array),
+### 1.3 — Enrich scenes ✅
+- [x] **Sources.** `ExtendedSource` (Sersic profile + arbitrary image/array),
   `UniformIllumination` (clean flats for PTC).
-- [ ] **Catalogs.** `Catalog.from_table(table, ...)` placing many sources; with a
+- [x] **Catalogs.** `Catalog.from_table(table, ...)` placing many sources; with a
   scene `WCSInfo`, accept RA/Dec and project to pixels (the WCS finally *does*
   something, not just tags).
-- [ ] **PSFs.** `AiryPSF` (diffraction-limited, space/AO), `ArrayPSF` (user kernel,
-  e.g. straight from an AO simulation), elliptical/position-angle PSFs; optional
-  field-varying PSF.
-- [ ] **Optics.** Vignetting / illumination falloff and a simple radial distortion.
+- [x] **PSFs.** `AiryPSF` (diffraction-limited, space/AO), `ArrayPSF` (user kernel,
+  e.g. straight from an AO simulation), elliptical/position-angle PSFs
+  (`EllipticalGaussianPSF`).
+- [x] **Optics.** Vignetting / illumination falloff and a simple radial distortion.
 
 ### 1.4 — Detector depth
 The artifacts a calibration pipeline must survive:

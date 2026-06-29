@@ -10,11 +10,13 @@ sampled on a stamp and normalised.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.special import erf
+from scipy.ndimage import shift as _ndimage_shift
+from scipy.special import erf, j1
 
 # FWHM = 2 * sqrt(2 ln 2) * sigma for a Gaussian.
 _FWHM_PER_SIGMA = 2.3548200450309493
@@ -122,3 +124,168 @@ class MoffatPSF(PSF):
         total = profile.sum()
         if total > 0:
             image[y0:y1, x0:x1] += flux * profile / total
+
+
+@dataclass(frozen=True)
+class EllipticalGaussianPSF(PSF):
+    """An elliptical Gaussian PSF with independent major/minor widths and an angle.
+
+    ``position_angle_deg`` is the angle of the major axis, measured counter-clockwise
+    from the +x axis. The profile is sampled on a stamp and normalised (not the exact
+    error-function integral the circular :class:`GaussianPSF` uses), so flux is
+    conserved to the sampling accuracy.
+    """
+
+    fwhm_major_arcsec: float
+    fwhm_minor_arcsec: float
+    position_angle_deg: float = 0.0
+
+    def add_source(
+        self,
+        image: NDArray[np.float64],
+        x: float,
+        y: float,
+        flux: float,
+        plate_scale_arcsec_per_pixel: float,
+    ) -> None:
+        if flux <= 0:
+            return
+        if self.fwhm_minor_arcsec > self.fwhm_major_arcsec:
+            raise ValueError("fwhm_minor_arcsec must not exceed fwhm_major_arcsec.")
+        sigma_major = self.fwhm_major_arcsec / _FWHM_PER_SIGMA / plate_scale_arcsec_per_pixel
+        sigma_minor = self.fwhm_minor_arcsec / _FWHM_PER_SIGMA / plate_scale_arcsec_per_pixel
+        if sigma_minor <= 0:
+            raise ValueError("PSF FWHM and plate scale must be positive.")
+
+        radius = int(np.ceil(5.0 * sigma_major)) + 1
+        x0, x1, y0, y1 = _stamp_bounds(x, y, radius, image.shape)
+        if x0 >= x1 or y0 >= y1:
+            return
+
+        xs = np.arange(x0, x1) - x
+        ys = np.arange(y0, y1) - y
+        theta = math.radians(self.position_angle_deg)
+        cos_t, sin_t = math.cos(theta), math.sin(theta)
+        u = xs[None, :] * cos_t + ys[:, None] * sin_t
+        v = -xs[None, :] * sin_t + ys[:, None] * cos_t
+        profile = np.exp(-0.5 * ((u / sigma_major) ** 2 + (v / sigma_minor) ** 2))
+        total = profile.sum()
+        if total > 0:
+            image[y0:y1, x0:x1] += flux * profile / total
+
+
+@dataclass(frozen=True)
+class AiryPSF(PSF):
+    """The diffraction-limited Airy pattern of a circular aperture.
+
+    Models a space- or AO-corrected diffraction-limited core: the intensity is
+    ``[2 J1(x)/x]^2`` with ``x = pi * D * theta / lambda``, optionally including a
+    central obstruction of fractional diameter ``obstruction``. The first dark ring
+    sits at ``theta = 1.22 lambda / D``. Sampled on a stamp and normalised.
+
+    Parameters
+    ----------
+    aperture_diameter_m:
+        Aperture diameter in metres (sets the angular scale of the pattern).
+    wavelength_m:
+        Observing wavelength in metres.
+    obstruction:
+        Central-obstruction diameter as a fraction of the aperture, in ``[0, 1)``.
+    """
+
+    aperture_diameter_m: float
+    wavelength_m: float
+    obstruction: float = 0.0
+
+    def add_source(
+        self,
+        image: NDArray[np.float64],
+        x: float,
+        y: float,
+        flux: float,
+        plate_scale_arcsec_per_pixel: float,
+    ) -> None:
+        if flux <= 0:
+            return
+        if self.aperture_diameter_m <= 0 or self.wavelength_m <= 0:
+            raise ValueError("AiryPSF aperture_diameter_m and wavelength_m must be positive.")
+        if not 0.0 <= self.obstruction < 1.0:
+            raise ValueError("AiryPSF obstruction must be in [0, 1).")
+
+        # Radians per pixel, then the argument scale x = pi D theta / lambda.
+        rad_per_pixel = plate_scale_arcsec_per_pixel * (math.pi / 180.0 / 3600.0)
+        arg_per_pixel = math.pi * self.aperture_diameter_m / self.wavelength_m * rad_per_pixel
+        # First null at 1.22 lambda / D; size the stamp to a few Airy rings.
+        first_null_pix = 1.22 / (arg_per_pixel / math.pi) if arg_per_pixel > 0 else 1.0
+        radius = int(np.ceil(5.0 * first_null_pix)) + 1
+        x0, x1, y0, y1 = _stamp_bounds(x, y, radius, image.shape)
+        if x0 >= x1 or y0 >= y1:
+            return
+
+        xs = np.arange(x0, x1) - x
+        ys = np.arange(y0, y1) - y
+        rr = np.sqrt(xs[None, :] ** 2 + ys[:, None] ** 2)
+        arg = arg_per_pixel * rr
+        profile = _airy_intensity(arg, self.obstruction)
+        total = profile.sum()
+        if total > 0:
+            image[y0:y1, x0:x1] += flux * profile / total
+
+
+def _airy_intensity(arg: NDArray[np.float64], obstruction: float) -> NDArray[np.float64]:
+    """Airy intensity ``[2 J1(x)/x]^2`` (with optional central obstruction)."""
+
+    def core(z: NDArray[np.float64]) -> NDArray[np.float64]:
+        out = np.ones_like(z)
+        nz = z != 0.0
+        out[nz] = 2.0 * j1(z[nz]) / z[nz]
+        return out
+
+    eps = obstruction
+    amp = core(arg) if eps <= 0.0 else (core(arg) - eps**2 * core(eps * arg)) / (1.0 - eps**2)
+    return np.asarray(amp**2, dtype=np.float64)
+
+
+@dataclass(frozen=True)
+class ArrayPSF(PSF):
+    """A user-supplied PSF kernel, e.g. straight from an AO/optics simulation.
+
+    The ``kernel`` is a 2D array sampled at detector-pixel resolution; it is
+    normalised to unit sum on construction. Sub-pixel source positions are handled by
+    a first-order (bilinear) shift of the kernel before it is pasted, so the centroid
+    lands at the requested location. Flux falling off the frame is clipped.
+    """
+
+    kernel: NDArray[np.float64]
+
+    def __post_init__(self) -> None:
+        arr = np.asarray(self.kernel, dtype=np.float64)
+        if arr.ndim != 2 or arr.size == 0:
+            raise ValueError("ArrayPSF kernel must be a non-empty 2D array.")
+        total = float(arr.sum())
+        if total <= 0:
+            raise ValueError("ArrayPSF kernel must have a positive sum.")
+        object.__setattr__(self, "kernel", arr / total)
+
+    def add_source(
+        self,
+        image: NDArray[np.float64],
+        x: float,
+        y: float,
+        flux: float,
+        plate_scale_arcsec_per_pixel: float,
+    ) -> None:
+        if flux <= 0:
+            return
+        kh, kw = self.kernel.shape
+        ix, iy = round(x), round(y)
+        fx, fy = x - ix, y - iy
+        stamp = _ndimage_shift(self.kernel, (fy, fx), order=1, mode="constant", cval=0.0)
+
+        top, left = iy - kh // 2, ix - kw // 2
+        height, width = image.shape
+        y0, y1 = max(0, top), min(height, top + kh)
+        x0, x1 = max(0, left), min(width, left + kw)
+        if y0 >= y1 or x0 >= x1:
+            return
+        image[y0:y1, x0:x1] += flux * stamp[y0 - top : y1 - top, x0 - left : x1 - left]
