@@ -113,7 +113,7 @@ known-first-party = ["getframes"]
 quote-style = "double"
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.12"
 strict = true
 warn_unused_ignores = true
 disallow_untyped_defs = true
@@ -121,7 +121,7 @@ plugins = []
 files = ["src/getframes"]
 
 [[tool.mypy.overrides]]
-module = ["matplotlib.*", "astropy.*", "scipy.*"]
+module = ["matplotlib.*", "astropy.*", "scipy.*", "tomli"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
