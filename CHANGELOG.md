@@ -8,6 +8,29 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Detector depth** (roadmap phase 1.4): the artifacts a real calibration
+  pipeline must survive, all off by default and additive on `CameraConfig`.
+  - **CTI**: `cti` smears charge by a CCD's charge-transfer inefficiency, deferring
+    a `cti * n_transfers` fraction into a trailing tail away from the readout
+    register (`noise.apply_cti`).
+  - **Blooming**: `blooming=True` bleeds charge above `full_well_e` symmetrically
+    along the column, charge-conserving (`noise.apply_blooming`).
+  - **IPC**: `ipc_coupling` applies a charge-conserving 3x3 inter-pixel-capacitance
+    kernel (`noise.apply_ipc`).
+  - **kTC/reset noise**: `reset_noise_e` adds a per-pixel, per-frame Gaussian charge
+    uncertainty alongside read noise.
+  - **Multi-amplifier readout**: `amplifier_layout=(n_rows, n_cols)` tiles the
+    sensor into amplifier blocks, each with its own fixed gain
+    (`amp_gain_nonuniformity`) and offset (`amp_offset_spread_adu`) error —
+    producing quadrant seams.
+  - **Cosmic-ray tracks**: `cosmic_ray_track_length_px` upgrades cosmic rays from
+    single pixels to extended tracks (exponential length, random direction).
+  - **Defects & structured bias**: `bad_column_fraction` / `dead_pixel_fraction`
+    impose a fixed map of dead columns/pixels that collect no charge;
+    `bias_structure_amplitude_adu` adds a fixed gradient-plus-column bias pattern on
+    top of the flat pedestal.
+  - **Polynomial nonlinearity**: `nonlinearity_coeffs=(c1, c2, ...)` generalises the
+    single-parameter `nonlinearity` to an arbitrary measured response curve.
 - **Richer scenes** (roadmap phase 1.3): build crowded, structured fields beyond
   point sources on a flat sky.
   - `ExtendedSource` for resolved sources: `ExtendedSource.sersic(...)` (a Sersic

@@ -93,6 +93,59 @@ Finally the electrons are:
 4. clipped to the ADC range `[0, 2**bit_depth - 1]`, and
 5. rounded to integer counts.
 
+## Detector-depth effects
+
+Beyond the core chain, `CameraConfig` carries a set of higher-fidelity detector
+artifacts — the things a calibration pipeline is built to survive. All are **off by
+default** and additive, so existing configs are unchanged. They fall in two groups.
+
+**Charge transport** (electron domain, after collection):
+
+- `blooming=True` — charge above `full_well_e` bleeds along the column (CCD
+  blooming), charge-conserving.
+- `cti` — CCD charge-transfer inefficiency: a `cti * n_transfers` fraction of each
+  pixel's charge is deferred into a trailing tail away from the readout register
+  (row 0).
+- `ipc_coupling` — inter-pixel capacitance: a charge-conserving 3×3 kernel that
+  couples each pixel into its four neighbours (CMOS / IR hybrids).
+- `cosmic_ray_track_length_px` — upgrades cosmic rays from single pixels to
+  extended tracks (set together with `cosmic_ray_rate_per_cm2_s`).
+- `nonlinearity_coeffs=(c1, c2, ...)` — a polynomial response curve
+  `q -> q * (1 + c1 u + c2 u**2 + ...)` with `u = q / full_well_e`, generalising the
+  single-parameter `nonlinearity`.
+
+**Readout structure** (digitisation domain, fixed per sensor):
+
+- `reset_noise_e` — kTC/reset noise, an independent per-pixel, per-frame Gaussian.
+- `amplifier_layout=(n_rows, n_cols)` with `amp_gain_nonuniformity` /
+  `amp_offset_spread_adu` — multi-amplifier readout: each block reads out with its
+  own small, fixed gain/offset error, producing quadrant seams.
+- `bad_column_fraction` / `dead_pixel_fraction` — a fixed map of dead columns and
+  pixels that collect no charge.
+- `bias_structure_amplitude_adu` — a fixed gradient-plus-column pattern riding on
+  the flat `bias_offset_adu` pedestal.
+
+```python
+from getframes import Camera, load_preset
+
+cfg = load_preset("generic_ccd").replace(
+    blooming=True,
+    cti=1e-5,
+    ipc_coupling=0.01,
+    reset_noise_e=5.0,
+    amplifier_layout=(2, 2),
+    amp_offset_spread_adu=15.0,
+    bad_column_fraction=0.001,
+    bias_structure_amplitude_adu=20.0,
+    nonlinearity_coeffs=(-0.05,),
+)
+frame = Camera(cfg).expose(photon_rate=200.0, exposure=10.0, seed=0)
+```
+
+The structural effects (`amplifier_layout`, defects, `bias_structure_amplitude_adu`)
+are keyed on `fixed_pattern_seed`, so they repeat across every frame a camera
+produces — which is exactly what lets master frames capture and remove them.
+
 ## Inspecting the pieces
 
 The intermediate stages are exposed for analysis:

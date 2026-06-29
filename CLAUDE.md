@@ -16,9 +16,11 @@ compatible.
 The library is mid-way through its **1.x → 2.0 arc** (see `docs/roadmap.md`),
 whose theme is the *observation*: sequences of structured, time-varying scenes,
 reduced against ground truth. Phases 1.1 (calibration loop), 1.2 (time series +
-persistence), and 1.3 (richer scenes) have shipped; 1.4–1.6 + 2.0 remain. Every
-1.x change is **additive**; breaking changes are deprecated through 1.x and only
-land at the 2.0 cut.
+persistence), 1.3 (richer scenes), and 1.4 (detector depth: CTI, blooming, IPC,
+kTC/reset noise, multi-amplifier readout, cosmic-ray tracks, defect/bias maps,
+polynomial nonlinearity) have shipped; 1.5–1.6 + 2.0 remain. Every 1.x change is
+**additive**; breaking changes are deprecated through 1.x and only land at the 2.0
+cut.
 
 ## Architecture
 

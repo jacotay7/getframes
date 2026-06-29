@@ -124,7 +124,7 @@ src/getframes/
 | ✅ | **1.1** | Close the loop | master bias/dark/flat builders, `calibrate()`, `expose_series`/`observe_series`, richer FITS I/O + config save/load | the validation workflow for **all 4** |
 | ✅ | **1.2** | Add time | `Observation` time-series driver, time-varying source brightness, pointing jitter / drift / dither, image motion; **persistence/latent images** | **#3, #4** |
 | ✅ | **1.3** | Enrich scenes | `ExtendedSource` (Sersic/array), `UniformIllumination`, `Catalog.from_table` with RA/Dec→pixel, `AiryPSF`/`ArrayPSF`, elliptical PSF | **#2** |
-| ☐ | **1.4** | Detector depth | CTI, blooming/bleed, IPC, kTC/reset noise, multi-amplifier readout, cosmic-ray tracks, defect/bad-column maps, structured bias, polynomial nonlinearity | accuracy |
+| ✅ | **1.4** | Detector depth | CTI, blooming/bleed, IPC, kTC/reset noise, multi-amplifier readout, cosmic-ray tracks, defect/bad-column maps, structured bias, polynomial nonlinearity | accuracy |
 | ☐ | **1.5** | Radiometry & IR | AB system, ugriz/Gaia/2MASS bands, transmission-product loading, extinction, true spectral flux integration, **IR thermal background + glow** | quantitative photometry, honest IR |
 | ☐ | **1.6** | Scale & datasets | float32 path, chunked/vectorised rendering, `dataset` generator for raw+truth pairs at scale, a `getframes` CLI, benchmarks | ML training data, large detectors |
 | ☐ | **2.0** | Stability | promote new APIs to stable, land deprecated breaking changes, validation/benchmark suite vs. published characterisations, JOSS paper + citation, full docs | — |
@@ -177,17 +177,17 @@ already half-supports.
   (`EllipticalGaussianPSF`).
 - [x] **Optics.** Vignetting / illumination falloff and a simple radial distortion.
 
-### 1.4 — Detector depth
+### 1.4 — Detector depth ✅
 The artifacts a calibration pipeline must survive:
 
-- [ ] **CTI** (CCD charge-transfer inefficiency).
-- [ ] **Blooming/bleed** along saturated columns.
-- [ ] **IPC** (inter-pixel capacitance kernel).
-- [ ] **kTC/reset noise.**
-- [ ] **Multi-amplifier** readout (per-amp gain/offset/quadrants + seams).
-- [ ] **Cosmic-ray tracks** (morphology, not single pixels).
-- [ ] **Defect/bad-column maps** and traps, and **structured bias**.
-- [ ] Nonlinearity generalises to a polynomial / lookup.
+- [x] **CTI** (CCD charge-transfer inefficiency).
+- [x] **Blooming/bleed** along saturated columns.
+- [x] **IPC** (inter-pixel capacitance kernel).
+- [x] **kTC/reset noise.**
+- [x] **Multi-amplifier** readout (per-amp gain/offset/quadrants + seams).
+- [x] **Cosmic-ray tracks** (morphology, not single pixels).
+- [x] **Defect/bad-column maps** and traps, and **structured bias**.
+- [x] Nonlinearity generalises to a polynomial / lookup.
 
 ### 1.5 — Radiometry & IR
 - [ ] **AB** alongside Vega.

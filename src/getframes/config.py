@@ -85,7 +85,63 @@ class CameraConfig:
         Fractional signal compression at full well, in ``[0, 0.5)``. The collected
         charge is bent as ``q -> q * (1 - nonlinearity * q / full_well_e)``, so a
         pixel at full well reads ``nonlinearity`` fraction low. ``0`` is perfectly
-        linear.
+        linear. Superseded by ``nonlinearity_coeffs`` when that is given.
+    nonlinearity_coeffs:
+        Optional polynomial generalisation of ``nonlinearity``. A sequence
+        ``(c1, c2, ...)`` defines the response multiplier
+        ``q -> q * (1 + c1 * u + c2 * u**2 + ...)`` with ``u = q / full_well_e``, so
+        an arbitrary measured nonlinearity curve (or look-up) can be reproduced.
+        When set it replaces the single-parameter ``nonlinearity`` model. ``None``
+        keeps the scalar model.
+    cti:
+        Charge-transfer inefficiency (CTI) of a CCD, the fraction of charge left
+        behind per pixel-to-pixel transfer during readout, in ``[0, 1)``. A bright
+        pixel ``r`` rows from the readout register undergoes ``r`` transfers and
+        smears a deferred-charge tail away from the register. ``0`` is a perfect
+        CCD. (Trap-driven deferral; the readout register is taken to be row 0.)
+    blooming:
+        When ``True``, charge collected above ``full_well_e`` spills (blooms) into
+        the vertically adjacent pixels of the same column until it is below full
+        well or runs off the array, charge-conserving — the bright bleed columns of
+        a saturated CCD. ``False`` simply clips at full well.
+    ipc_coupling:
+        Inter-pixel capacitance (IPC): the fraction of each pixel's signal that
+        couples capacitively into *each* of its four nearest neighbours at readout,
+        in ``[0, 0.25)``. Applied as a charge-conserving 3x3 convolution (CMOS/IR
+        hybrid arrays). ``0`` disables it.
+    reset_noise_e:
+        kTC / reset noise RMS in electrons: an independent per-pixel, per-frame
+        Gaussian charge uncertainty from resetting the sense node, added alongside
+        read noise. ``0`` disables it (or assumes it is removed by correlated double
+        sampling).
+    amplifier_layout:
+        Multi-amplifier readout as ``(n_rows, n_cols)`` of amplifiers tiling the
+        sensor (e.g. ``(2, 2)`` for a four-quadrant CCD). Each amplifier block gets
+        its own small gain and offset error (see ``amp_gain_nonuniformity`` /
+        ``amp_offset_spread_adu``), producing the characteristic seams. ``(1, 1)``
+        is a single amplifier.
+    amp_gain_nonuniformity:
+        Fractional RMS spread of per-amplifier gain about ``gain_e_per_adu`` (a
+        fixed pattern keyed on ``fixed_pattern_seed``). Ignored for a single
+        amplifier.
+    amp_offset_spread_adu:
+        RMS spread of per-amplifier bias offset in ADU, about ``bias_offset_adu``
+        (fixed pattern). Ignored for a single amplifier.
+    cosmic_ray_track_length_px:
+        Mean length in pixels of cosmic-ray *tracks*. ``0`` keeps the single-pixel
+        hit model; a positive value draws an exponential track length and a random
+        direction per hit, depositing the charge along the track (glancing muons).
+    bad_column_fraction:
+        Fraction of columns that are defective (dead): a fixed, deterministic set of
+        whole columns forced to zero signal in every frame — the bad columns a flat
+        cannot rescue. ``0`` disables.
+    dead_pixel_fraction:
+        Fraction of individual pixels that are dead (zero response), a fixed map.
+        ``0`` disables.
+    bias_structure_amplitude_adu:
+        Peak amplitude in ADU of a fixed, structured bias pattern (a smooth gradient
+        plus per-column offsets) added on top of the flat ``bias_offset_adu``
+        pedestal. ``0`` keeps the bias a flat pedestal.
     cosmic_ray_rate_per_cm2_s:
         Cosmic-ray hit rate in events per cm^2 per second (sea level is ~5). The
         number of hits scales with sensor area and exposure; each deposits a burst
@@ -159,6 +215,18 @@ class CameraConfig:
     prnu: float = 0.0
     read_noise_nonuniformity: float = 0.0
     nonlinearity: float = 0.0
+    nonlinearity_coeffs: tuple[float, ...] | None = None
+    cti: float = 0.0
+    blooming: bool = False
+    ipc_coupling: float = 0.0
+    reset_noise_e: float = 0.0
+    amplifier_layout: tuple[int, int] = (1, 1)
+    amp_gain_nonuniformity: float = 0.0
+    amp_offset_spread_adu: float = 0.0
+    cosmic_ray_track_length_px: float = 0.0
+    bad_column_fraction: float = 0.0
+    dead_pixel_fraction: float = 0.0
+    bias_structure_amplitude_adu: float = 0.0
     cosmic_ray_rate_per_cm2_s: float = 0.0
     dark_current_ref_temp_c: float = 20.0
     dark_current_doubling_temp_c: float = 6.3
@@ -180,6 +248,11 @@ class CameraConfig:
         # Normalise/validate without mutating frozen fields directly.
         object.__setattr__(self, "sensor_type", SensorType.coerce(self.sensor_type))
         object.__setattr__(self, "resolution", tuple(int(n) for n in self.resolution))
+        object.__setattr__(self, "amplifier_layout", tuple(int(n) for n in self.amplifier_layout))
+        if self.nonlinearity_coeffs is not None:
+            object.__setattr__(
+                self, "nonlinearity_coeffs", tuple(float(c) for c in self.nonlinearity_coeffs)
+            )
         self._validate()
 
     def _validate(self) -> None:
@@ -199,6 +272,30 @@ class CameraConfig:
             raise ValueError("read_noise_nonuniformity must be non-negative.")
         if not 0.0 <= self.nonlinearity < 0.5:
             raise ValueError("nonlinearity must be in [0, 0.5).")
+        if self.nonlinearity_coeffs is not None and len(self.nonlinearity_coeffs) == 0:
+            raise ValueError("nonlinearity_coeffs must be a non-empty sequence or None.")
+        if not 0.0 <= self.cti < 1.0:
+            raise ValueError("cti must be in [0, 1).")
+        if not 0.0 <= self.ipc_coupling < 0.25:
+            raise ValueError("ipc_coupling must be in [0, 0.25).")
+        if self.reset_noise_e < 0:
+            raise ValueError("reset_noise_e must be non-negative.")
+        if len(self.amplifier_layout) != 2 or any(n <= 0 for n in self.amplifier_layout):
+            raise ValueError(
+                f"amplifier_layout must be two positive ints, got {self.amplifier_layout!r}."
+            )
+        if self.amp_gain_nonuniformity < 0:
+            raise ValueError("amp_gain_nonuniformity must be non-negative.")
+        if self.amp_offset_spread_adu < 0:
+            raise ValueError("amp_offset_spread_adu must be non-negative.")
+        if self.cosmic_ray_track_length_px < 0:
+            raise ValueError("cosmic_ray_track_length_px must be non-negative.")
+        if not 0.0 <= self.bad_column_fraction <= 1.0:
+            raise ValueError("bad_column_fraction must be in [0, 1].")
+        if not 0.0 <= self.dead_pixel_fraction <= 1.0:
+            raise ValueError("dead_pixel_fraction must be in [0, 1].")
+        if self.bias_structure_amplitude_adu < 0:
+            raise ValueError("bias_structure_amplitude_adu must be non-negative.")
         if self.cosmic_ray_rate_per_cm2_s < 0:
             raise ValueError("cosmic_ray_rate_per_cm2_s must be non-negative.")
         if self.dark_current_e_per_s < 0:
@@ -266,6 +363,9 @@ class CameraConfig:
         data = asdict(self)
         data["sensor_type"] = self.sensor_type.value
         data["resolution"] = list(self.resolution)
+        data["amplifier_layout"] = list(self.amplifier_layout)
+        if self.nonlinearity_coeffs is not None:
+            data["nonlinearity_coeffs"] = list(self.nonlinearity_coeffs)
         data["qe_curve"] = _serialize_qe_curve(self.qe_curve)
         return data
 
