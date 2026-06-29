@@ -13,6 +13,13 @@ dark, bias, and flat frames, and renders star fields through a PSF and telescope
 mode. As of 1.0 the public API is frozen under SemVer; keep it backwards
 compatible.
 
+The library is mid-way through its **1.x → 2.0 arc** (see `docs/roadmap.md`),
+whose theme is the *observation*: sequences of structured, time-varying scenes,
+reduced against ground truth. Phases 1.1 (calibration loop), 1.2 (time series +
+persistence), and 1.3 (richer scenes) have shipped; 1.4–1.6 + 2.0 remain. Every
+1.x change is **additive**; breaking changes are deprecated through 1.x and only
+land at the 2.0 cut.
+
 ## Architecture
 
 `src/` layout, importable as `getframes`.
@@ -22,17 +29,27 @@ compatible.
 | `config.py` | `CameraConfig` (frozen dataclass of detector params) and `SensorType` enum. Pure data + validation + temperature scaling. No randomness. |
 | `noise.py` | The physics. Pure functions: `CameraConfig` + exposure + temperature + seeded `Generator` → electrons/ADU. This is where noise models live. |
 | `frame.py` | `Frame` container: a NumPy array (ADU) plus metadata; array-like; optional FITS export. |
-| `camera.py` | `Camera`, the main user-facing object. Orchestrates config + noise into `Frame`s. Holds the RNG and high-level methods (`dark_frame`, `dark_series`). |
+| `camera.py` | `Camera`, the main user-facing object. Orchestrates config + scene + noise into `Frame`s. Holds the RNG and high-level methods (`dark_frame`, `dark_series`, `expose`, `observe`, `*_series`, `master_*`). |
+| `calibrate.py` | Master-frame builders (`combine`) and `calibrate` reduction — the raw → reduced → truth loop (phase 1.1). |
+| `observation.py` | `Observation` / `ObservationTruth` / `Pointing`: the time-series driver, jitter/drift/dither, per-frame truth (phase 1.2). |
+| `spectral.py` | Opt-in spectral mode: `QE`, `SED`, `Spectrum`, `SpectralBandpass`, effective-QE folding. |
+| `scene/` | The scene/optics layer (phase 1.3): `Scene`, `Source` hierarchy (`PointSource`, `ExtendedSource`, `UniformIllumination`, `Catalog`), PSFs (`GaussianPSF`/`MoffatPSF`/`AiryPSF`/`ArrayPSF`/`EllipticalGaussianPSF`), `Telescope` (+ `Vignetting`/`RadialDistortion`), `Bandpass`, `WCSInfo`, `LightCurve`. Renders a photon-rate map; no randomness. |
+| `analysis/` | Measurement helpers: `apertures.py` (`aperture_sum`, `centroid`), `ptc.py` (`photon_transfer_curve`). |
 | `presets/` | Preset library. TOML data files in `presets/data/`, loaded via `importlib.resources`. `load_preset`, `available_presets`, `preset_info`. |
 
-Data flows one way: `presets` → `CameraConfig` → `Camera` → `noise` → `Frame`.
-Keep `config` and `noise` free of side effects and global state.
+Data flows one way: `presets` → `CameraConfig` → `Scene` → `Camera` → `noise` →
+`Frame` (→ `calibrate`/`analysis`). Keep `config`, `noise`, `scene`, and
+`spectral` free of side effects and global state; never reach back up the chain
+(e.g. `scene` must not import `camera`).
 
 ## Design principles
 
-1. **API first.** The public surface (`Camera`, `CameraConfig`, `Frame`,
-   `load_preset`, `available_presets`) must stay clean and obvious. New features
-   should feel like the existing ones. Update `__init__.py`'s `__all__`.
+1. **API first.** The public surface (`Camera`, `CameraConfig`, `Frame`, `Scene`
+   and its sources/PSFs/optics, `calibrate`, `Observation`, `load_preset`, …)
+   must stay clean and obvious. New features should feel like the existing ones —
+   mirror an existing constructor/method shape before inventing a new one. Every
+   new public name goes in the subpackage `__all__` **and** the top-level
+   `getframes/__init__.py` `__all__`.
 2. **Reproducibility.** All randomness goes through a `numpy.random.Generator`.
    Every generation method accepts a `seed`. Never call the global `np.random.*`.
 3. **Physics is auditable.** Noise models live as small, documented, pure functions
@@ -79,10 +96,58 @@ ruff check . && ruff format --check . && mypy && pytest
 To cut a release: bump `src/getframes/__about__.py` and the `CHANGELOG.md`, tag
 `vX.Y.Z`, and push the tag.
 
+## Keeping the repo healthy
+
+The repo only stays clean if every change updates the things that travel *with*
+it. Treat these as part of "done," not follow-up work — a feature whose docs,
+changelog, and exports lag is a half-finished feature. When you add or change
+public behaviour, walk this list:
+
+1. **Exports.** New public name → add it to the subpackage `__all__` *and*
+   `getframes/__init__.py`'s import block and `__all__` (keep both alphabetised).
+   If it shouldn't be public, prefix it with `_`.
+2. **Docstrings.** Every public class/function gets a NumPy-style docstring with
+   units (`_e`, `_adu`, …) and, for physics, the model form and assumptions. The
+   API reference is generated from docstrings via `mkdocstrings`, so the docstring
+   *is* the reference page.
+3. **`docs/reference.md`.** Add a `::: getframes.module.Name` stanza for each new
+   public symbol (whole modules like `getframes.scene.psf` are auto-expanded, so
+   new members of an already-listed module need no edit).
+4. **Guides.** If the feature is user-facing, extend the relevant `docs/guides/*`
+   page (or add one and wire it into `mkdocs.yml`'s `nav:`). Code in guides should
+   be runnable.
+5. **`CHANGELOG.md`.** Add a bullet under `## [Unreleased]` → `### Added` /
+   `Changed` / `Fixed`, tagged with the roadmap phase where relevant. This is the
+   accumulating record between releases.
+6. **`docs/roadmap.md`.** When you finish a roadmap item, tick its `- [ ]` → `[x]`
+   (and the phase's table row `☐` → `✅` once all its items are done). Don't
+   invent scope the roadmap doesn't list without flagging it.
+7. **`CLAUDE.md` (this file).** Keep it a faithful map of the repo. Update it
+   whenever a change touches something it describes: a new or moved module (the
+   Architecture table + data-flow line), the public surface or a new design
+   constraint (Design principles), a runtime dependency (Things to avoid), the
+   conventions, or the test/release process. New top-level module → new table row.
+   It's load-bearing context for every future agent — a stale line here misleads
+   far more than a stale guide. If you learn something non-obvious about how the
+   repo wants to be worked in, write it down here.
+8. **Tests.** Add seeded, deterministic tests asserting *statistical* / behavioural
+   properties (see Testing). New module → new `tests/test_*.py`.
+9. **Gate.** Run the full gate below and make it green before declaring done.
+
+Rules of thumb: prefer additive changes that keep the frozen 1.0 API working;
+make the smallest change that fits the existing patterns; and if a change spans
+layers, respect the one-way data flow. When something is genuinely done and
+verified, say so plainly; when a step was skipped or a test fails, say *that*.
+
 ## Things to avoid
 
-- Don't add heavy runtime dependencies. Core depends only on `numpy` (+ `tomli`
-  backport on <3.11). Keep `matplotlib`/`astropy` in optional extras.
+- Don't add heavy runtime dependencies. Core runtime deps are `numpy` and `scipy`
+  (+ `tomli` backport on <3.11). Keep `matplotlib`/`astropy` in optional extras
+  (`examples`); `astropy`-backed features (WCS pixel↔world projection, catalogs)
+  must import it lazily and raise an informative error when it's missing. (The
+  roadmap plans `astropy` as a core dep at 2.0 — until then, keep it optional.)
 - Don't introduce global mutable state or module-level RNGs.
-- Don't break the one-way data flow or reach from `config`/`noise` back into
-  `camera`/`presets`.
+- Don't break the one-way data flow or reach from `config`/`noise`/`scene`/
+  `spectral` back into `camera`/`presets`.
+- Don't edit `__about__.py` or cut a tag as part of a feature; releases are a
+  separate, deliberate step.
