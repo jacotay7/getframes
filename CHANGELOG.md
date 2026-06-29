@@ -8,6 +8,26 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Scale & datasets** (roadmap phase 1.6): generate large detectors and bulk
+  raw+truth training data, all additive.
+  - **float32 fast path**: `Camera(..., precision="float32")` runs the whole signal
+    chain (and each frame's ground truth) in single precision, halving the per-pixel
+    memory for large detectors and bulk generation. The digitised ADU stay integer;
+    `noise.simulate_frame` and `Scene.photon_rate_map` gain a `float_dtype`/`dtype`
+    argument (`float64` exact default).
+  - **Vectorised multi-source rendering**: `GaussianPSF.add_sources` deposits a whole
+    catalog in one batched, memory-chunked NumPy expression (exact match to the
+    per-source path), so a 10⁵-star `Catalog` no longer loops in Python. The base
+    `PSF.add_sources` falls back to a loop for other PSFs.
+  - **Dataset generator** (`getframes.dataset`): `pairs(camera=, scenes=, exposure=)`
+    streams `{"raw": ADU, "truth": e-}` pairs reproducibly to disk via
+    `PairDataset.to_npz` (or `to_arrays`), and `random_star_fields(n, shape, ...)` is
+    a re-iterable source of random star-field scenes to feed it.
+  - **`getframes` CLI**: a console entry point with `presets`, `generate config.toml
+    -o frame.fits`, and `dataset config.toml -o train/` subcommands, so an experiment
+    is a shareable TOML file (`getframes.cli`).
+  - **Benchmarks**: `benchmarks/run.py`, a dependency-light throughput harness for the
+    signal chain, catalog rendering, and dataset generation (not part of the gate).
 - **Radiometry & the infrared** (roadmap phase 1.5): quantitative photometry and
   honest IR backgrounds, all additive.
   - **AB system**: `Bandpass.ab(band)` alongside the Vega-system `Bandpass.johnson`,

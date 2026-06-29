@@ -20,9 +20,11 @@ persistence), 1.3 (richer scenes), 1.4 (detector depth: CTI, blooming, IPC,
 kTC/reset noise, multi-amplifier readout, cosmic-ray tracks, defect/bias maps,
 polynomial nonlinearity), and 1.5 (radiometry & IR: AB system, ugriz/Gaia/2MASS
 bands, transmission products, extinction, spectral flux integration, thermal
-background + detector glow) have shipped; 1.6 + 2.0 remain. Every 1.x change is
-**additive**; breaking changes are deprecated through 1.x and only land at the 2.0
-cut.
+background + detector glow), and 1.6 (scale & datasets: a float32 fast path,
+vectorised/chunked multi-source rendering, a `dataset` raw+truth generator, the
+`getframes` CLI, and a benchmark suite) have shipped; 2.0 remains. Every 1.x change
+is **additive**; breaking changes are deprecated through 1.x and only land at the
+2.0 cut.
 
 ## Architecture
 
@@ -39,6 +41,8 @@ cut.
 | `spectral.py` | Opt-in spectral mode: `QE`, `SED` (relative or absolute via `from_flux_density`), `Spectrum`, `SpectralBandpass`, effective-QE folding, transmission-product helpers (`product`, `from_file`/`from_product`), optional `astropy.units` coercion. |
 | `scene/` | The scene/optics layer: `Scene`, `Source` hierarchy (`PointSource`, `ExtendedSource`, `UniformIllumination`, `Catalog`; point/extended sources accept a `flux_sed` absolute SED), PSFs (`GaussianPSF`/`MoffatPSF`/`AiryPSF`/`ArrayPSF`/`EllipticalGaussianPSF`), `Telescope` (+ `Vignetting`/`RadialDistortion`), `Bandpass` (Vega `johnson` / AB `ab` ugriz·Gaia·2MASS + `Extinction`) in `photometry.py`, `Thermal` graybody background in `thermal.py`, `WCSInfo`, `LightCurve`. Renders a photon-rate map; no randomness. |
 | `analysis/` | Measurement helpers: `apertures.py` (`aperture_sum`, `centroid`), `ptc.py` (`photon_transfer_curve`). |
+| `dataset.py` | Scalable raw+truth dataset generation (phase 1.6): `pairs()` → a streaming `PairDataset` (`to_npz`/`to_arrays`), `random_star_fields()` re-iterable scene source. float32-friendly; no global state. |
+| `cli.py` | The `getframes` console entry point (phase 1.6): `presets` / `generate` / `dataset` subcommands driven by a TOML config. |
 | `presets/` | Preset library. TOML data files in `presets/data/`, loaded via `importlib.resources`. `load_preset`, `available_presets`, `preset_info`. |
 
 Data flows one way: `presets` → `CameraConfig` → `Scene` → `Camera` → `noise` →

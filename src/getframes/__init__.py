@@ -12,7 +12,7 @@ Quick start
 
 from __future__ import annotations
 
-from . import analysis
+from . import analysis, dataset
 from .__about__ import __version__
 from .calibrate import calibrate, combine
 from .camera import Camera
@@ -86,5 +86,6 @@ __all__ = [
     "available_presets",
     "calibrate",
     "combine",
+    "dataset",
     "load_preset",
 ]

@@ -126,7 +126,7 @@ src/getframes/
 | ✅ | **1.3** | Enrich scenes | `ExtendedSource` (Sersic/array), `UniformIllumination`, `Catalog.from_table` with RA/Dec→pixel, `AiryPSF`/`ArrayPSF`, elliptical PSF | **#2** |
 | ✅ | **1.4** | Detector depth | CTI, blooming/bleed, IPC, kTC/reset noise, multi-amplifier readout, cosmic-ray tracks, defect/bad-column maps, structured bias, polynomial nonlinearity | accuracy |
 | ✅ | **1.5** | Radiometry & IR | AB system, ugriz/Gaia/2MASS bands, transmission-product loading, extinction, true spectral flux integration, **IR thermal background + glow** | quantitative photometry, honest IR |
-| ☐ | **1.6** | Scale & datasets | float32 path, chunked/vectorised rendering, `dataset` generator for raw+truth pairs at scale, a `getframes` CLI, benchmarks | ML training data, large detectors |
+| ✅ | **1.6** | Scale & datasets | float32 path, chunked/vectorised rendering, `dataset` generator for raw+truth pairs at scale, a `getframes` CLI, benchmarks | ML training data, large detectors |
 | ☐ | **2.0** | Stability | promote new APIs to stable, land deprecated breaking changes, validation/benchmark suite vs. published characterisations, JOSS paper + citation, full docs | — |
 
 Persistence (1.2) is the one item explicitly deferred from the 1.0 series; it lands
@@ -200,14 +200,14 @@ The artifacts a calibration pipeline must survive:
   1.0 open decision #4).
 - [x] Optional `astropy.units` interop.
 
-### 1.6 — Scale & datasets
-- [ ] A **float32** fast path.
-- [ ] **Chunked/tiled** rendering and **vectorised** multi-source PSF evaluation (a
+### 1.6 — Scale & datasets ✅
+- [x] A **float32** fast path.
+- [x] **Chunked/tiled** rendering and **vectorised** multi-source PSF evaluation (a
   10⁵-star catalog should not loop in Python).
-- [ ] An optional **`dataset`** generator yielding raw+truth pairs at scale for ML
+- [x] An optional **`dataset`** generator yielding raw+truth pairs at scale for ML
   training (denoising, deconvolution, calibration).
-- [ ] A **`getframes` CLI** to generate frames from a config file.
-- [ ] A **benchmark** suite to keep throughput honest.
+- [x] A **`getframes` CLI** to generate frames from a config file.
+- [x] A **benchmark** suite to keep throughput honest.
 
 ---
 

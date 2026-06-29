@@ -21,6 +21,10 @@ from scipy.special import erf, j1
 # FWHM = 2 * sqrt(2 ln 2) * sigma for a Gaussian.
 _FWHM_PER_SIGMA = 2.3548200450309493
 
+# Target number of stamp elements held in a single batched-deposit chunk
+# (~4M float64 ≈ 32 MB), so vectorised multi-source rendering stays memory-bounded.
+_STAMP_BUDGET = 4_000_000
+
 
 def _stamp_bounds(
     x: float, y: float, radius: int, shape: tuple[int, int]
@@ -46,6 +50,25 @@ class PSF:
     ) -> None:
         """Add ``flux`` photons/s of a point source at sub-pixel ``(x, y)`` into ``image``."""
         raise NotImplementedError
+
+    def add_sources(
+        self,
+        image: NDArray[np.float64],
+        xs: NDArray[np.float64],
+        ys: NDArray[np.float64],
+        fluxes: NDArray[np.float64],
+        plate_scale_arcsec_per_pixel: float,
+    ) -> None:
+        """Add many point sources at once (vectorised where the PSF supports it).
+
+        ``xs``, ``ys``, ``fluxes`` are equal-length 1-D arrays of sub-pixel column,
+        row, and total flux. The generic implementation loops over
+        :meth:`add_source`; subclasses (e.g. :class:`GaussianPSF`) override it with a
+        batched, chunked evaluation so a large :class:`~getframes.scene.sources.Catalog`
+        does not pay a Python-level per-source loop.
+        """
+        for x, y, flux in zip(xs, ys, fluxes):
+            self.add_source(image, float(x), float(y), float(flux), plate_scale_arcsec_per_pixel)
 
 
 @dataclass(frozen=True)
@@ -83,6 +106,63 @@ class GaussianPSF(PSF):
         px = np.diff(cdf_x)
         py = np.diff(cdf_y)
         image[y0:y1, x0:x1] += flux * np.outer(py, px)
+
+    def add_sources(
+        self,
+        image: NDArray[np.float64],
+        xs: NDArray[np.float64],
+        ys: NDArray[np.float64],
+        fluxes: NDArray[np.float64],
+        plate_scale_arcsec_per_pixel: float,
+    ) -> None:
+        """Vectorised, chunked deposition of many Gaussian point sources.
+
+        Builds every source's exact per-pixel error-function integral on a common
+        stamp in one batched NumPy expression and scatter-adds it into ``image``,
+        replacing the Python per-source loop. Identical pixel values to repeated
+        :meth:`add_source` calls (flux off the frame is clipped the same way). Work
+        is chunked over sources to keep the intermediate ``(chunk, stamp, stamp)``
+        buffer bounded for very large catalogues.
+        """
+        xs = np.asarray(xs, dtype=np.float64)
+        ys = np.asarray(ys, dtype=np.float64)
+        fluxes = np.asarray(fluxes, dtype=np.float64)
+        sigma = self.fwhm_arcsec / _FWHM_PER_SIGMA / plate_scale_arcsec_per_pixel
+        if sigma <= 0:
+            raise ValueError("PSF FWHM and plate scale must be positive.")
+        keep = fluxes > 0
+        if not keep.any():
+            return
+        xs, ys, fluxes = xs[keep], ys[keep], fluxes[keep]
+
+        radius = int(np.ceil(5.0 * sigma)) + 1
+        span = 2 * radius + 1
+        scale = sigma * np.sqrt(2.0)
+        height, width = image.shape
+        # Process in chunks so the (n, span, span) stamp buffer stays bounded.
+        chunk = max(1, _STAMP_BUDGET // (span * span))
+        offsets = np.arange(span)
+        edge_offsets = np.arange(span + 1) - 0.5
+        for start in range(0, xs.shape[0], chunk):
+            cx = xs[start : start + chunk]
+            cy = ys[start : start + chunk]
+            cf = fluxes[start : start + chunk]
+            ix = np.round(cx).astype(np.intp)
+            iy = np.round(cy).astype(np.intp)
+            # Exact per-pixel integral on the common stamp, per source (separable).
+            edges_x = (ix[:, None] - radius) + edge_offsets[None, :]
+            edges_y = (iy[:, None] - radius) + edge_offsets[None, :]
+            px = np.diff(0.5 * (1.0 + erf((edges_x - cx[:, None]) / scale)), axis=1)
+            py = np.diff(0.5 * (1.0 + erf((edges_y - cy[:, None]) / scale)), axis=1)
+            stamps = cf[:, None, None] * py[:, :, None] * px[:, None, :]
+            cols = (ix[:, None] - radius) + offsets[None, :]  # (n, span)
+            rows = (iy[:, None] - radius) + offsets[None, :]  # (n, span)
+            rr = rows[:, :, None]
+            cc = cols[:, None, :]
+            inb = (rr >= 0) & (rr < height) & (cc >= 0) & (cc < width)
+            r_full = np.broadcast_to(rr, stamps.shape)[inb]
+            c_full = np.broadcast_to(cc, stamps.shape)[inb]
+            np.add.at(image, (r_full, c_full), stamps[inb])
 
 
 @dataclass(frozen=True)

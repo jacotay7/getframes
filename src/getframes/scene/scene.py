@@ -19,6 +19,8 @@ from .wcs import WCSInfo
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from numpy.typing import DTypeLike
+
     from ..spectral import QE, SED
 
 
@@ -90,6 +92,7 @@ class Scene:
         qe_scale: Callable[[SED | None], float],
         time_s: float | None,
         offset_xy: tuple[float, float],
+        dtype: DTypeLike = np.float64,
     ) -> NDArray[np.float64]:
         """Deposit every source into a fresh map and apply vignetting."""
         ctx = RenderContext(
@@ -101,7 +104,7 @@ class Scene:
             qe_scale=qe_scale,
             pixel_transform=self._pixel_transform(),
         )
-        image = np.zeros(self.shape, dtype=np.float64)
+        image = np.zeros(self.shape, dtype=dtype)
         for source in self.sources:
             source.deposit(image, ctx)
         illumination = self.optics.illumination_map(self.shape)
@@ -113,6 +116,7 @@ class Scene:
         self,
         time_s: float | None = None,
         offset_xy: tuple[float, float] = (0.0, 0.0),
+        dtype: DTypeLike = np.float64,
     ) -> NDArray[np.float64]:
         """Render the sources through the PSF into a photons/s/pixel map.
 
@@ -128,8 +132,11 @@ class Scene:
         offset_xy:
             A whole-field pointing offset ``(dx, dy)`` in pixels added to every
             source position (models jitter / drift / dither). Defaults to no shift.
+        dtype:
+            Output (and working) floating-point dtype. ``float64`` is the exact
+            default; ``float32`` halves the map's memory for the fast path.
         """
-        return self._render(lambda _sed: 1.0, time_s, offset_xy)
+        return self._render(lambda _sed: 1.0, time_s, offset_xy, dtype)
 
     def sky_photon_rate(self) -> float:
         """Uniform sky background in photons/s/pixel (``0`` if no sky is set)."""
@@ -153,6 +160,7 @@ class Scene:
         qe_curve: QE,
         time_s: float | None = None,
         offset_xy: tuple[float, float] = (0.0, 0.0),
+        dtype: DTypeLike = np.float64,
     ) -> NDArray[np.float64]:
         """Render sources to a *photoelectron*-rate map (e-/s/pixel) in spectral mode.
 
@@ -168,7 +176,7 @@ class Scene:
         band = self.optics.band
         if band is None or band.response is None:
             raise ValueError("photoelectron_rate_map requires a band with a spectral response.")
-        return self._render(lambda sed: band.effective_qe(qe_curve, sed), time_s, offset_xy)
+        return self._render(lambda sed: band.effective_qe(qe_curve, sed), time_s, offset_xy, dtype)
 
     def sky_electron_rate(self, qe_curve: QE) -> float:
         """Uniform sky background in photoelectrons/s/pixel for spectral mode."""

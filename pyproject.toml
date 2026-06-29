@@ -59,6 +59,9 @@ examples = [
     "astropy>=5.0",
 ]
 
+[project.scripts]
+getframes = "getframes.cli:main"
+
 [project.urls]
 Homepage = "https://github.com/jacotay7/getframes"
 Documentation = "https://jacotay7.github.io/getframes/"
@@ -73,7 +76,15 @@ path = "src/getframes/__about__.py"
 packages = ["src/getframes"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/getframes", "tests", "examples", "README.md", "LICENSE", "CHANGELOG.md"]
+include = [
+    "src/getframes",
+    "tests",
+    "examples",
+    "benchmarks",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+]
 
 [tool.ruff]
 line-length = 100

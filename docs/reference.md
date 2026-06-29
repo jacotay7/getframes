@@ -76,6 +76,14 @@
 
 ::: getframes.analysis.ptc
 
+## Datasets & scale
+
+::: getframes.dataset
+
+## Command line
+
+::: getframes.cli
+
 ## Noise models
 
 ::: getframes.noise

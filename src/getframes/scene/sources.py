@@ -611,15 +611,36 @@ class Catalog(Source):
 
     def deposit(self, image: NDArray[np.float64], ctx: RenderContext) -> None:
         scale = _brightness_scale(self.brightness, ctx.time_s) * ctx.qe_scale(self.sed)
-        if scale <= 0:
+        if scale <= 0 or not self.entries:
             return
         plate_scale = ctx.optics.plate_scale_arcsec_per_pixel
-        for e in self.entries:
-            rate = _resolve_rate(e.magnitude, e.photon_rate, ctx.optics) * scale
-            if rate <= 0:
-                continue
-            px, py = ctx.place(e.x, e.y, e.ra_deg, e.dec_deg)
-            ctx.psf.add_source(image, px, py, rate, plate_scale)
+        rates = np.array(
+            [_resolve_rate(e.magnitude, e.photon_rate, ctx.optics) for e in self.entries],
+            dtype=np.float64,
+        )
+        rates *= scale
+        xs, ys = self._placed_positions(ctx)
+        # One batched (vectorised, chunked) deposit instead of a Python per-star loop.
+        ctx.psf.add_sources(image, xs, ys, rates, plate_scale)
+
+    def _placed_positions(
+        self, ctx: RenderContext
+    ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """Resolve every entry to detector pixels, vectorising the common path.
+
+        Pixel-placed catalogues with no optical distortion are projected in one
+        array op; RA/Dec or distortion fall back to the per-entry
+        :meth:`RenderContext.place` so WCS and distortion behave exactly as for a
+        single source.
+        """
+        pixel_only = all(e.ra_deg is None and e.x is not None for e in self.entries)
+        if pixel_only and ctx.pixel_transform is None:
+            xs = np.array([e.x for e in self.entries], dtype=np.float64)
+            ys = np.array([e.y for e in self.entries], dtype=np.float64)
+            return xs + ctx.offset_xy[0], ys + ctx.offset_xy[1]
+        placed = [ctx.place(e.x, e.y, e.ra_deg, e.dec_deg) for e in self.entries]
+        arr = np.asarray(placed, dtype=np.float64).reshape(len(placed), 2)
+        return arr[:, 0], arr[:, 1]
 
 
 def _paste_centered(

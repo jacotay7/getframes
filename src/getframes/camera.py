@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
 
@@ -49,7 +49,18 @@ class Camera:
     seed:
         Optional seed for this camera's internal random generator, giving
         reproducible output across calls when no per-call seed is supplied.
+    precision:
+        Working floating-point precision of the signal chain: ``"float64"`` (the
+        exact default) or ``"float32"`` for the memory-light fast path — half the
+        per-pixel memory, useful for large detectors and bulk dataset generation.
+        The digitised ADU stay integer either way; only the floating-point arrays
+        (including each frame's ground truth) change.
     """
+
+    _PRECISIONS: ClassVar[dict[str, type[np.floating[Any]]]] = {
+        "float32": np.float32,
+        "float64": np.float64,
+    }
 
     def __init__(
         self,
@@ -57,15 +68,22 @@ class Camera:
         *,
         default_temperature_c: float | None = None,
         seed: int | None = None,
+        precision: str = "float64",
     ) -> None:
         if not isinstance(config, CameraConfig):
             raise TypeError("config must be a CameraConfig instance.")
+        if precision not in self._PRECISIONS:
+            raise ValueError(
+                f"precision must be one of {sorted(self._PRECISIONS)}, got {precision!r}."
+            )
         self.config = config
         self.default_temperature_c = (
             default_temperature_c
             if default_temperature_c is not None
             else config.dark_current_ref_temp_c
         )
+        self.precision = precision
+        self._float_dtype = self._PRECISIONS[precision]
         self._rng = np.random.default_rng(seed)
 
     # ------------------------------------------------------------------
@@ -101,6 +119,7 @@ class Camera:
         return Camera(
             self.config.replace(**changes),
             default_temperature_c=self.default_temperature_c,
+            precision=self.precision,
         )
 
     # ------------------------------------------------------------------
@@ -229,12 +248,13 @@ class Camera:
             quantum_efficiency=quantum_efficiency,
             extra_electrons=extra_electrons,
             rng=rng,
+            float_dtype=self._float_dtype,
         )
         truth = (
             FrameTruth(
                 mean_electrons=result.mean_photoelectrons
                 + result.mean_dark_electrons
-                + np.asarray(extra_electrons, dtype=np.float64),
+                + np.asarray(extra_electrons, dtype=self._float_dtype),
                 mean_photoelectrons=result.mean_photoelectrons,
                 photon_rate=result.photon_rate,
             )
@@ -333,11 +353,13 @@ class Camera:
         per-frame time and pointing offset through to the scene renderer.
         """
         spectral = self.config.qe_curve is not None and scene.is_spectral_capable
+        dtype = self._float_dtype
         if spectral:
             assert self.config.qe_curve is not None  # narrowed by `spectral`
-            rate = scene.photoelectron_rate_map(self.config.qe_curve, time_s, offset_xy)
+            rate = scene.photoelectron_rate_map(self.config.qe_curve, time_s, offset_xy, dtype)
             return rate, scene.background_electron_rate(self.config.qe_curve), 1.0, True
-        return scene.photon_rate_map(time_s, offset_xy), scene.background_photon_rate(), None, False
+        rate = scene.photon_rate_map(time_s, offset_xy, dtype)
+        return rate, scene.background_photon_rate(), None, False
 
     @staticmethod
     def _tag_science(frame: Frame, scene: Scene, spectral: bool) -> None:

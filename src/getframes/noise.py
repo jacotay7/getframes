@@ -34,11 +34,16 @@ import numpy as np
 from scipy import ndimage
 
 if TYPE_CHECKING:
-    from numpy.typing import NDArray
+    from numpy.typing import DTypeLike, NDArray
 
     from .config import CameraConfig
 
     PhotonRate = float | NDArray[np.float64]
+
+# The working floating-point dtype of the signal chain. ``float64`` is the exact
+# default; ``float32`` halves the memory of the per-pixel arrays (the "fast path"
+# used for large detectors and bulk dataset generation) at a small precision cost.
+DEFAULT_FLOAT_DTYPE = np.float64
 
 
 # Independent sub-streams of the fixed-pattern generator, so PRNU, DSNU, and the
@@ -67,6 +72,7 @@ def dark_signal_map(
     config: CameraConfig,
     exposure_s: float,
     temperature_c: float,
+    float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
 ) -> NDArray[np.float64]:
     """Per-pixel *mean* dark signal in electrons, including fixed-pattern structure.
 
@@ -76,10 +82,13 @@ def dark_signal_map(
     it repeats across frames and can be calibrated out with a master dark. A uniform
     detector-glow term (``detector_glow_e_per_s``) is added on top, also
     exposure-scaled and dark-removable.
+
+    ``float_dtype`` selects the working precision (``float64`` exact default, or
+    ``float32`` for the memory-light fast path).
     """
     height, width = config.resolution
     mean_dark = config.dark_current_at(temperature_c) * exposure_s
-    signal = np.full((height, width), mean_dark, dtype=np.float64)
+    signal = np.full((height, width), mean_dark, dtype=float_dtype)
 
     # Dark-signal non-uniformity: log-normal so the per-pixel gain stays positive
     # with unit mean. Drawn from the fixed-pattern stream (same every frame).
@@ -97,9 +106,9 @@ def dark_signal_map(
 
     # Detector glow: a uniform self-emission term that scales with exposure (and so
     # is removed by an exposure-matched master dark). Added after DSNU/hot pixels,
-    # which describe the dark *current*, not the glow.
+    # which describe the dark *current*, not the glow. In place to preserve dtype.
     if config.detector_glow_e_per_s > 0 and exposure_s > 0:
-        signal = signal + config.detector_glow_e_per_s * exposure_s
+        signal += config.detector_glow_e_per_s * exposure_s
 
     return signal
 
@@ -110,6 +119,7 @@ def photo_signal_map(
     exposure_s: float,
     background_photon_rate: PhotonRate,
     quantum_efficiency: float | None = None,
+    float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
 ) -> NDArray[np.float64]:
     """Per-pixel *mean* photo-generated signal in electrons (noise-free).
 
@@ -124,7 +134,8 @@ def photo_signal_map(
 
     ``quantum_efficiency`` overrides ``config.quantum_efficiency`` when given. The
     spectral path uses this with a pre-multiplied (already-photoelectron) map and
-    ``quantum_efficiency = 1.0``.
+    ``quantum_efficiency = 1.0``. ``float_dtype`` selects the working precision
+    (``float64`` default, or ``float32`` for the memory-light fast path).
     """
     height, width = config.resolution
     qe = config.quantum_efficiency if quantum_efficiency is None else quantum_efficiency
@@ -133,7 +144,7 @@ def photo_signal_map(
     if rate.ndim not in (0, 2) or background.ndim not in (0, 2):
         raise ValueError("photon_rate/background must be a scalar or a 2-D array.")
 
-    mean_photo = np.zeros((height, width), dtype=np.float64)
+    mean_photo = np.zeros((height, width), dtype=float_dtype)
     # Broadcasts a scalar or an (h, w) array; a mismatched array shape raises here.
     mean_photo += (rate + background) * exposure_s * qe
 
@@ -183,7 +194,7 @@ def apply_gain_stage(
     f2 = excess_noise_factor**2
     alpha = 1.0 / (f2 - 1.0)
     theta = gain * (f2 - 1.0)
-    out = np.zeros_like(electrons, dtype=np.float64)
+    out = np.zeros_like(electrons)
     nonzero = electrons > 0
     if np.any(nonzero):
         out[nonzero] = rng.gamma(shape=electrons[nonzero] * alpha, scale=theta)
@@ -245,7 +256,7 @@ def apply_blooming(
     full well until the charge is absorbed or runs off the array edge. Deterministic
     and charge-conserving except for charge that bleeds off the top/bottom edge.
     """
-    out = np.array(electrons, dtype=np.float64, copy=True)
+    out = np.array(electrons, copy=True)
     excess = np.clip(out - full_well_e, 0.0, None)
     if not excess.any():
         return out
@@ -257,7 +268,7 @@ def apply_blooming(
     down_share = 0.5 * excess
     up_share = excess - down_share
     for source, rows in ((down_share, range(n_rows)), (up_share, range(n_rows - 1, -1, -1))):
-        carry = np.zeros(width, dtype=np.float64)
+        carry = np.zeros(width, dtype=out.dtype)
         for r in rows:
             incoming = carry + source[r]
             room = full_well_e - out[r]
@@ -282,7 +293,7 @@ def apply_cti(
     """
     if cti <= 0:
         return electrons
-    out = np.array(electrons, dtype=np.float64, copy=True)
+    out = np.array(electrons, copy=True)
     n_rows = out.shape[0]
     transfers = np.arange(n_rows, dtype=np.float64).reshape(n_rows, 1)
     deferred = np.minimum(cti * transfers * out, out)
@@ -308,7 +319,9 @@ def apply_ipc(
         [[0.0, coupling, 0.0], [coupling, 1.0 - 4.0 * coupling, coupling], [0.0, coupling, 0.0]],
         dtype=np.float64,
     )
-    result: NDArray[np.float64] = ndimage.convolve(electrons, kernel, mode="constant", cval=0.0)
+    convolved = ndimage.convolve(electrons, kernel, mode="constant", cval=0.0)
+    # Preserve the input dtype (the float32 fast path) — convolve upcasts to float64.
+    result: NDArray[np.float64] = convolved.astype(electrons.dtype, copy=False)
     return result
 
 
@@ -451,8 +464,9 @@ def digitize(
         signal[defects] = 0.0
 
     # kTC / reset noise: an independent per-pixel, per-frame Gaussian (electrons).
+    # Added in place so the working dtype (e.g. the float32 fast path) is preserved.
     if config.reset_noise_e > 0:
-        signal = signal + rng.normal(0.0, config.reset_noise_e, size=signal.shape)
+        signal += rng.normal(0.0, config.reset_noise_e, size=signal.shape)
 
     # Read noise in electrons, added at the amplifier.
     if config.read_noise_e > 0:
@@ -461,9 +475,9 @@ def digitize(
             sigma_map = config.read_noise_e * rng.lognormal(
                 mean=-0.5 * spread**2, sigma=spread, size=signal.shape
             )
-            signal = signal + rng.standard_normal(signal.shape) * sigma_map
+            signal += rng.standard_normal(signal.shape) * sigma_map
         else:
-            signal = signal + rng.normal(0.0, config.read_noise_e, size=signal.shape)
+            signal += rng.normal(0.0, config.read_noise_e, size=signal.shape)
 
     gain_map, amp_offset = _amplifier_maps(config)
     adu = signal / gain_map + config.bias_offset_adu + amp_offset + _bias_structure_map(config)
@@ -490,9 +504,10 @@ def frame_electrons(
 
     Takes the noise-free expected electrons per pixel and returns a realised
     electron frame prior to read noise and digitisation. ``exposure_s`` is needed
-    only to scale the cosmic-ray rate.
+    only to scale the cosmic-ray rate. The working dtype follows ``mean_electrons``
+    (``float64`` exact, or ``float32`` for the memory-light fast path).
     """
-    electrons = rng.poisson(mean_electrons).astype(np.float64)
+    electrons = rng.poisson(mean_electrons).astype(mean_electrons.dtype)
 
     if config.clock_induced_charge_e > 0:
         electrons += rng.poisson(config.clock_induced_charge_e, size=electrons.shape)
@@ -531,6 +546,7 @@ def simulate_frame(
     extra_electrons: PhotonRate = 0.0,
     rng: np.random.Generator | None = None,
     seed: int | None = None,
+    float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
 ) -> SimulationResult:
     """Simulate one frame end-to-end, returning ADU and the noise-free truth.
 
@@ -557,6 +573,11 @@ def simulate_frame(
         charge in the well, so it picks up shot noise and any EM/avalanche gain.
     rng, seed:
         Provide an existing generator, or a seed to build a fresh one.
+    float_dtype:
+        Working floating-point precision of the per-pixel arrays: ``float64`` (the
+        exact default) or ``float32`` for the memory-light fast path used for large
+        detectors and bulk dataset generation. The digitised ADU stay integer
+        regardless; only the floating-point signal chain and the truth arrays change.
     """
     if exposure_s < 0:
         raise ValueError("exposure_s must be non-negative.")
@@ -564,10 +585,10 @@ def simulate_frame(
         rng = np.random.default_rng(seed)
 
     mean_photo = photo_signal_map(
-        config, photon_rate, exposure_s, background_photon_rate, quantum_efficiency
+        config, photon_rate, exposure_s, background_photon_rate, quantum_efficiency, float_dtype
     )
-    mean_dark = dark_signal_map(config, exposure_s, temperature_c)
-    mean_total = mean_photo + mean_dark + np.asarray(extra_electrons, dtype=np.float64)
+    mean_dark = dark_signal_map(config, exposure_s, temperature_c, float_dtype)
+    mean_total = mean_photo + mean_dark + np.asarray(extra_electrons, dtype=float_dtype)
     electrons = frame_electrons(config, mean_total, rng, exposure_s)
     adu = digitize(electrons, config, rng)
     return SimulationResult(adu, mean_photo, mean_dark, photon_rate)
