@@ -28,3 +28,6 @@ pip install -e ".[examples]"
 | [`08_ao_limiting_magnitude.py`](08_ao_limiting_magnitude.py) | AO wavefront-sensor centroid error: EMCCD vs eAPD limiting flux. |
 | [`09_transit_photometry.py`](09_transit_photometry.py) | Inject a transit into a frame sequence; recover it by differential photometry. |
 | [`10_detector_realism.py`](10_detector_realism.py) | Visualise cosmic-ray hits and detector nonlinearity. |
+| [`11_radiometry_and_ir.py`](11_radiometry_and_ir.py) | AB/Vega zero points, interstellar extinction, and the IR thermal background. |
+| [`12_ml_dataset.py`](12_ml_dataset.py) | Stream raw+truth training pairs to disk with `getframes.dataset` (float32). |
+| [`13_crowded_field.py`](13_crowded_field.py) | Render a 20k-star catalog; vectorised vs. per-source, with flux conservation. |

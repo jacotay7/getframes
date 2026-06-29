@@ -1,13 +1,17 @@
 # API stability & versioning
 
-As of **1.0.0**, `getframes` follows [Semantic
-Versioning](https://semver.org/spec/v2.0.0.html). The public API is frozen: code
-that works on 1.0 will keep working across the entire 1.x series.
+`getframes` follows [Semantic
+Versioning](https://semver.org/spec/v2.0.0.html). **2.0.0** freezes the *full*
+public surface grown over the 1.x series — the detector, scene, calibration,
+observation, radiometry, and dataset APIs — as stable: code that works on 2.0 will
+keep working across the entire 2.x series. (The 1.x series stayed backwards
+compatible throughout; 2.0 added `astropy` as a core dependency and promoted the
+enlarged surface to stable, with no breaking removals.)
 
 ## What "public" means
 
 The public, supported surface is everything exported from the top-level package
-and the `getframes.analysis` subpackage:
+and the `getframes.analysis` / `getframes.dataset` subpackages:
 
 ```python
 import getframes as gf
@@ -15,14 +19,18 @@ import getframes as gf
 gf.Camera, gf.CameraConfig, gf.SensorType
 gf.Frame, gf.FrameTruth
 gf.load_preset, gf.available_presets
-gf.Scene, gf.Telescope, gf.Bandpass, gf.PointSource, gf.Sky, gf.WCSInfo
-gf.PSF, gf.GaussianPSF, gf.MoffatPSF
+gf.calibrate, gf.combine
+gf.Scene, gf.Telescope, gf.Bandpass, gf.Extinction
+gf.PointSource, gf.ExtendedSource, gf.UniformIllumination, gf.Catalog, gf.CatalogEntry
+gf.Sky, gf.Thermal, gf.WCSInfo, gf.Vignetting, gf.RadialDistortion
+gf.PSF, gf.GaussianPSF, gf.MoffatPSF, gf.AiryPSF, gf.ArrayPSF, gf.EllipticalGaussianPSF
 gf.LightCurve, gf.Observation, gf.ObservationTruth, gf.Pointing
 gf.QE, gf.SED, gf.Spectrum, gf.SpectralBandpass
 gf.analysis.aperture_sum, gf.analysis.centroid, gf.analysis.photon_transfer_curve
+gf.dataset.pairs, gf.dataset.random_star_fields, gf.dataset.PairDataset
 ```
 
-These are the names listed in each module's `__all__`. For these, within the 1.x
+These are the names listed in each module's `__all__`. For these, within the 2.x
 series we guarantee:
 
 - Names will not be **removed or renamed**.

@@ -127,7 +127,7 @@ src/getframes/
 | ✅ | **1.4** | Detector depth | CTI, blooming/bleed, IPC, kTC/reset noise, multi-amplifier readout, cosmic-ray tracks, defect/bad-column maps, structured bias, polynomial nonlinearity | accuracy |
 | ✅ | **1.5** | Radiometry & IR | AB system, ugriz/Gaia/2MASS bands, transmission-product loading, extinction, true spectral flux integration, **IR thermal background + glow** | quantitative photometry, honest IR |
 | ✅ | **1.6** | Scale & datasets | float32 path, chunked/vectorised rendering, `dataset` generator for raw+truth pairs at scale, a `getframes` CLI, benchmarks | ML training data, large detectors |
-| ☐ | **2.0** | Stability | promote new APIs to stable, land deprecated breaking changes, validation/benchmark suite vs. published characterisations, JOSS paper + citation, full docs | — |
+| ✅ | **2.0** | Stability | promote new APIs to stable, `astropy` as a core dep, validation suite vs. published characterisations, full docs (JOSS paper + citation deferred post-release) | — |
 
 Persistence (1.2) is the one item explicitly deferred from the 1.0 series; it lands
 once 1.2 introduces cross-frame state via `Observation`.
@@ -208,6 +208,16 @@ The artifacts a calibration pipeline must survive:
   training (denoising, deconvolution, calibration).
 - [x] A **`getframes` CLI** to generate frames from a config file.
 - [x] A **benchmark** suite to keep throughput honest.
+
+### 2.0 — Stability ✅
+- [x] **Promote the enlarged surface to stable** under SemVer (2.x), with no
+  breaking removals (nothing was deprecated during 1.x, so nothing to land).
+- [x] **`astropy` as a core dependency** (decision #2) — FITS I/O, WCS projection,
+  and catalogs; still imported lazily so `import getframes` stays fast.
+- [x] **Validation suite vs. published/analytic characterisations**
+  (`tests/test_validation.py`) plus a [validation guide](guides/validation.md).
+- [x] **Full docs**: guides for every shipped capability, worked examples 11–13.
+- [ ] **JOSS paper + citation** — *deferred to a post-2.0 follow-up.*
 
 ---
 

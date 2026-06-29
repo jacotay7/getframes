@@ -89,10 +89,10 @@ class Frame:
         """
         try:
             from astropy.io import fits
-        except ImportError as exc:  # pragma: no cover - optional dependency
+        except ImportError as exc:  # pragma: no cover - astropy is a core dependency
             raise ImportError(
-                "Writing FITS files requires astropy. "
-                "Install with: pip install 'getframes[examples]'"
+                "Writing FITS files requires astropy (a core dependency of getframes); "
+                "reinstall with: pip install getframes"
             ) from exc
 
         hdu = fits.PrimaryHDU(data=np.asarray(self.data))

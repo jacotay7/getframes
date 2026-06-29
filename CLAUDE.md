@@ -10,10 +10,10 @@ image-processing and simulation pipelines. The priority is a **clean, small,
 well-documented API** with **accurate, auditable noise physics**. It produces
 dark, bias, and flat frames, and renders star fields through a PSF and telescope
 (`Camera.observe`) — the full photon → electron → ADU path, with opt-in spectral
-mode. As of 1.0 the public API is frozen under SemVer; keep it backwards
+mode. As of **2.0** the full public API is frozen under SemVer; keep it backwards
 compatible.
 
-The library is mid-way through its **1.x → 2.0 arc** (see `docs/roadmap.md`),
+The library has completed its **1.x → 2.0 arc** (see `docs/roadmap.md`),
 whose theme is the *observation*: sequences of structured, time-varying scenes,
 reduced against ground truth. Phases 1.1 (calibration loop), 1.2 (time series +
 persistence), 1.3 (richer scenes), 1.4 (detector depth: CTI, blooming, IPC,
@@ -22,9 +22,10 @@ polynomial nonlinearity), and 1.5 (radiometry & IR: AB system, ugriz/Gaia/2MASS
 bands, transmission products, extinction, spectral flux integration, thermal
 background + detector glow), and 1.6 (scale & datasets: a float32 fast path,
 vectorised/chunked multi-source rendering, a `dataset` raw+truth generator, the
-`getframes` CLI, and a benchmark suite) have shipped; 2.0 remains. Every 1.x change
-is **additive**; breaking changes are deprecated through 1.x and only land at the
-2.0 cut.
+`getframes` CLI, and a benchmark suite), and 2.0 (stability: `astropy` promoted to
+a core dep, a validation suite vs. published forms, and the enlarged surface frozen
+under SemVer) have all shipped. The 1.x work was **additive**; 2.0 added no breaking
+removals. A JOSS paper + citation remain a post-2.0 follow-up.
 
 ## Architecture
 
@@ -149,11 +150,11 @@ verified, say so plainly; when a step was skipped or a test fails, say *that*.
 
 ## Things to avoid
 
-- Don't add heavy runtime dependencies. Core runtime deps are `numpy` and `scipy`
-  (+ `tomli` backport on <3.11). Keep `matplotlib`/`astropy` in optional extras
-  (`examples`); `astropy`-backed features (WCS pixel↔world projection, catalogs)
-  must import it lazily and raise an informative error when it's missing. (The
-  roadmap plans `astropy` as a core dep at 2.0 — until then, keep it optional.)
+- Don't add heavy runtime dependencies. Core runtime deps are `numpy`, `scipy`, and
+  `astropy` (+ `tomli` backport on <3.11). `astropy` became core at the 2.0 cut
+  (FITS I/O, WCS pixel↔world projection, catalogs); still import it *lazily* inside
+  the functions that use it (it is slow to import) — never at module top level, so
+  `import getframes` stays fast. Keep `matplotlib` in the optional `examples` extra.
 - Don't introduce global mutable state or module-level RNGs.
 - Don't break the one-way data flow or reach from `config`/`noise`/`scene`/
   `spectral` back into `camera`/`presets`.

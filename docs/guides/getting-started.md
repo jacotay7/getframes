@@ -8,8 +8,9 @@ This guide walks you from install to your first reproducible dark frame.
 pip install getframes
 ```
 
-The core install depends only on NumPy and SciPy. For the plotting examples and
-FITS export, add the optional extras (`matplotlib` + `astropy`):
+The core install depends on NumPy, SciPy, and astropy (used for FITS I/O, WCS
+projection, and catalogs). For the plotting examples, add the `examples` extra,
+which pulls in `matplotlib`:
 
 ```bash
 pip install "getframes[examples]"

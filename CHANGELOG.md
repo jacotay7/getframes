@@ -6,7 +6,33 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-06-29
+
+The 2.0 cut promotes the full surface grown across 1.1–1.6 to **stable** and lands
+the one planned dependency change. There are **no breaking API removals**: code
+written against 1.x continues to work.
+
+### Changed
+
+- **`astropy` is now a core dependency** (roadmap decision #2). It powers FITS I/O,
+  WCS pixel↔world projection, and catalogs; it is still imported lazily inside the
+  functions that use it so `import getframes` stays fast. `matplotlib` remains the
+  only `examples` extra.
+- **API stability**: the detector, scene, calibration, observation, radiometry, and
+  dataset APIs are now frozen under SemVer for the 2.x series (see
+  `docs/stability.md`).
+
 ### Added
+
+- A **validation suite** (`tests/test_validation.py`) and a
+  [validation guide](docs/guides/validation.md) asserting the physics against
+  analytic / published references: AB & Vega zero points, the gain-stage excess
+  noise factor, CTI/IPC/blooming charge conservation, PSF flux conservation, PTC
+  parameter recovery, and reduced-frame truth recovery.
+- Three worked **examples** for the newer features: `11_radiometry_and_ir.py`,
+  `12_ml_dataset.py`, and `13_crowded_field.py`.
+
+### Added (1.x features, first released in 2.0)
 
 - **Scale & datasets** (roadmap phase 1.6): generate large detectors and bulk
   raw+truth training data, all additive.

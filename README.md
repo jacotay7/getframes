@@ -18,7 +18,8 @@ It generates **dark**, **bias**, and **flat** frames, and renders **star fields*
 through a PSF and telescope into a realistic science frame — the full
 photon → electron → ADU signal path, with optional opt-in spectral mode.
 
-> **Status:** stable. `getframes` 1.0 freezes the public API under
+> **Status:** stable. `getframes` 2.0 freezes the full public surface — the
+> detector, scene, calibration, observation, radiometry, and dataset APIs — under
 > [Semantic Versioning](https://semver.org/spec/v2.0.0.html); see
 > [API stability](docs/stability.md).
 

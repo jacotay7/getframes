@@ -83,10 +83,10 @@ class WCSInfo:
         """Build an :class:`astropy.wcs.WCS` (requires ``astropy``)."""
         try:
             from astropy.wcs import WCS
-        except ImportError as exc:  # pragma: no cover - optional dependency
+        except ImportError as exc:  # pragma: no cover - astropy is a core dependency
             raise ImportError(
-                "WCS pixel/world conversion requires astropy. "
-                "Install with: pip install 'getframes[examples]'"
+                "WCS pixel/world conversion requires astropy (a core dependency of "
+                "getframes); reinstall with: pip install getframes"
             ) from exc
         wcs = WCS(naxis=2)
         cards = self.header_cards()
