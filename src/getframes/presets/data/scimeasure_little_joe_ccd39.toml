@@ -1,6 +1,8 @@
 # SciMeasure Little Joe wavefront-sensor camera with e2v/Marconi CCD39-01.
 # Keck identifies its CCD-39 implementation with the CCD39-01 product sheet:
 # https://www2.keck.hawaii.edu/optics/aowg/docs/PDRCommitteeReportResponse.pdf
+# Keck low-rate read-noise and inversion-clocking performance:
+# https://citeseerx.ist.psu.edu/document?doi=294a085f3760d55d36d87499d28877ae3f4d062d&repid=rep1&type=pdf
 name = "Keck/SciMeasure Little Joe CCD39"
 manufacturer = "SciMeasure"
 model = "Little Joe CCD39 (e2v CCD39-01)"

@@ -24,9 +24,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - A Keck LGS tip/tilt and low-bandwidth wavefront-sensor detector trade-study
   example, including physically sampled AO/sub-aperture PSFs, complete detector
   Monte Carlo simulations, blackbody NGS weighting of each camera's QE curve
-  (`--ngs-teff`), Monte Carlo standard errors on every point, and a per-camera
-  closed-loop cadence optimisation (Tyler tilt-lag disturbance model plus servo
-  noise propagation) alongside the fixed STRAP schedule.
+  (`--ngs-teff`), the 600–950 nm TTS/LBWFS arm bandpass folded into the zero-point
+  bands, Monte Carlo standard errors on every point, a per-camera closed-loop
+  cadence optimisation (a physical `a·f + b·f²` noise model fitted to the Monte
+  Carlo data, saturation-aware, against a Tyler tilt-lag disturbance model), and
+  a best/worst-performer frame gallery figure beside the trade curves.
 
 ## [2.0.0] - 2026-06-29
 

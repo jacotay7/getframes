@@ -22,17 +22,26 @@ Compared with the exploratory notebook, this version also:
   SED (``--ngs-teff``, default 3500 K --- an M-dwarf-like tip/tilt star) while
   keeping flat photon weighting for the airglow-dominated sky;
 * attaches a Monte Carlo standard error to every point (shaded bands in the
-  figure, +/- in the printed tables); and
-* adds a per-camera TTS cadence optimisation that balances propagated
-  measurement noise against a documented tilt-disturbance lag model, instead of
-  forcing every candidate onto STRAP's magnitude/frame-rate schedule.
+  figure, +/- in the printed tables);
+* clips the I/Z zero-point bands to the rough 600--950 nm bandpass of the
+  beamsplitter arm feeding the TTS/LBWFS;
+* adds a per-camera TTS cadence optimisation: the physical noise model
+  ``sigma_meas^2(f) = a f + b f^2`` is fitted to the Monte Carlo grid and the
+  closed-loop residual (fitted noise propagation plus a documented
+  tilt-disturbance lag) is minimised continuously in frame rate, instead of
+  forcing every candidate onto STRAP's magnitude/frame-rate schedule; and
+* renders a second frame-gallery figure (saved beside ``--save`` with a
+  ``_frames`` suffix) showing each sensor's pixel-integrated PSF next to single
+  raw frames from the best candidate, worst candidate, and incumbent.
 
 The current STRAP entry is local because its values describe a Keck instrument
 operating point, not a portable manufacturer preset. Little Joe and the candidate
 camera geometry/electronics come from getframes presets; measured trade-study
 values override their readout-mode-dependent read noise and dark current. The I/Z
-responses are currently explicit top-hat approximations; replace them with measured
-filter x atmosphere x relay-optics curves when available.
+responses are currently explicit top-hat approximations clipped to the TTS/LBWFS
+arm bandpass (600--700 nm light the arm passes is not counted, since the zero
+points only cover I and Z); replace them with measured filter x atmosphere x
+relay-optics curves when available.
 
 Run (400 Monte Carlo frames per point by default):
     python examples/14_keck_lgs_ttf_trade_study.py
@@ -53,6 +62,7 @@ Those are instrument inputs and should be added here when they become available.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
@@ -97,12 +107,23 @@ IZ_ZEROPOINT_MAG = np.array([27.34, 27.16])
 IZ_SKY_MAG_ARCSEC2 = np.array([19.33, 18.45])
 ZEROPOINT_REFERENCE_QE = 0.70
 
-# I and Z wavelength intervals used by OptTTF_sim_v2. These tophats make the
-# current assumption explicit and can be replaced directly by measured responses.
-IZ_RESPONSES = (
-    gf.SpectralBandpass.tophat(center_nm=777.0, width_nm=154.0),  # 700--854 nm
-    gf.SpectralBandpass.tophat(center_nm=908.5, width_nm=107.0),  # 855--962 nm
-)
+# I and Z wavelength intervals used by OptTTF_sim_v2, clipped to the rough
+# 600--950 nm bandpass of the beamsplitter arm feeding the TTS/LBWFS.  The KAON
+# 764 zero points only cover the I/Z intervals, so the 600--700 nm light the arm
+# also passes is not counted (a small conservative flux underestimate); the
+# effective change is that the Z band ends at 950 nm instead of 962 nm.  Replace
+# these tophats with measured filter x atmosphere x relay curves when available.
+TTF_BANDPASS_NM = (600.0, 950.0)
+IZ_BAND_NM = ((700.0, 854.0), (855.0, 962.0))
+
+
+def _clipped_response(band_min_nm: float, band_max_nm: float) -> gf.SpectralBandpass:
+    low = max(band_min_nm, TTF_BANDPASS_NM[0])
+    high = min(band_max_nm, TTF_BANDPASS_NM[1])
+    return gf.SpectralBandpass.tophat(center_nm=(low + high) / 2.0, width_nm=high - low)
+
+
+IZ_RESPONSES = tuple(_clipped_response(low, high) for low, high in IZ_BAND_NM)
 
 # Within-band QE weighting.  The airglow-dominated sky keeps the notebook's flat
 # photon weighting; the star uses a blackbody at the --ngs-teff temperature, which
@@ -153,6 +174,27 @@ def iz_effective_qe(camera: gf.Camera, weighting_sed: gf.SED) -> np.ndarray:
     if curve is None:
         return np.full(2, camera.config.quantum_efficiency, dtype=np.float64)
     return np.array([effective_qe(curve, response, weighting_sed) for response in IZ_RESPONSES])
+
+
+def band_fractions(weighting_sed: gf.SED) -> np.ndarray:
+    """SED-weighted photon fraction of each zero-point band inside the TTF bandpass.
+
+    The KAON 764 zero points set the photon rate over the *full* I/Z intervals;
+    this is the fraction of those photons the 600--950 nm TTS/LBWFS arm passes.
+    """
+    fractions = np.empty(2)
+    for index, (band_min_nm, band_max_nm) in enumerate(IZ_BAND_NM):
+        grid_nm = np.linspace(band_min_nm, band_max_nm, 513)
+        weight = weighting_sed(grid_nm)
+        passed = weight * ((grid_nm >= TTF_BANDPASS_NM[0]) & (grid_nm <= TTF_BANDPASS_NM[1]))
+        fractions[index] = float(passed.sum() / weight.sum())
+    return fractions
+
+
+def band_response(camera: gf.Camera, weighting_sed: gf.SED) -> np.ndarray:
+    """Per-band conversion from zero-point photon rate to detected electron rate:
+    effective QE over the clipped response times the in-bandpass photon fraction."""
+    return iz_effective_qe(camera, weighting_sed) * band_fractions(weighting_sed)
 
 
 def tts_frame_rate(magnitude: float | np.ndarray) -> float | np.ndarray:
@@ -391,24 +433,54 @@ def _rms_and_error(squared: np.ndarray, scale: float) -> tuple[float, float]:
     return rms * scale, standard_error * scale
 
 
+def _tts_scene(
+    pattern: np.ndarray,
+    plate_scale: float,
+    magnitude: float,
+    star_band_response: np.ndarray,
+    sky_band_response: np.ndarray,
+) -> tuple[np.ndarray, float]:
+    """Detected star electron-rate map and per-pixel sky electron rate for the TTS."""
+    star_electron_rate = float(np.dot(incident_star_rates(magnitude), star_band_response))
+    photon_rate = pattern * star_electron_rate * TTS_BEAMSPLITTER
+    sky_electron_rate = float(np.dot(incident_sky_rates(), sky_band_response))
+    sky_rate = sky_electron_rate * TTS_BEAMSPLITTER * plate_scale**2
+    return photon_rate, sky_rate
+
+
+def _lbwfs_scene(
+    pattern: np.ndarray,
+    magnitude: float,
+    mode: int,
+    star_band_response: np.ndarray,
+    sky_band_response: np.ndarray,
+) -> tuple[np.ndarray, float]:
+    """Detected per-sub-aperture electron-rate map and sky electron rate for the LBWFS."""
+    subapertures = 304 if mode == 20 else 20
+    star_electron_rate = float(np.dot(incident_star_rates(magnitude), star_band_response))
+    photon_rate = pattern * star_electron_rate * (1.0 - TTS_BEAMSPLITTER) / subapertures
+    sky_electron_rate = float(np.dot(incident_sky_rates(), sky_band_response))
+    sky_rate = sky_electron_rate * (1.0 - TTS_BEAMSPLITTER) * LBWFS_PLATE_SCALE**2 / subapertures
+    return photon_rate, sky_rate
+
+
 def _tts_rms_error(
     camera: gf.Camera,
     pattern: np.ndarray,
     plate_scale: float,
     magnitude: float,
     exposure: float,
-    star_band_qe: np.ndarray,
-    sky_band_qe: np.ndarray,
+    star_band_response: np.ndarray,
+    sky_band_response: np.ndarray,
     trials: int,
     seed: int,
 ) -> tuple[float, float]:
     """Radial RMS TTS centroid error and its standard error, in arcsec."""
     true_center = gf.analysis.centroid(pattern, background=0.0)
     mask_radius = max(seeing_fwhm_arcsec() / (2.0 * plate_scale), np.sqrt(2.0))
-    star_electron_rate = float(np.dot(incident_star_rates(magnitude), star_band_qe))
-    photon_rate = pattern * star_electron_rate * TTS_BEAMSPLITTER
-    sky_electron_rate = float(np.dot(incident_sky_rates(), sky_band_qe))
-    sky_rate = sky_electron_rate * TTS_BEAMSPLITTER * plate_scale**2
+    photon_rate, sky_rate = _tts_scene(
+        pattern, plate_scale, magnitude, star_band_response, sky_band_response
+    )
     background_e = _background_electrons(camera, sky_rate, exposure)
     squared = np.empty(trials)
     frames = camera.expose_series(
@@ -441,8 +513,8 @@ def tts_centroid_error(
     seed: int,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Radial RMS TTS centroid error and standard error (arcsec) on the STRAP schedule."""
-    star_band_qe = iz_effective_qe(camera, ngs_sed)
-    sky_band_qe = iz_effective_qe(camera, SKY_WEIGHTING_SED)
+    star_band_response = band_response(camera, ngs_sed)
+    sky_band_response = band_response(camera, SKY_WEIGHTING_SED)
     errors = np.empty(magnitudes.size)
     standard_errors = np.empty(magnitudes.size)
     for index, magnitude in enumerate(magnitudes):
@@ -453,12 +525,47 @@ def tts_centroid_error(
             plate_scale,
             float(magnitude),
             exposure,
-            star_band_qe,
-            sky_band_qe,
+            star_band_response,
+            sky_band_response,
             trials,
             seed + 10_000 * index,
         )
     return errors, standard_errors
+
+
+def _fit_noise_variance_model(
+    rates: np.ndarray, variances: np.ndarray, variance_errors: np.ndarray
+) -> tuple[float, float]:
+    """Weighted least-squares fit of ``sigma_meas^2(f) = a f + b f^2`` with ``a, b >= 0``.
+
+    The two terms are the physical scalings of per-frame centroid noise with frame
+    rate ``f`` at fixed photon rate: ``a f`` is the shot-noise (photon + sky +
+    dark) term, whose variance grows inversely with exposure time, and ``b f^2``
+    is the read-noise term, quadratic because the collected signal in the
+    denominator of the centroid also shrinks with exposure.  If the unconstrained
+    fit turns a coefficient negative, the better-fitting single-term model is
+    used instead.
+    """
+    weights = 1.0 / np.maximum(variance_errors, 1e-30) ** 2
+    design = np.stack([rates, rates**2], axis=1)
+    normal = (design * weights[:, None]).T @ design
+    moment = (design * weights[:, None]).T @ variances
+    try:
+        a, b = np.linalg.solve(normal, moment)
+    except np.linalg.LinAlgError:
+        a, b = -1.0, -1.0
+    if a < 0.0 or b < 0.0:
+        candidates = []
+        for exponent in (1, 2):
+            column = rates**exponent
+            coefficient = max(
+                float(np.sum(weights * column * variances) / np.sum(weights * column**2)), 0.0
+            )
+            residual = float(np.sum(weights * (variances - coefficient * column) ** 2))
+            candidates.append((residual, coefficient, exponent))
+        _, coefficient, exponent = min(candidates)
+        a, b = (coefficient, 0.0) if exponent == 1 else (0.0, coefficient)
+    return float(a), float(b)
 
 
 def optimal_tts_cadence(
@@ -472,44 +579,72 @@ def optimal_tts_cadence(
 ) -> tuple[np.ndarray, np.ndarray]:
     """Best closed-loop radial residual (arcsec) and its frame rate (Hz) per magnitude.
 
-    Evaluates the Monte Carlo per-frame centroid error on a logarithmic frame-rate
-    grid and folds each point through ``closed_loop_error_arcsec`` (noise
-    propagation plus disturbance lag).  Where the total-error curve is flat ---
-    e.g. when the spot is so faint that the masked centroid error saturates at
-    every rate --- the grid minimum is Monte Carlo noise, so the slowest rate
-    within one standard error of the minimum is kept instead of the raw argmin.
+    Measures the Monte Carlo per-frame centroid error on a coarse logarithmic
+    frame-rate grid, fits the physical noise model ``sigma_meas^2(f) = a f +
+    b f^2`` (see ``_fit_noise_variance_model``), and minimises
+    ``closed_loop_error_arcsec`` over a continuous rate range using the fitted
+    model, which removes Monte Carlo argmin jitter.
+
+    Physically the variance must grow at least linearly with frame rate
+    (log-log slope >= 1); once the spot is too faint the masked centroid clips
+    at a fixed pixel-scale error instead, and the slope collapses toward zero.
+    Grid points are therefore truncated at the first log-log slope (measured
+    from the slowest rate, the longest and least noisy baseline) below 0.5 ---
+    beyond that the data carry estimator saturation, not noise information ---
+    and the rate search is capped at the last usable grid rate so an "optimum"
+    is never claimed in a regime where the spot was empirically lost.  If fewer
+    than three points survive but the slowest rate still shows a real gradient,
+    the loop is reported parked at ``TTS_RATE_MIN_HZ`` using the direct
+    measurement there; with no gradient at all the star is unguidable (NaN).
     """
-    rates = np.geomspace(TTS_RATE_MIN_HZ, TTS_RATE_MAX_HZ, 6)
-    star_band_qe = iz_effective_qe(camera, ngs_sed)
-    sky_band_qe = iz_effective_qe(camera, SKY_WEIGHTING_SED)
-    noise_fraction = 2.0 / SERVO_BANDWIDTH_RATIO
-    best_errors = np.empty(magnitudes.size)
-    best_rates = np.empty(magnitudes.size)
+    grid_rates = np.geomspace(TTS_RATE_MIN_HZ, TTS_RATE_MAX_HZ, 6)
+    star_band_response = band_response(camera, ngs_sed)
+    sky_band_response = band_response(camera, SKY_WEIGHTING_SED)
+    noise_gain = np.sqrt(2.0 / SERVO_BANDWIDTH_RATIO)
+    lag_coefficient = tilt_disturbance_arcsec_hz() * SERVO_BANDWIDTH_RATIO
+    best_errors = np.full(magnitudes.size, np.nan)
+    best_rates = np.full(magnitudes.size, np.nan)
     for index, magnitude in enumerate(magnitudes):
-        totals = np.empty(rates.size)
-        total_standard_errors = np.empty(rates.size)
-        for rate_index, rate in enumerate(rates):
-            measured_rms, measured_se = _tts_rms_error(
+        measured = np.empty(grid_rates.size)
+        measured_se = np.empty(grid_rates.size)
+        for rate_index, rate in enumerate(grid_rates):
+            measured[rate_index], measured_se[rate_index] = _tts_rms_error(
                 camera,
                 pattern,
                 plate_scale,
                 float(magnitude),
                 1.0 / float(rate),
-                star_band_qe,
-                sky_band_qe,
+                star_band_response,
+                sky_band_response,
                 trials,
                 seed + 10_000 * index + 101 * rate_index,
             )
-            totals[rate_index] = closed_loop_error_arcsec(measured_rms, float(rate))
-            # d(total)/d(sigma_meas) = noise_fraction * sigma_meas / total.
-            total_standard_errors[rate_index] = (
-                noise_fraction * measured_rms * measured_se / max(totals[rate_index], 1e-12)
+        variances = np.maximum(measured**2, 1e-20)
+        slopes_from_first = (np.log(variances[1:]) - np.log(variances[0])) / (
+            np.log(grid_rates[1:]) - np.log(grid_rates[0])
+        )
+        saturated = slopes_from_first < 0.5
+        cut = int(np.argmax(saturated)) + 1 if bool(np.any(saturated)) else grid_rates.size
+        if cut >= 3:
+            a, b = _fit_noise_variance_model(
+                grid_rates[:cut],
+                variances[:cut],
+                2.0 * measured[:cut] * measured_se[:cut],
             )
-        minimum = int(np.argmin(totals))
-        threshold = totals[minimum] + total_standard_errors[minimum]
-        best = int(np.argmax(totals <= threshold))  # slowest such rate: grid is ascending
-        best_errors[index] = totals[best]
-        best_rates[index] = rates[best]
+            dense_rates = np.geomspace(TTS_RATE_MIN_HZ, float(grid_rates[cut - 1]), 512)
+            model_rms = np.sqrt(a * dense_rates + b * dense_rates**2)
+            totals = np.hypot(noise_gain * model_rms, lag_coefficient / dense_rates)
+            best = int(np.argmin(totals))
+            best_errors[index] = totals[best]
+            best_rates[index] = dense_rates[best]
+        elif slopes_from_first[0] >= 0.25:
+            # Too saturated to support a model fit, but the slowest rate still shows
+            # a genuine noise gradient: park the loop at the minimum allowed rate.
+            best_errors[index] = float(
+                np.hypot(noise_gain * measured[0], lag_coefficient / grid_rates[0])
+            )
+            best_rates[index] = float(grid_rates[0])
+        # Otherwise the centroid is saturation-limited at every rate: unguidable.
     return best_errors, best_rates
 
 
@@ -526,19 +661,15 @@ def lbwfs_centroid_error(
     # The matched-filter template defines the calibrated zero point.  This also
     # removes the sub-oversample-pixel phase introduced by discrete convolution.
     true_center = gf.analysis.centroid(pattern, background=0.0)
-    subapertures = 304 if mode == 20 else 20
-    star_band_qe = iz_effective_qe(camera, ngs_sed)
-    sky_band_qe = iz_effective_qe(camera, SKY_WEIGHTING_SED)
+    star_band_response = band_response(camera, ngs_sed)
+    sky_band_response = band_response(camera, SKY_WEIGHTING_SED)
     errors = np.empty(magnitudes.size)
     standard_errors = np.empty(magnitudes.size)
     for index, magnitude in enumerate(magnitudes):
         schedule_mag = float(magnitude) if mode == 20 else float(magnitude) - 1.5
         exposure = float(lbwfs_integration(schedule_mag))
-        star_electron_rate = float(np.dot(incident_star_rates(float(magnitude)), star_band_qe))
-        photon_rate = pattern * star_electron_rate * (1.0 - TTS_BEAMSPLITTER) / subapertures
-        sky_electron_rate = float(np.dot(incident_sky_rates(), sky_band_qe))
-        sky_rate = (
-            sky_electron_rate * (1.0 - TTS_BEAMSPLITTER) * LBWFS_PLATE_SCALE**2 / subapertures
+        photon_rate, sky_rate = _lbwfs_scene(
+            pattern, float(magnitude), mode, star_band_response, sky_band_response
         )
         background_e = _background_electrons(camera, sky_rate, exposure)
         squared = np.empty(trials)
@@ -559,6 +690,183 @@ def lbwfs_centroid_error(
             squared[trial] = (cx - true_center[0]) ** 2 + (cy - true_center[1]) ** 2
         errors[index], standard_errors[index] = _rms_and_error(squared, LBWFS_PLATE_SCALE)
     return errors, standard_errors
+
+
+def _example_frame_tts(
+    camera: gf.Camera,
+    pattern: np.ndarray,
+    plate_scale: float,
+    magnitude: float,
+    ngs_sed: gf.SED,
+    seed: int,
+) -> tuple[np.ndarray, float]:
+    """One bias-subtracted TTS frame in electrons at the STRAP-schedule exposure."""
+    photon_rate, sky_rate = _tts_scene(
+        pattern,
+        plate_scale,
+        magnitude,
+        band_response(camera, ngs_sed),
+        band_response(camera, SKY_WEIGHTING_SED),
+    )
+    exposure = 1.0 / float(tts_frame_rate(magnitude))
+    frame = camera.expose(
+        photon_rate,
+        exposure,
+        background=sky_rate,
+        quantum_efficiency=1.0,
+        seed=seed,
+        include_truth=False,
+    )
+    return _electrons(frame, camera), exposure
+
+
+def _example_frame_lbwfs(
+    camera: gf.Camera,
+    pattern: np.ndarray,
+    magnitude: float,
+    mode: int,
+    ngs_sed: gf.SED,
+    seed: int,
+) -> tuple[np.ndarray, float]:
+    """One bias-subtracted LBWFS sub-aperture frame in electrons at the scheduled exposure."""
+    photon_rate, sky_rate = _lbwfs_scene(
+        pattern,
+        magnitude,
+        mode,
+        band_response(camera, ngs_sed),
+        band_response(camera, SKY_WEIGHTING_SED),
+    )
+    exposure = float(lbwfs_integration(magnitude))
+    frame = camera.expose(
+        photon_rate,
+        exposure,
+        background=sky_rate,
+        quantum_efficiency=1.0,
+        seed=seed,
+        include_truth=False,
+    )
+    return _electrons(frame, camera), exposure
+
+
+def _rank_candidates(
+    results: dict[str, tuple[np.ndarray, np.ndarray]],
+    magnitudes: np.ndarray,
+    reference_magnitude: float,
+) -> tuple[str, str, int]:
+    """Best and worst candidate labels (presets only) at the reference magnitude."""
+    index = int(np.argmin(np.abs(magnitudes - reference_magnitude)))
+    candidate_errors = {point.label: results[point.label][0][index] for point in CANDIDATES}
+    best = min(candidate_errors, key=candidate_errors.__getitem__)
+    worst = max(candidate_errors, key=candidate_errors.__getitem__)
+    return best, worst, index
+
+
+def render_frame_gallery(
+    plt: Any,
+    seed: int,
+    ngs_sed: gf.SED,
+    tts_cameras: dict[str, gf.Camera],
+    lbwfs_cameras: dict[str, gf.Camera],
+    tts_results: dict[str, tuple[np.ndarray, np.ndarray]],
+    lbwfs_results: dict[str, tuple[np.ndarray, np.ndarray]],
+    tts_pattern: np.ndarray,
+    strap_pattern: np.ndarray,
+    lbwfs_pattern: np.ndarray,
+    magnitudes: np.ndarray,
+) -> Any:
+    """Second figure: pixel-integrated PSFs beside single raw frames.
+
+    Each row pairs a sensor's noiseless PSF (log stretch) with one Monte Carlo
+    frame from the best candidate, the worst candidate, and the incumbent at
+    that sensor's reference magnitude, so the abstract error curves can be read
+    against what the detector actually sees.
+    """
+    fig, axes = plt.subplots(2, 4, figsize=(18, 8.5))
+
+    def _extent(shape: tuple[int, ...], plate_scale: float) -> tuple[float, float, float, float]:
+        height, width = shape
+        half_w = width * plate_scale / 2.0
+        half_h = height * plate_scale / 2.0
+        return (-half_w, half_w, -half_h, half_h)
+
+    def _show_psf(ax: Any, pattern: np.ndarray, plate_scale: float, title: str) -> None:
+        stretch = np.log10(np.maximum(pattern / pattern.max(), 1e-6))
+        image = ax.imshow(
+            stretch, origin="lower", extent=_extent(pattern.shape, plate_scale), vmin=-5, vmax=0
+        )
+        fig.colorbar(image, ax=ax, label="log10 relative intensity")
+        ax.set(title=title, xlabel="arcsec", ylabel="arcsec")
+        ax.grid(False)
+
+    def _show_frame(ax: Any, electrons: np.ndarray, plate_scale: float, title: str) -> None:
+        image = ax.imshow(electrons, origin="lower", extent=_extent(electrons.shape, plate_scale))
+        fig.colorbar(image, ax=ax, label="signal (e-)")
+        ax.set(title=title, xlabel="arcsec", ylabel="arcsec")
+        ax.grid(False)
+
+    tts_reference_mag = 18.0
+    best, worst, reference = _rank_candidates(tts_results, magnitudes, tts_reference_mag)
+    _show_psf(
+        axes[0, 0],
+        tts_pattern,
+        TTS_PLATE_SCALE,
+        f'TTS AO PSF ({TTS_PLATE_SCALE:.2f}"/px)',
+    )
+    for column, (tag, label, pattern, plate_scale) in enumerate(
+        (
+            ("Best candidate", best, tts_pattern, TTS_PLATE_SCALE),
+            ("Worst candidate", worst, tts_pattern, TTS_PLATE_SCALE),
+            ("Incumbent", "STRAP", strap_pattern, STRAP_PLATE_SCALE),
+        ),
+        start=1,
+    ):
+        electrons, exposure = _example_frame_tts(
+            tts_cameras[label],
+            pattern,
+            plate_scale,
+            tts_reference_mag,
+            ngs_sed,
+            seed + 90_000_000 + column,
+        )
+        error_mas = 1000.0 * tts_results[label][0][reference]
+        _show_frame(
+            axes[0, column],
+            electrons,
+            plate_scale,
+            f"{tag}: {label}\nI={tts_reference_mag:.0f}, {exposure:.3g} s, {error_mas:.0f} mas RMS",
+        )
+
+    lbwfs_reference_mag = 17.0
+    best, worst, reference = _rank_candidates(lbwfs_results, magnitudes, lbwfs_reference_mag)
+    _show_psf(
+        axes[1, 0],
+        lbwfs_pattern,
+        LBWFS_PLATE_SCALE,
+        f'LBWFS 20x20 spot PSF ({LBWFS_PLATE_SCALE:.3f}"/px)',
+    )
+    for column, (tag, label) in enumerate(
+        (("Best candidate", best), ("Worst candidate", worst), ("Incumbent", "Little Joe")),
+        start=1,
+    ):
+        electrons, exposure = _example_frame_lbwfs(
+            lbwfs_cameras[label],
+            lbwfs_pattern,
+            lbwfs_reference_mag,
+            20,
+            ngs_sed,
+            seed + 91_000_000 + column,
+        )
+        error_mas = 1000.0 * lbwfs_results[label][0][reference]
+        _show_frame(
+            axes[1, column],
+            electrons,
+            LBWFS_PLATE_SCALE,
+            f"{tag}: {label}\nI={lbwfs_reference_mag:.0f}, {exposure:.3g} s, "
+            f"{error_mas:.0f} mas RMS",
+        )
+
+    fig.tight_layout()
+    return fig
 
 
 def _print_reference_table(
@@ -618,6 +926,11 @@ def main() -> None:
     print(f"  AO Strehl: {AO_STREHL:.2f} at {WAVELENGTH_M * 1e6:.1f} um")
     print(f"  Monte Carlo trials per point: {args.trials}")
     print(f"  NGS weighting SED: {args.ngs_teff:.0f} K blackbody (sky: flat)")
+    star_fractions = band_fractions(ngs_sed)
+    print(
+        f"  TTS/LBWFS arm bandpass: {TTF_BANDPASS_NM[0]:.0f}--{TTF_BANDPASS_NM[1]:.0f} nm "
+        f"(passes I={star_fractions[0]:.3f}, Z={star_fractions[1]:.3f} of NGS band photons)"
+    )
     disturbance = tilt_disturbance_arcsec_hz()
     print(
         f"  tilt disturbance coefficient: {1000.0 * disturbance:.1f} mas*Hz "
@@ -699,10 +1012,13 @@ def main() -> None:
     reference_index = int(np.argmin(np.abs(optimal_magnitudes - 18.0)))
     print(f"\nOptimised TTS closed-loop residual at I={optimal_magnitudes[reference_index]:.1f}")
     for label, (residuals, rates) in tts_optimal.items():
-        print(
-            f"  {label:<14} {1000.0 * residuals[reference_index]:7.2f} mas RMS "
-            f"at {rates[reference_index]:6.0f} Hz"
-        )
+        if np.isnan(residuals[reference_index]):
+            print(f"  {label:<14} unguidable (spot lost at every frame rate)")
+        else:
+            print(
+                f"  {label:<14} {1000.0 * residuals[reference_index]:7.2f} mas RMS "
+                f"at {rates[reference_index]:6.0f} Hz"
+            )
 
     plt = get_pyplot(args)
     if plt is None:
@@ -835,6 +1151,25 @@ def main() -> None:
         yscale="log",
     )
     ax.legend(ncol=2, fontsize=8)
+
+    gallery = render_frame_gallery(
+        plt,
+        args.seed,
+        ngs_sed,
+        tts_cameras,
+        lbwfs_cameras,
+        tts_results,
+        lbwfs_results,
+        tts_pattern,
+        strap_pattern,
+        lbwfs_patterns[20],
+        magnitudes,
+    )
+    if args.save:
+        root, extension = os.path.splitext(args.save)
+        gallery_path = f"{root}_frames{extension or '.png'}"
+        gallery.savefig(gallery_path)
+        print(f"\nSaved frame gallery to {gallery_path}")
 
     finish(plt, fig, args)
 
