@@ -1,0 +1,31 @@
+# Andor Marana 4.2B-11 — 11 um back-illuminated scientific CMOS.
+# Manufacturer specifications:
+# https://andor.oxinst.com/products/scmos-camera-series/marana-scmos
+name = "Andor Marana 4.2B-11"
+manufacturer = "Andor"
+model = "Marana 4.2B-11"
+sensor_type = "SCMOS"
+resolution = [2048, 2048]
+pixel_size_um = 11.0
+quantum_efficiency = 0.95
+full_well_e = 85000.0
+bit_depth = 16
+gain_e_per_adu = 1.3                  # representative extended-dynamic-range conversion
+bias_offset_adu = 100.0
+read_noise_e = 1.6                    # median
+read_noise_nonuniformity = 0.2
+dark_current_e_per_s = 0.3
+dark_current_ref_temp_c = -45.0       # liquid-cooled specification
+dark_current_doubling_temp_c = 6.0
+prnu = 0.005                          # published <0.5% at half range
+nonlinearity = 0.003                  # published linearity >99.7%
+dark_current_nonuniformity = 0.03
+notes = "Extended-dynamic-range mode; published sensor QE curve and liquid-cooled dark current."
+
+# Marana 4.2B-11 sensor QE from Andor's published camera-window selector data
+# (selector key SONA11MARA11). The optical window and instrument throughput are
+# separate spectral terms and are not folded into this curve.
+# https://andor.oxinst.com/tools/camera-window-selector
+[qe_curve]
+wavelength_nm = [200.0, 240.0, 300.0, 350.0, 400.0, 450.0, 500.0, 570.0, 600.0, 650.0, 700.0, 750.0, 800.0, 850.0, 900.0, 950.0, 1000.0]
+qe = [0.2912, 0.5592, 0.4411, 0.4960, 0.7003, 0.8638, 0.9188, 0.9476, 0.9248, 0.9339, 0.8406, 0.7273, 0.6428, 0.5062, 0.3465, 0.2242, 0.1019]

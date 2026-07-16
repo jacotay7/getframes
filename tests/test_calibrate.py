@@ -76,6 +76,15 @@ def test_expose_series_reproducible_and_independent():
     assert indices == [0, 1, 2]
 
 
+def test_expose_series_accepts_qe_override():
+    cam = make_camera(read_noise_e=0.0, dark_current_e_per_s=0.0)
+    frames = list(cam.expose_series(100.0, 2.0, 2, quantum_efficiency=0.25, seed=7))
+    assert all(frame.truth is not None for frame in frames)
+    for frame in frames:
+        assert frame.truth is not None
+        np.testing.assert_allclose(frame.truth.mean_photoelectrons, 50.0)
+
+
 def test_observe_series_runs():
     cam = make_camera()
     scope = gf.Telescope(

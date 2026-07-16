@@ -6,6 +6,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Five scientific-camera presets used by the Keck tip/tilt and low-bandwidth WFS
+  detector trade example: KURO 1200B, Prime 95B, Marana 4.2B-11, QHY530 Pro II,
+  and Aries 6504 Pro. All five now include a wavelength-resolved `qe_curve`:
+  Marana and Aries from Andor's/Gpixel's published data (the Aries
+  `QE x fill factor` trace is digitized from Gpixel's graph); KURO 1200B,
+  Prime 95B, and QHY530 Pro II are digitized from published manufacturer QE
+  plots.
+- A `quantum_efficiency` override on `Camera.expose_series`, matching
+  `Camera.expose` and supporting pre-integrated spectral electron-rate series.
+- `getframes.analysis.matched_filter_centroid`, a background-insensitive
+  cross-correlation centroid with sub-pixel peak refinement.
+- A Keck LGS tip/tilt and low-bandwidth wavefront-sensor detector trade-study
+  example, including physically sampled AO/sub-aperture PSFs and complete detector
+  Monte Carlo simulations.
+
 ## [2.0.0] - 2026-06-29
 
 The 2.0 cut promotes the full surface grown across 1.1–1.6 to **stable** and lands

@@ -5,7 +5,12 @@ import numpy as np
 import pytest
 
 import getframes as gf
-from getframes.analysis import aperture_sum, centroid, photon_transfer_curve
+from getframes.analysis import (
+    aperture_sum,
+    centroid,
+    matched_filter_centroid,
+    photon_transfer_curve,
+)
 
 
 def test_aperture_sum_recovers_injected_flux():
@@ -37,6 +42,29 @@ def test_centroid_empty_returns_center():
     img = np.zeros((10, 10))
     cx, cy = centroid(img, background=0.0)
     assert (cx, cy) == (4.5, 4.5)
+
+
+def test_matched_filter_centroid_finds_shifted_low_snr_spot():
+    template = np.zeros((16, 16))
+    gf.GaussianPSF(2.5).add_source(
+        template, x=7.5, y=7.5, flux=1.0, plate_scale_arcsec_per_pixel=1.0
+    )
+    image = np.zeros_like(template)
+    gf.GaussianPSF(2.5).add_source(
+        image, x=8.2, y=6.9, flux=100.0, plate_scale_arcsec_per_pixel=1.0
+    )
+    image += 25.0
+
+    cx, cy = matched_filter_centroid(image, template, background=25.0)
+    assert cx == pytest.approx(8.2, abs=0.1)
+    assert cy == pytest.approx(6.9, abs=0.1)
+
+
+def test_matched_filter_centroid_rejects_bad_templates():
+    with pytest.raises(ValueError, match="positive sum"):
+        matched_filter_centroid(np.ones((4, 4)), np.zeros((4, 4)))
+    with pytest.raises(ValueError, match="must not be constant"):
+        matched_filter_centroid(np.ones((4, 4)), np.ones((4, 4)))
 
 
 def test_photon_transfer_curve_recovers_gain():

@@ -377,6 +377,7 @@ class Camera:
         temperature: float | None = None,
         *,
         background: PhotonRate = 0.0,
+        quantum_efficiency: float | None = None,
         seed: int | None = None,
         include_truth: bool = True,
     ) -> Iterator[Frame]:
@@ -384,7 +385,9 @@ class Camera:
 
         The light-frame analogue of :meth:`dark_series`. When ``seed`` is given the
         series is reproducible; each frame uses a distinct derived seed so the
-        frames are independent but the whole series repeats.
+        frames are independent but the whole series repeats. ``quantum_efficiency``
+        has the same meaning as in :meth:`expose`; pass ``1.0`` when
+        ``photon_rate`` and ``background`` are already expressed as electron rates.
         """
         for i, frame_seed in enumerate(self._series_seeds(seed, n_frames)):
             frame = self.expose(
@@ -392,6 +395,7 @@ class Camera:
                 exposure,
                 temperature,
                 background=background,
+                quantum_efficiency=quantum_efficiency,
                 seed=frame_seed,
                 include_truth=include_truth,
             )

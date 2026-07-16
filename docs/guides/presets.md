@@ -39,6 +39,11 @@ cam = gf.Camera(warmer)
 | `leonardo_saphira` | EAPD | HgCdTe avalanche IR array (AO wavefront sensing) |
 | `zwo_asi2600mm` | CMOS | Sony IMX571 cooled CMOS |
 | `hamamatsu_orca_fusion` | sCMOS | Back-thinned sCMOS with per-pixel read noise |
+| `andor_marana_4_2b_11` | sCMOS | 11 µm Marana, extended-dynamic-range mode |
+| `photometrics_prime_95b` | sCMOS | 11 µm Prime 95B, combined-gain mode |
+| `princeton_instruments_kuro_1200b` | sCMOS | 11 µm KURO 1200B |
+| `qhy530_pro_ii` | CMOS | Global-shutter Sony IMX530 camera |
+| `tucsen_aries_6504_pro` | sCMOS | Single-photon-level sensitive mode |
 | `generic_ccd` | CCD | Idealised CCD for teaching/testing |
 | `generic_cmos` | CMOS | Idealised uncooled CMOS |
 | `generic_emccd` | EMCCD | Idealised EMCCD |
@@ -73,7 +78,15 @@ dark_current_e_per_s = 0.3
 dark_current_ref_temp_c = 20.0
 dark_current_doubling_temp_c = 6.0
 notes = "Where these numbers came from."
+
+# Optional wavelength-resolved QE for spectral simulations.
+[qe_curve]
+wavelength_nm = [400.0, 500.0, 600.0, 700.0, 800.0]
+qe = [0.45, 0.72, 0.88, 0.81, 0.55]
 ```
 
 The loader discovers the file automatically — no code changes required. If you are
 working from a clone, the preset test suite will validate it loads correctly.
+When a manufacturer only publishes a graph, record in `notes` that the curve was
+digitized and whether the ordinate is bare QE or `QE x fill factor`. Keep filters,
+windows, atmosphere, and relay optics as separate throughput curves.

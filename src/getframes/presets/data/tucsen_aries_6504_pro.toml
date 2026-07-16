@@ -1,0 +1,52 @@
+# Tucsen Aries 6504 Pro — GSENSE6504BSI single-photon-level sCMOS.
+# Manufacturer datasheet:
+# https://www.tucsen.com/aries-6504-pro-product/
+name = "Tucsen Aries 6504 Pro"
+manufacturer = "Tucsen"
+model = "Aries 6504 Pro (GSENSE6504BSI)"
+sensor_type = "SCMOS"
+resolution = [2048, 2048]
+pixel_size_um = 6.5
+quantum_efficiency = 0.95              # peak at 450 nm
+full_well_e = 15000.0                  # HDR mode
+bit_depth = 16
+gain_e_per_adu = 0.25                  # representative sensitive-mode conversion
+bias_offset_adu = 100.0
+read_noise_e = 0.43                    # RMS, sensitive mode
+read_noise_nonuniformity = 0.2
+dark_current_e_per_s = 0.01
+dark_current_ref_temp_c = -20.0
+dark_current_doubling_temp_c = 6.0
+prnu = 0.003                           # published 0.3%
+dark_current_nonuniformity = 0.03
+notes = "Sensitive-mode read noise with HDR-mode full well; QE x fill-factor curve digitized from Gpixel's published GSENSE6504BSI plot. Select one characterized readout mode for final design work."
+
+# GSENSE6504BSI QE x fill factor, digitized at 10 nm spacing from Gpixel's
+# published high-resolution graph. The trace accuracy is limited by the source
+# plot; camera window and instrument throughput are separate spectral terms.
+# https://gpixel.com/en/pro_details_11303.html
+[qe_curve]
+wavelength_nm = [
+    200.0, 210.0, 220.0, 230.0, 240.0, 250.0, 260.0, 270.0, 280.0, 290.0,
+    300.0, 310.0, 320.0, 330.0, 340.0, 350.0, 360.0, 370.0, 380.0, 390.0,
+    400.0, 410.0, 420.0, 430.0, 440.0, 450.0, 460.0, 470.0, 480.0, 490.0,
+    500.0, 510.0, 520.0, 530.0, 540.0, 550.0, 560.0, 570.0, 580.0, 590.0,
+    600.0, 610.0, 620.0, 630.0, 640.0, 650.0, 660.0, 670.0, 680.0, 690.0,
+    700.0, 710.0, 720.0, 730.0, 740.0, 750.0, 760.0, 770.0, 780.0, 790.0,
+    800.0, 810.0, 820.0, 830.0, 840.0, 850.0, 860.0, 870.0, 880.0, 890.0,
+    900.0, 910.0, 920.0, 930.0, 940.0, 950.0, 960.0, 970.0, 980.0, 990.0,
+    1000.0, 1010.0, 1020.0, 1030.0, 1040.0, 1050.0, 1060.0, 1070.0, 1080.0, 1090.0,
+    1100.0,
+]
+qe = [
+    0.2095, 0.3749, 0.7380, 0.6682, 0.7716, 0.7607, 0.4734, 0.2884, 0.2695, 0.3673,
+    0.5132, 0.6165, 0.6145, 0.5495, 0.4912, 0.4420, 0.4071, 0.4364, 0.5170, 0.6124,
+    0.7262, 0.8142, 0.8833, 0.9224, 0.9402, 0.9496, 0.9294, 0.9001, 0.8882, 0.8693,
+    0.8582, 0.8505, 0.8435, 0.8431, 0.8466, 0.8505, 0.8533, 0.8578, 0.8568, 0.8554,
+    0.8540, 0.8494, 0.8512, 0.8463, 0.8428, 0.8309, 0.8204, 0.8107, 0.7932, 0.7660,
+    0.7346, 0.7077, 0.6829, 0.6564, 0.6221, 0.5865, 0.5499, 0.5083, 0.4615, 0.4371,
+    0.4360, 0.4315, 0.3903, 0.3400, 0.3805, 0.3784, 0.2716, 0.3847, 0.2604, 0.2709,
+    0.2667, 0.2136, 0.2513, 0.1791, 0.2129, 0.1602, 0.1627, 0.1578, 0.1117, 0.1466,
+    0.0880, 0.1229, 0.0782, 0.0733, 0.0607, 0.0377, 0.0415, 0.0195, 0.0132, 0.0111,
+    0.0021,
+]

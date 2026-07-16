@@ -121,6 +121,11 @@ preset_info()         # rich descriptors for each preset
 | `leonardo_saphira` | EAPD | HgCdTe avalanche IR array (AO wavefront sensing) |
 | `zwo_asi2600mm` | CMOS | Sony IMX571 cooled CMOS |
 | `hamamatsu_orca_fusion` | sCMOS | Back-thinned sCMOS with per-pixel read noise |
+| `andor_marana_4_2b_11` | sCMOS | 11 µm-pixel, back-illuminated scientific CMOS |
+| `photometrics_prime_95b` | sCMOS | 11 µm-pixel, 95% peak-QE scientific CMOS |
+| `princeton_instruments_kuro_1200b` | sCMOS | Back-illuminated scientific CMOS |
+| `qhy530_pro_ii` | CMOS | Global-shutter Sony IMX530 scientific camera |
+| `tucsen_aries_6504_pro` | sCMOS | Sub-electron sensitive-mode read noise |
 | `generic_ccd` / `generic_cmos` / `generic_emccd` / `generic_eapd` / `generic_scmos` | — | Idealised references for teaching/testing |
 
 ## How the dark-frame model works

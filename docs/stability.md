@@ -26,7 +26,8 @@ gf.Sky, gf.Thermal, gf.WCSInfo, gf.Vignetting, gf.RadialDistortion
 gf.PSF, gf.GaussianPSF, gf.MoffatPSF, gf.AiryPSF, gf.ArrayPSF, gf.EllipticalGaussianPSF
 gf.LightCurve, gf.Observation, gf.ObservationTruth, gf.Pointing
 gf.QE, gf.SED, gf.Spectrum, gf.SpectralBandpass
-gf.analysis.aperture_sum, gf.analysis.centroid, gf.analysis.photon_transfer_curve
+gf.analysis.aperture_sum, gf.analysis.centroid, gf.analysis.matched_filter_centroid
+gf.analysis.photon_transfer_curve
 gf.dataset.pairs, gf.dataset.random_star_fields, gf.dataset.PairDataset
 ```
 

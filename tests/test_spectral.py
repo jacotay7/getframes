@@ -130,6 +130,22 @@ def test_saphira_preset_ships_a_qe_curve():
     assert cfg.qe_curve(1500.0) == pytest.approx(0.9, abs=0.05)
 
 
+@pytest.mark.parametrize(
+    ("preset", "peak_nm", "peak_qe", "red_nm", "red_qe"),
+    [
+        ("andor_marana_4_2b_11", 570.0, 0.9476, 900.0, 0.3465),
+        ("tucsen_aries_6504_pro", 450.0, 0.9496, 900.0, 0.2667),
+    ],
+)
+def test_keck_trade_presets_ship_published_qe_curves(
+    preset, peak_nm, peak_qe, red_nm, red_qe
+):
+    curve = gf.load_preset(preset).qe_curve
+    assert isinstance(curve, QE)
+    assert curve(peak_nm) == pytest.approx(peak_qe)
+    assert curve(red_nm) == pytest.approx(red_qe)
+
+
 # --------------------------------------------------------------------------
 # Camera.observe spectral mode
 # --------------------------------------------------------------------------

@@ -35,3 +35,22 @@ def test_preset_info_shape():
     info = preset_info()
     assert all({"preset", "name", "sensor_type"} <= set(row) for row in info)
     assert len(info) == len(available_presets())
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "andor_marana_4_2b_11",
+        "photometrics_prime_95b",
+        "princeton_instruments_kuro_1200b",
+        "qhy530_pro_ii",
+        "tucsen_aries_6504_pro",
+    ],
+)
+def test_keck_trade_camera_presets_have_physical_provenance(name):
+    cfg = load_preset(name)
+    assert cfg.manufacturer
+    assert cfg.model
+    assert cfg.notes
+    assert cfg.read_noise_e < 5.0
+    assert cfg.dark_current_e_per_s < 1.0

@@ -1,0 +1,48 @@
+# Teledyne Photometrics Prime 95B — back-illuminated scientific CMOS.
+# Manufacturer datasheet:
+# https://www.photometrics.com/wp-content/uploads/2019/10/Prime-95B-Datasheet-07172020.pdf
+name = "Teledyne Photometrics Prime 95B"
+manufacturer = "Teledyne Photometrics"
+model = "Prime 95B"
+sensor_type = "SCMOS"
+resolution = [1200, 1200]
+pixel_size_um = 11.0
+quantum_efficiency = 0.95
+full_well_e = 80000.0
+bit_depth = 16
+gain_e_per_adu = 1.25                 # representative combined-gain conversion
+bias_offset_adu = 100.0
+read_noise_e = 1.8                    # RMS (1.6 e- median)
+read_noise_nonuniformity = 0.2
+dark_current_e_per_s = 0.3
+dark_current_ref_temp_c = -25.0       # liquid-cooled specification
+dark_current_doubling_temp_c = 6.0
+prnu = 0.005
+nonlinearity = 0.005
+dark_current_nonuniformity = 0.03
+notes = "Combined-gain 16-bit mode; published peak QE and liquid-cooled dark current."
+
+# Wavelength-resolved quantum efficiency, digitized from the manufacturer QE plot
+# (UV peak near 240 nm, broad ~550-600 nm plateau, NIR etaloning ripples above
+# ~800 nm typical of a thinned back-illuminated sensor). Optional; only used in
+# spectral mode (Camera.observe with a band that has a spectral response).
+# Manually digitized from a plotted curve --- approximate, not tabulated data.
+[qe_curve]
+wavelength_nm = [
+    200.0, 210.0, 220.0, 230.0, 238.0, 245.0, 255.0, 265.0, 275.0, 285.0,
+    300.0, 320.0, 340.0, 360.0, 375.0, 390.0, 400.0, 410.0, 420.0, 430.0,
+    440.0, 450.0, 460.0, 470.0, 480.0, 490.0, 500.0, 520.0, 540.0, 560.0,
+    580.0, 600.0, 620.0, 640.0, 660.0, 680.0, 700.0, 720.0, 740.0, 760.0,
+    780.0, 790.0, 800.0, 810.0, 820.0, 830.0, 840.0, 850.0, 860.0, 870.0,
+    880.0, 890.0, 900.0, 910.0, 920.0, 930.0, 940.0, 950.0, 960.0, 970.0,
+    980.0, 990.0, 1000.0,
+]
+qe = [
+    0.24, 0.28, 0.38, 0.60, 0.78, 0.65, 0.45, 0.32, 0.29, 0.30,
+    0.31, 0.33, 0.36, 0.40, 0.44, 0.55, 0.65, 0.70, 0.74, 0.78,
+    0.81, 0.84, 0.86, 0.88, 0.90, 0.92, 0.93, 0.94, 0.945, 0.94,
+    0.935, 0.925, 0.91, 0.895, 0.88, 0.855, 0.83, 0.80, 0.75, 0.70,
+    0.66, 0.63, 0.61, 0.58, 0.56, 0.52, 0.50, 0.53, 0.51, 0.48,
+    0.46, 0.44, 0.41, 0.39, 0.37, 0.38, 0.40, 0.35, 0.30, 0.27,
+    0.23, 0.18, 0.15,
+]
