@@ -17,11 +17,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   plots.
 - A `quantum_efficiency` override on `Camera.expose_series`, matching
   `Camera.expose` and supporting pre-integrated spectral electron-rate series.
+- A Keck/SciMeasure Little Joe CCD39 preset with the manufacturer CCD39-01
+  standard-AR/no-window spectral-response curve.
 - `getframes.analysis.matched_filter_centroid`, a background-insensitive
   cross-correlation centroid with sub-pixel peak refinement.
 - A Keck LGS tip/tilt and low-bandwidth wavefront-sensor detector trade-study
-  example, including physically sampled AO/sub-aperture PSFs and complete detector
-  Monte Carlo simulations.
+  example, including physically sampled AO/sub-aperture PSFs, complete detector
+  Monte Carlo simulations, blackbody NGS weighting of each camera's QE curve
+  (`--ngs-teff`), Monte Carlo standard errors on every point, and a per-camera
+  closed-loop cadence optimisation (Tyler tilt-lag disturbance model plus servo
+  noise propagation) alongside the fixed STRAP schedule.
 
 ## [2.0.0] - 2026-06-29
 

@@ -43,6 +43,7 @@ cam = gf.Camera(warmer)
 | `photometrics_prime_95b` | sCMOS | 11 µm Prime 95B, combined-gain mode |
 | `princeton_instruments_kuro_1200b` | sCMOS | 11 µm KURO 1200B |
 | `qhy530_pro_ii` | CMOS | Global-shutter Sony IMX530 camera |
+| `scimeasure_little_joe_ccd39` | CCD | Keck/SciMeasure Little Joe with CCD39-01 QE curve |
 | `tucsen_aries_6504_pro` | sCMOS | Single-photon-level sensitive mode |
 | `generic_ccd` | CCD | Idealised CCD for teaching/testing |
 | `generic_cmos` | CMOS | Idealised uncooled CMOS |

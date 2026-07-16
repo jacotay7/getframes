@@ -1,0 +1,48 @@
+# SciMeasure Little Joe wavefront-sensor camera with e2v/Marconi CCD39-01.
+# Keck identifies its CCD-39 implementation with the CCD39-01 product sheet:
+# https://www2.keck.hawaii.edu/optics/aowg/docs/PDRCommitteeReportResponse.pdf
+name = "Keck/SciMeasure Little Joe CCD39"
+manufacturer = "SciMeasure"
+model = "Little Joe CCD39 (e2v CCD39-01)"
+sensor_type = "CCD"
+resolution = [80, 80]
+pixel_size_um = 24.0
+quantum_efficiency = 0.905             # peak of the typical response curve
+full_well_e = 300000.0                 # typical CCD39-01 peak charge storage
+bit_depth = 14                         # standard Little Joe digitisation
+gain_e_per_adu = 5.0                   # representative Keck controller conversion
+bias_offset_adu = 1000.0
+read_noise_e = 4.5                     # measured Keck low-frame-rate upper end
+dark_current_e_per_s = 0.0             # reported negligible under inversion clocking
+dark_current_ref_temp_c = -40.0
+dark_current_doubling_temp_c = 6.3
+notes = "Keck/SciMeasure low-frame-rate CCD39 operating point; wavelength response is the CCD39-01 typical standard-AR/no-window curve at -20 C. Read noise and dark current are controller, clocking, temperature, and cadence dependent."
+
+# Typical CCD39-01 spectral response at -20 C, with standard AR coating and no
+# window. Resampled at 10 nm from the vector trace in the original Marconi
+# Applied Technologies datasheet (page 4), rather than estimated from pixels:
+# https://instrumentation.obs.carnegiescience.edu/ccd/parts/CCD39-01.pdf
+# A real Little Joe camera window and the Keck WFS optics remain separate terms.
+[qe_curve]
+wavelength_nm = [
+    200.0, 210.0, 220.0, 230.0, 240.0, 250.0, 260.0, 270.0, 280.0, 290.0,
+    300.0, 310.0, 320.0, 330.0, 340.0, 350.0, 360.0, 370.0, 380.0, 390.0,
+    400.0, 410.0, 420.0, 430.0, 440.0, 450.0, 460.0, 470.0, 480.0, 490.0,
+    500.0, 510.0, 520.0, 530.0, 540.0, 550.0, 560.0, 570.0, 580.0, 590.0,
+    600.0, 610.0, 620.0, 630.0, 640.0, 650.0, 660.0, 670.0, 680.0, 690.0,
+    700.0, 710.0, 720.0, 730.0, 740.0, 750.0, 760.0, 770.0, 780.0, 790.0,
+    800.0, 810.0, 820.0, 830.0, 840.0, 850.0, 860.0, 870.0, 880.0, 890.0,
+    900.0, 910.0, 920.0, 930.0, 940.0, 950.0, 960.0, 970.0, 980.0, 990.0,
+    1000.0,
+]
+qe = [
+    0.8000, 0.6385, 0.5059, 0.3938, 0.3299, 0.3117, 0.3201, 0.3445, 0.3902, 0.4448,
+    0.5000, 0.5504, 0.5963, 0.6398, 0.6803, 0.7181, 0.7530, 0.7850, 0.8107, 0.8336,
+    0.8517, 0.8656, 0.8766, 0.8851, 0.8917, 0.8967, 0.9003, 0.9027, 0.9037, 0.9045,
+    0.9048, 0.9043, 0.9038, 0.9021, 0.9001, 0.8978, 0.8942, 0.8906, 0.8859, 0.8805,
+    0.8750, 0.8678, 0.8606, 0.8525, 0.8433, 0.8340, 0.8233, 0.8124, 0.8007, 0.7879,
+    0.7750, 0.7603, 0.7455, 0.7301, 0.7133, 0.6965, 0.6782, 0.6597, 0.6405, 0.6203,
+    0.6000, 0.5781, 0.5562, 0.5337, 0.5099, 0.4861, 0.4604, 0.4343, 0.4073, 0.3787,
+    0.3500, 0.3192, 0.2883, 0.2578, 0.2282, 0.2000, 0.1744, 0.1493, 0.1251, 0.1016,
+    0.0784,
+]

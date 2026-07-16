@@ -44,6 +44,7 @@ def test_preset_info_shape():
         "photometrics_prime_95b",
         "princeton_instruments_kuro_1200b",
         "qhy530_pro_ii",
+        "scimeasure_little_joe_ccd39",
         "tucsen_aries_6504_pro",
     ],
 )
