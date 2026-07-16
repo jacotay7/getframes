@@ -98,6 +98,7 @@ SERVO_BANDWIDTH_RATIO = 20.0  # closed-loop f_3dB = frame rate / this ratio
 WINDSHAKE_MAS_HZ = 25.0  # placeholder windshake/vibration term; replace with a measured PSD
 TTS_RATE_MIN_HZ = 25.0
 TTS_RATE_MAX_HZ = 1000.0
+TRUST_FRACTION = 0.8  # centroid errors above this fraction of the no-star ceiling are biased
 DEFAULT_NGS_TEFF_K = 3500.0  # M-dwarf-like tip/tilt star
 
 # DAVINCI zero points and sky brightnesses from KAON 764, as used by the notebook.
@@ -585,23 +586,41 @@ def optimal_tts_cadence(
     ``closed_loop_error_arcsec`` over a continuous rate range using the fitted
     model, which removes Monte Carlo argmin jitter.
 
-    Physically the variance must grow at least linearly with frame rate
-    (log-log slope >= 1); once the spot is too faint the masked centroid clips
-    at a fixed pixel-scale error instead, and the slope collapses toward zero.
-    Grid points are therefore truncated at the first log-log slope (measured
-    from the slowest rate, the longest and least noisy baseline) below 0.5 ---
-    beyond that the data carry estimator saturation, not noise information ---
-    and the rate search is capped at the last usable grid rate so an "optimum"
-    is never claimed in a regime where the spot was empirically lost.  If fewer
-    than three points survive but the slowest rate still shows a real gradient,
-    the loop is reported parked at ``TTS_RATE_MIN_HZ`` using the direct
-    measurement there; with no gradient at all the star is unguidable (NaN).
+    The masked centroid is a *bounded* estimator: on a lost spot it reports the
+    centroid of noise inside the mask, a fixed pixel-scale RMS ceiling, and
+    measurements approaching that ceiling are biased low.  The ceiling is
+    measured directly from zero-star frames (it is magnitude-independent ---
+    the sky does not change), and a grid point is trusted only while its
+    measured error stays below ``TRUST_FRACTION`` of the ceiling *and* its
+    variance keeps growing with frame rate (log-log slope from the slowest
+    rate >= 0.5, as the physics requires).  The rate search is capped at the
+    last trusted grid rate so an "optimum" is never claimed in a regime where
+    the spot was empirically lost.  Two trusted points suffice for a
+    (single-term) fit; with only the slowest rate trusted the loop is reported
+    parked at ``TTS_RATE_MIN_HZ`` using the direct measurement there; if even
+    the slowest rate is ceiling-limited the star is past this camera's limiting
+    magnitude and NaN is returned (the loop cannot hold lock).
     """
     grid_rates = np.geomspace(TTS_RATE_MIN_HZ, TTS_RATE_MAX_HZ, 6)
     star_band_response = band_response(camera, ngs_sed)
     sky_band_response = band_response(camera, SKY_WEIGHTING_SED)
     noise_gain = np.sqrt(2.0 / SERVO_BANDWIDTH_RATIO)
     lag_coefficient = tilt_disturbance_arcsec_hz() * SERVO_BANDWIDTH_RATIO
+    ceiling = np.empty(grid_rates.size)
+    for rate_index, rate in enumerate(grid_rates):
+        # Zero-star frames (magnitude -> infinity) measure the estimator's noise
+        # ceiling at this exposure: sky + dark + read noise centroided in the mask.
+        ceiling[rate_index], _ = _tts_rms_error(
+            camera,
+            pattern,
+            plate_scale,
+            np.inf,
+            1.0 / float(rate),
+            star_band_response,
+            sky_band_response,
+            trials,
+            seed + 99 * rate_index,
+        )
     best_errors = np.full(magnitudes.size, np.nan)
     best_rates = np.full(magnitudes.size, np.nan)
     for index, magnitude in enumerate(magnitudes):
@@ -620,12 +639,18 @@ def optimal_tts_cadence(
                 seed + 10_000 * index + 101 * rate_index,
             )
         variances = np.maximum(measured**2, 1e-20)
-        slopes_from_first = (np.log(variances[1:]) - np.log(variances[0])) / (
-            np.log(grid_rates[1:]) - np.log(grid_rates[0])
+        log_rate_span = np.log(grid_rates[1:] / grid_rates[0])
+        slopes_from_first = (np.log(variances[1:]) - np.log(variances[0])) / log_rate_span
+        relative_se = measured_se / np.maximum(measured, 1e-10)
+        slope_se = 2.0 * np.sqrt(relative_se[1:] ** 2 + relative_se[0] ** 2) / log_rate_span
+        # One standard error of benefit-of-the-doubt on both tests keeps borderline
+        # points from flipping the trust decision on Monte Carlo noise between
+        # adjacent magnitudes (and between near-identical cameras).
+        distrusted = (measured - measured_se >= TRUST_FRACTION * ceiling) | np.concatenate(
+            ([False], slopes_from_first + slope_se < 0.5)
         )
-        saturated = slopes_from_first < 0.5
-        cut = int(np.argmax(saturated)) + 1 if bool(np.any(saturated)) else grid_rates.size
-        if cut >= 3:
+        cut = int(np.argmax(distrusted)) if bool(np.any(distrusted)) else grid_rates.size
+        if cut >= 2:
             a, b = _fit_noise_variance_model(
                 grid_rates[:cut],
                 variances[:cut],
@@ -637,14 +662,15 @@ def optimal_tts_cadence(
             best = int(np.argmin(totals))
             best_errors[index] = totals[best]
             best_rates[index] = dense_rates[best]
-        elif slopes_from_first[0] >= 0.25:
-            # Too saturated to support a model fit, but the slowest rate still shows
-            # a genuine noise gradient: park the loop at the minimum allowed rate.
+        elif cut >= 1:
+            # Too few trusted points for a model fit, but the slowest rate is still
+            # a real measurement: park the loop at the minimum allowed rate.
             best_errors[index] = float(
                 np.hypot(noise_gain * measured[0], lag_coefficient / grid_rates[0])
             )
             best_rates[index] = float(grid_rates[0])
-        # Otherwise the centroid is saturation-limited at every rate: unguidable.
+        # Otherwise even the slowest rate is ceiling-limited: past the limiting
+        # magnitude for this camera, the loop cannot hold lock.
     return best_errors, best_rates
 
 
@@ -1013,7 +1039,7 @@ def main() -> None:
     print(f"\nOptimised TTS closed-loop residual at I={optimal_magnitudes[reference_index]:.1f}")
     for label, (residuals, rates) in tts_optimal.items():
         if np.isnan(residuals[reference_index]):
-            print(f"  {label:<14} unguidable (spot lost at every frame rate)")
+            print(f"  {label:<14} past limiting magnitude (loop cannot hold lock)")
         else:
             print(
                 f"  {label:<14} {1000.0 * residuals[reference_index]:7.2f} mas RMS "
