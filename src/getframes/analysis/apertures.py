@@ -56,9 +56,16 @@ def centroid(
     *,
     center: tuple[float, float] | None = None,
     r: float | None = None,
-    background: float | None = None,
+    background: float | NDArray[np.floating[Any]] | None = None,
+    threshold: float | NDArray[np.floating[Any]] | None = None,
 ) -> tuple[float, float]:
-    """Intensity-weighted centroid ``(x, y)`` of ``image`` (or a region of it).
+    """Intensity-weighted (thresholded) centroid ``(x, y)`` of ``image``.
+
+    This is a calibrated centre-of-gravity estimator suitable for a real-time
+    controller: subtract a background, subtract a noise-floor threshold, clip the
+    remaining negative weights, optionally restrict to a window, then take first
+    moments. With scalar arguments it reduces to the plain background-subtracted
+    centroid.
 
     Parameters
     ----------
@@ -67,18 +74,29 @@ def centroid(
         (useful for isolating one spot). Otherwise the whole image is used.
     background:
         Level subtracted before weighting, so the pedestal doesn't bias the
-        centroid. Defaults to the image median, which works well for a small spot
-        on a flat background.
+        centroid. A scalar, or a per-pixel array (e.g. a master sky+dark frame of
+        the same shape as ``image``). Defaults to the image median, which works
+        well for a small spot on a flat background.
+    threshold:
+        Optional noise floor subtracted after the background and before clipping,
+        so pixels that are only noise do not pull the centroid. A scalar, or a
+        per-pixel array (e.g. ``k`` times a measured per-pixel noise sigma map).
+        ``None`` (default) applies no threshold.
 
     Returns
     -------
     (x, y):
         Sub-pixel centroid. Returns the geometric centre if there is no positive
-        signal after background subtraction.
+        signal after background and threshold subtraction.
     """
     data = np.asarray(image, dtype=np.float64)
-    bg = float(np.median(data)) if background is None else background
-    weights = np.clip(data - bg, 0.0, None)
+    bg: float | NDArray[np.float64] = (
+        float(np.median(data)) if background is None else np.asarray(background, dtype=np.float64)
+    )
+    corrected = data - bg
+    if threshold is not None:
+        corrected = corrected - np.asarray(threshold, dtype=np.float64)
+    weights = np.clip(corrected, 0.0, None)
 
     if center is not None and r is not None:
         mask = _radial_grid(data.shape, *center) <= r**2

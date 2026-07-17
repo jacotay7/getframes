@@ -70,6 +70,50 @@ class Frame:
     def __array__(self, dtype: Any = None) -> NDArray[Any]:
         return np.asarray(self.data, dtype=dtype)
 
+    def binned(self, factor: int, *, method: str = "sum") -> Frame:
+        """Digitally bin the frame into ``factor x factor`` super-pixels after readout.
+
+        Models post-read (digital) binning: a read-out image is combined into
+        coarser pixels in software, rather than charge being summed on-chip before
+        the amplifier. With ``method="sum"`` the ADU of each ``factor x factor``
+        block are added (the charge-combining convention, which also sums the bias
+        pedestal and read noise in quadrature); ``method="mean"`` averages them.
+
+        Parameters
+        ----------
+        factor:
+            Positive integer block size. Both image dimensions must be divisible
+            by it.
+        method:
+            ``"sum"`` (default) or ``"mean"``.
+
+        Returns
+        -------
+        Frame:
+            A new frame of shape ``(height // factor, width // factor)`` in ADU.
+            Ground-truth (:attr:`truth`) is not propagated through binning and is
+            ``None`` on the result; ``metadata`` is copied with a ``binning`` entry
+            recording the applied factor.
+        """
+        if factor < 1:
+            raise ValueError("binning factor must be a positive integer.")
+        if method not in ("sum", "mean"):
+            raise ValueError("method must be 'sum' or 'mean'.")
+        data = np.asarray(self.data)
+        height, width = data.shape
+        if height % factor or width % factor:
+            raise ValueError(
+                f"frame shape {data.shape} is not divisible by binning factor {factor}."
+            )
+        if factor == 1:
+            binned = data.copy()
+        else:
+            blocks = data.reshape(height // factor, factor, width // factor, factor)
+            binned = blocks.sum(axis=(1, 3)) if method == "sum" else blocks.mean(axis=(1, 3))
+        metadata = dict(self.metadata)
+        metadata["binning"] = int(metadata.get("binning", 1)) * factor
+        return Frame(data=binned, metadata=metadata, truth=None)
+
     def stats(self) -> dict[str, float]:
         """Common summary statistics of the pixel values (mean/median/std/min/max)."""
         arr = np.asarray(self.data, dtype=float)

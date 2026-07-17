@@ -21,6 +21,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   standard-AR/no-window spectral-response curve.
 - `getframes.analysis.matched_filter_centroid`, a background-insensitive
   cross-correlation centroid with sub-pixel peak refinement.
+- `Frame.binned(factor, method=...)`, post-read digital binning of a frame into
+  `factor x factor` super-pixels (sum or mean).
+- `getframes.analysis.centroid` now accepts a per-pixel array `background` (e.g. a
+  master sky+dark frame) and an optional `threshold` (scalar or per-pixel noise
+  map), making it a calibrated thresholded centre-of-gravity estimator suitable
+  for a real-time controller. Both additions are backwards compatible.
 - A Keck LGS tip/tilt and low-bandwidth wavefront-sensor detector trade-study
   example, including physically sampled AO/sub-aperture PSFs, complete detector
   Monte Carlo simulations, blackbody NGS weighting of each camera's QE curve

@@ -44,6 +44,34 @@ def test_centroid_empty_returns_center():
     assert (cx, cy) == (4.5, 4.5)
 
 
+def test_centroid_array_background_removes_structured_pedestal():
+    # A ramp pedestal would bias a scalar-background centroid; a per-pixel master
+    # of the same ramp cancels it, recovering the injected spot.
+    yy, xx = np.mgrid[0:32, 0:32]
+    pedestal = 50.0 + 3.0 * xx + 2.0 * yy
+    img = pedestal.astype(float)
+    gf.GaussianPSF(2.0).add_source(
+        img, x=20.3, y=11.7, flux=4000.0, plate_scale_arcsec_per_pixel=1.0
+    )
+    cx, cy = centroid(img, background=pedestal)
+    assert cx == pytest.approx(20.3, abs=0.1)
+    assert cy == pytest.approx(11.7, abs=0.1)
+
+
+def test_centroid_threshold_suppresses_subthreshold_noise():
+    rng = np.random.default_rng(0)
+    noise = rng.normal(0.0, 1.0, size=(48, 48))
+    img = noise.copy()
+    gf.GaussianPSF(1.5).add_source(
+        img, x=30.6, y=18.4, flux=3000.0, plate_scale_arcsec_per_pixel=1.0
+    )
+    # Without a threshold the whole-image noise floor biases the estimate; a
+    # per-pixel noise cut leaves only the spot.
+    cx, cy = centroid(img, background=0.0, threshold=5.0)
+    assert cx == pytest.approx(30.6, abs=0.1)
+    assert cy == pytest.approx(18.4, abs=0.1)
+
+
 def test_matched_filter_centroid_finds_shifted_low_snr_spot():
     template = np.zeros((16, 16))
     gf.GaussianPSF(2.5).add_source(
