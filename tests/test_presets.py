@@ -89,6 +89,7 @@ def test_new_keck_trade_presets_have_full_visible_qe_coverage(name):
     [
         "andor_cb1_0_5mp",
         "andor_marana_4_2b_11",
+        "hamamatsu_orca_quest_2",
         "photometrics_prime_95b",
         "princeton_instruments_kuro_1200b",
         "qhy530_pro_ii",
@@ -100,3 +101,14 @@ def test_keck_trade_modes_are_captured_as_preset_metadata(name):
     assert extra["supported_binning"]
     assert extra["binning_implementation"]
     assert extra["source_modes_url"]
+    assert extra["detector_modes"]
+    for mode in extra["detector_modes"]:
+        assert mode["name"]
+        assert mode["binning"] >= 1
+        if mode["binning"] > 1:
+            assert f"{mode['binning']}x{mode['binning']}" in extra["supported_binning"]
+        assert mode["read_noise_model"] in {
+            "native",
+            "digital_post_read",
+            "uncharacterized",
+        }

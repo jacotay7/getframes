@@ -29,6 +29,31 @@ readout_modes = ["16-bit high dynamic range", "12-bit fast speed"]
 roi_minimum_pixels = [25, 1]
 source_modes_url = "https://andor.oxinst.com/downloads/uploads/Andor_Marana_Specifications.pdf"
 
+[[extra.detector_modes]]
+name = "16-bit HDR 1x1"
+binning = 1
+read_noise_model = "native"
+
+[[extra.detector_modes]]
+name = "16-bit HDR 2x2"
+binning = 2
+read_noise_model = "digital_post_read"
+
+[[extra.detector_modes]]
+name = "16-bit HDR 3x3"
+binning = 3
+read_noise_model = "digital_post_read"
+
+[[extra.detector_modes]]
+name = "16-bit HDR 4x4"
+binning = 4
+read_noise_model = "digital_post_read"
+
+[[extra.detector_modes]]
+name = "16-bit HDR 8x8"
+binning = 8
+read_noise_model = "digital_post_read"
+
 # Marana 4.2B-11 sensor QE from Andor's published camera-window selector data
 # (selector key SONA11MARA11). The optical window and instrument throughput are
 # separate spectral terms and are not folded into this curve.

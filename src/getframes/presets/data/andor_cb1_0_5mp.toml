@@ -26,6 +26,11 @@ binning_implementation = "No 2x2 binning is offered for the CB1 0.5 MP model."
 readout_modes = ["8-bit", "12-bit", "14-bit HDR"]
 source_modes_url = "https://andor.oxinst.com/assets/uploads/products/andor/documents/c-blue-one-specifications.pdf"
 
+[[extra.detector_modes]]
+name = "12-bit high gain 1x1"
+binning = 1
+read_noise_model = "native"
+
 # CB1's manufacturer QE plot manually digitized at 25--50 nm spacing. The
 # curve is typical (not guaranteed) and represents the visible IMX426 response;
 # it is independently consistent with Allied Vision's 73% QE at 529 nm for

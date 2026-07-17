@@ -24,6 +24,23 @@ supported_binning = ["1x1", "2x2", "3x3"]
 binning_implementation = "2x2 and 3x3 FD charge-domain binning; 2x2 raises full-frame rate to 61 fps (USB3, 8-bit)."
 source_modes_url = "https://www.qhyccd.com/qhy530pro-ii/"
 
+[[extra.detector_modes]]
+name = "native 1x1"
+binning = 1
+read_noise_model = "native"
+
+# 2x2 and 3x3 are documented charge-domain modes, but no mode-specific
+# read-noise value is published for this profile; retain them outside ranking.
+[[extra.detector_modes]]
+name = "FD charge-domain 2x2"
+binning = 2
+read_noise_model = "uncharacterized"
+
+[[extra.detector_modes]]
+name = "FD charge-domain 3x3"
+binning = 3
+read_noise_model = "uncharacterized"
+
 # QHY530 absolute-response QE, digitized from QHYCCD's published "QHY530 QE" plot
 # (peak ~88% near 460-470 nm, shoulders near 500-530 nm and 690-720 nm, rolling
 # off to ~4-5% by 1000 nm). Manually digitized from a plotted curve --- approximate,

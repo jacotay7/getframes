@@ -28,6 +28,16 @@ binning_implementation = "2x2 FPGA post-readout binning."
 readout_modes = ["16-bit combined gain", "12-bit full well", "12-bit balanced", "12-bit sensitivity"]
 source_modes_url = "https://www.photometrics.com/wp-content/uploads/2019/10/95B-Manual_08062020.pdf"
 
+[[extra.detector_modes]]
+name = "combined gain 1x1"
+binning = 1
+read_noise_model = "native"
+
+[[extra.detector_modes]]
+name = "combined gain 2x2"
+binning = 2
+read_noise_model = "digital_post_read"
+
 # Wavelength-resolved quantum efficiency, digitized from the manufacturer QE plot
 # (UV peak near 240 nm, broad ~550-600 nm plateau, NIR etaloning ripples above
 # ~800 nm typical of a thinned back-illuminated sensor). Optional; only used in

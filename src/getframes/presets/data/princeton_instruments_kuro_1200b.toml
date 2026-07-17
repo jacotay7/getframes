@@ -28,6 +28,11 @@ binning_implementation = "No on-chip binning documented for this sCMOS family; s
 readout_modes = ["12-bit", "16-bit", "rolling shutter", "effective global shutter"]
 source_modes_url = "https://www.teledynevisionsolutions.com/learn/learning-center/imaging-fundamentals/new-scientific-cmos-cameras-with-back-illuminated-technology/"
 
+[[extra.detector_modes]]
+name = "16-bit 1x1"
+binning = 1
+read_noise_model = "native"
+
 # KURO sCMOS back-illuminated QE (all incident angles), digitized from Teledyne
 # Photometrics/Princeton Instruments' published QE comparison plot (UV peak near
 # 240 nm, ~95% plateau at 550-560 nm, NIR etaloning ripple near 830-850 nm).

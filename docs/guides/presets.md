@@ -102,3 +102,11 @@ the generic detector-noise model—such as a camera body's mechanical envelope,
 supported binning modes, or the implementation of binning—use an `[extra]` TOML
 table with a source URL. These values are exposed as `CameraConfig.extra`; a
 consumer should treat an absent value as unknown, not as a pass/fail result.
+
+When a trade needs to compare documented acquisition modes, it can carry an
+`[[extra.detector_modes]]` array. Each entry should identify the readout mode,
+binning, the native read-noise model (`native`, `digital_post_read`, or
+`uncharacterized`), and any mode-specific temperature, dark current, or rate.
+Do not infer binned read noise from a pixel pitch alone. A mode marked
+`uncharacterized` should be reported as available but excluded from a
+performance ranking until its read noise and timing are measured or published.
