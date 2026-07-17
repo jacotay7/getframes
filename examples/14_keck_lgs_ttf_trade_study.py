@@ -2,10 +2,9 @@
 """Keck LGS tip/tilt and low-bandwidth WFS detector trade study.
 
 This is a detector-faithful reworking of ``keck_ttf/OptTTF_sim_v2.ipynb``.  It
-keeps the notebook's Keck photometric zero points, cadence laws, beamsplitter,
-effective read noise, and effective dark current, while replacing its hand-written
-Poisson-plus-Gaussian image model with getframes' full photon -> electron ->
-digitised-ADU detector chain.
+keeps the notebook's Keck photometric zero points, cadence laws, and beamsplitter
+while replacing its hand-written Poisson-plus-Gaussian image model with
+getframes' full photon -> electron -> digitised-ADU detector chain.
 
 Compared with the exploratory notebook, this version also:
 
@@ -15,13 +14,22 @@ Compared with the exploratory notebook, this version also:
   non-uniformity, full well, and nonlinearity where the presets specify them;
 * folds published wavelength-resolved QE through the notebook's I and Z bands,
   falling back to its measured scalar I/Z QE where no curve is available;
-* uses a matched-filter centroid for LBWFS spots, with sub-pixel peak fitting;
+* applies an exposure-matched finite sky+dark master and a fixed-window,
+  thresholded centre-of-gravity centroid that can run in a real-time controller;
 * uses the f/1.45 relay's 13.7 arcsec/mm plate scale to give each candidate its
-  physical pixel scale and a common TTS field, rather than assigning every
-  camera the same angular pixel scale;
+  physical native pixel scale and a common angular field for both channels;
+* reads detector noise at native physical pixels and applies documented digital
+  binning only after readout, rather than overriding an "effective" binned
+  read-noise value;
+* compares every characterized or explicitly documented post-read-binning mode
+  in the profile and reports the lowest-centroid-error mode for each detector
+  at the reference magnitude; and
 * weights each camera's wavelength-resolved QE with a configurable NGS blackbody
   SED (``--ngs-teff``, default 3500 K --- an M-dwarf-like tip/tilt star) while
   keeping flat photon weighting for the airglow-dominated sky;
+* samples the same stratified physical tracking positions for every detector,
+  exactly pixel-integrating each sub-pixel phase rather than translating a
+  sampled image, and reports centroid bias and random variance as well as RMS;
 * attaches a Monte Carlo standard error to every point (shaded bands in the
   figure, +/- in the printed tables);
 * clips the I/Z zero-point bands to the rough 600--950 nm bandpass of the
@@ -31,18 +39,19 @@ Compared with the exploratory notebook, this version also:
   closed-loop residual (fitted noise propagation plus a documented
   tilt-disturbance lag) is minimised continuously in frame rate, instead of
   forcing every candidate onto STRAP's magnitude/frame-rate schedule; and
-* renders a second frame-gallery figure (saved beside ``--save`` with a
-  ``_frames`` suffix) showing each sensor's pixel-integrated PSF next to single
-  raw frames from the best candidate, worst candidate, and incumbent.
+* plots the selected characterized mode per detector for the TTS and both
+  LBWFS geometries; and
+* saves a frame gallery beside ``--save`` showing the underlying PSF, the
+  best/worst selected detector modes, and the incumbent for each channel.
 
 The current STRAP entry is local because its values describe a Keck instrument
 operating point, not a portable manufacturer preset. Little Joe and the candidate
-camera geometry/electronics come from getframes presets; measured trade-study
-values override their readout-mode-dependent read noise and dark current. The I/Z
-responses are currently explicit top-hat approximations clipped to the TTS/LBWFS
-arm bandpass (600--700 nm light the arm passes is not counted, since the zero
-points only cover I and Z); replace them with measured filter x atmosphere x
-relay-optics curves when available.
+camera geometry/electronics come from getframes presets. Mode-specific detector
+values are stored in the preset ``extra.detector_modes`` metadata, with native
+pixel noise retained during simulation. The I/Z responses are currently explicit
+top-hat approximations clipped to the TTS/LBWFS arm bandpass (600--700 nm light
+the arm passes is not counted, since the zero points only cover I and Z); replace
+them with measured filter x atmosphere x relay-optics curves when available.
 
 Run (400 Monte Carlo frames per point by default):
     python examples/14_keck_lgs_ttf_trade_study.py
@@ -54,11 +63,11 @@ cadence optimisation uses a deliberately simple servo model --- an integrator wi
 closed-loop bandwidth ``frame rate / SERVO_BANDWIDTH_RATIO``, a Tyler (1994)
 single-layer atmospheric tilt lag derived from the Fried parameter and one
 effective wind speed, and a placeholder windshake coefficient --- not a measured
-disturbance PSD.  It still does not model centroid gain calibration, spot motion
-within a frame, rolling-shutter timing, camera dead time or camera-specific ROI
-frame-rate limits (the generic ``TTS_RATE_MAX_HZ`` remains an upper search bound,
-not a claim of availability in the chosen bit-depth/noise mode), or measured
-filter/atmosphere/relay throughput curves.
+disturbance PSD.  It still does not fit and apply a centroid-gain calibration,
+model spot motion *during* an exposure, rolling-shutter timing, camera dead time
+or camera-specific ROI frame-rate limits (the generic ``TTS_RATE_MAX_HZ`` remains
+an upper search bound, not a claim of availability in the chosen bit-depth/noise
+mode), or measured filter/atmosphere/relay throughput curves.
 Those are instrument inputs and should be added here when they become available.
 """
 
@@ -85,13 +94,19 @@ SEEING_WAVELENGTH_M = 0.5e-6
 AO_STREHL = 0.05
 MOFFAT_BETA = 3.0
 TTS_BEAMSPLITTER = 0.90
-LBWFS_PLATE_SCALE = 0.292
 # The fastest relay which fits in the available TTS optical volume is f/1.45.
 # Scott's optical layout gives this measured/design plate scale.  The retained
 # 4.8 arcsec TTS field matches the former 32 pixels x 0.15 arcsec reference;
 # the number of pixels now changes with each camera's physical effective pitch.
 TTS_ARCSEC_PER_MM = 13.7
 TTS_FIELD_ARCSEC = 4.8
+# Retain the 4.672 arcsec per-sub-aperture field from the original 16 pixels at
+# 0.292 arcsec/pixel model.  At the fixed relay, the integer ROI is selected
+# separately for each detector mode to retain this angular field.
+LBWFS_FIELD_ARCSEC = 16.0 * 0.292
+# Legacy plotting helpers below retain these reference constants.  The active
+# mode-first entry point uses ``*_FIELD_ARCSEC`` and per-detector pixel scale.
+LBWFS_PLATE_SCALE = 0.292
 STRAP_PLATE_SCALE = 1.4
 TTS_SHAPE = (32, 32)
 STRAP_SHAPE = (2, 2)
@@ -107,6 +122,12 @@ TTS_RATE_MIN_HZ = 25.0
 TTS_RATE_MAX_HZ = 1000.0
 TRUST_FRACTION = 0.8  # centroid errors above this fraction of the no-star ceiling are biased
 DEFAULT_NGS_TEFF_K = 3500.0  # M-dwarf-like tip/tilt star
+MASTER_BACKGROUND_FRAMES = 64
+CENTROID_THRESHOLD_SIGMA = 1.5
+TTS_TRACKING_WALK_ARCSEC = 0.75
+LBWFS_TRACKING_WALK_ARCSEC = 0.75
+MOTION_POSITIONS = 25
+MOTION_POSITION_SEED = 941
 
 # DAVINCI zero points and sky brightnesses from KAON 764, as used by the notebook.
 # The zero points were defined for 70% QE, so divide by 0.70 to recover photons/s
@@ -145,57 +166,211 @@ def ngs_weighting_sed(temperature_k: float) -> gf.SED:
 
 
 @dataclass(frozen=True)
-class OperatingPoint:
-    """Band-, binning-, and readout-mode-dependent values used in the trade."""
+class DetectorCandidate:
+    """A camera package admitted to one or both optical trades."""
 
     preset: str
     label: str
-    binning: int
-    fallback_qe_iz: float
-    read_noise_e: float | None
-    dark_current_e_per_s: float | None
-    temperature_c: float | None
     include_tts: bool = True
     include_lbwfs: bool = True
 
 
+@dataclass(frozen=True)
+class DetectorMode:
+    """One documented, characterized acquisition mode from a preset."""
+
+    candidate: DetectorCandidate
+    name: str
+    binning: int
+    read_noise_e: float
+    dark_current_e_per_s: float
+    temperature_c: float
+    read_noise_model: str
+    full_frame_max_hz: float | None
+
+    @property
+    def label(self) -> str:
+        return f"{self.candidate.label} ({self.name})"
+
+
+@dataclass(frozen=True)
+class SampledMode:
+    """A detector mode sampled at native pitch, with optional digital binning."""
+
+    detector_mode: DetectorMode
+    camera: gf.Camera
+    native_plate_scale: float
+    output_plate_scale: float
+    native_shape: tuple[int, int]
+    output_shape: tuple[int, int]
+
+    @property
+    def label(self) -> str:
+        return self.detector_mode.label
+
+
+@dataclass(frozen=True)
+class CentroidMoments:
+    """Bias, random variance, and radial MSE for one operating point."""
+
+    radial_rms: float
+    radial_rms_se: float
+    bias_x: float
+    bias_y: float
+    variance_x: float
+    variance_y: float
+
+
+@dataclass(frozen=True)
+class CentroidCurve:
+    """Per-magnitude centroid moments; iterable as legacy (RMS, RMS s.e.)."""
+
+    radial_rms: np.ndarray
+    radial_rms_se: np.ndarray
+    bias_x: np.ndarray
+    bias_y: np.ndarray
+    variance_x: np.ndarray
+    variance_y: np.ndarray
+
+    def __iter__(self):
+        yield self.radial_rms
+        yield self.radial_rms_se
+
+    def __getitem__(self, index: int) -> np.ndarray:
+        return (self.radial_rms, self.radial_rms_se)[index]
+
+
 CANDIDATES = (
-    OperatingPoint("andor_marana_4_2b_11", "Marana-11", 1, 0.72, 1.565, 0.637, -25.0),
-    OperatingPoint("princeton_instruments_kuro_1200b", "KURO 1200B", 1, 0.72, 1.679, 0.883, -25.0),
-    OperatingPoint("photometrics_prime_95b", "Prime 95B", 1, 0.73, 1.710, 0.475, -20.0),
-    # QHY documents 1x1, 2x2, and 3x3 modes; the prior 4x4 effective-pixel
-    # point is not a documented hardware mode, so it is retained as a preset
-    # but excluded from the current trade until its real readout is measured.
-    OperatingPoint("qhy530_pro_ii", "QHY530", 4, 0.40, 4.4, 0.016, -20.0, False, False),
-    OperatingPoint("tucsen_aries_6504_pro", "Aries 6504P", 2, 0.60, 0.86, 0.040, -20.0),
+    DetectorCandidate("andor_marana_4_2b_11", "Marana-11"),
+    DetectorCandidate("princeton_instruments_kuro_1200b", "KURO 1200B"),
+    DetectorCandidate("photometrics_prime_95b", "Prime 95B"),
+    # The QHY profile is retained, but its source does not give characterized
+    # read-noise values for the charge-domain 2x2/3x3 modes.
+    DetectorCandidate("qhy530_pro_ii", "QHY530", False, False),
+    DetectorCandidate("tucsen_aries_6504_pro", "Aries 6504P"),
     # The 120 x 120 mm symmetric volume around the TTS optical axis excludes
     # all existing EMCCD camera packages. Keep their presets for other work,
     # but do not rank them as realizable TTS options in this configuration.
-    OperatingPoint("nuvu_hnu_240", "HNü 240", 1, 0.80, None, None, -45.0, False, False),
-    OperatingPoint("nuvu_hnu_128_omega", "HNü 128Ω", 1, 0.65, None, None, -60.0, False, False),
-    OperatingPoint("andor_ocam2k", "OCAM2K", 1, 0.80, None, None, -45.0, False, False),
-    # Low-bandwidth challenger.  Its published ultra-low-noise operating point
-    # is much slower than a fast TT loop and belongs in this comparison first.
-    OperatingPoint(
-        "hamamatsu_orca_quest_2", "ORCA-Quest 2", 2, 0.50, None, None, -35.0, False, True
-    ),
-    OperatingPoint("andor_cb1_0_5mp", "CB1 0.5 MP", 1, 0.50, None, None, 10.0, True, False),
+    DetectorCandidate("nuvu_hnu_240", "HNü 240", False, False),
+    DetectorCandidate("nuvu_hnu_128_omega", "HNü 128Ω", False, False),
+    DetectorCandidate("andor_ocam2k", "OCAM2K", False, False),
+    DetectorCandidate("hamamatsu_orca_quest_2", "ORCA-Quest 2", False, True),
+    DetectorCandidate("andor_cb1_0_5mp", "CB1 0.5 MP", True, False),
 )
 
-TTS_CANDIDATES = tuple(point for point in CANDIDATES if point.include_tts)
-LBWFS_CANDIDATES = tuple(point for point in CANDIDATES if point.include_lbwfs)
+TTS_CANDIDATES = tuple(candidate for candidate in CANDIDATES if candidate.include_tts)
+LBWFS_CANDIDATES = tuple(candidate for candidate in CANDIDATES if candidate.include_lbwfs)
 
 
-def tts_plate_scale(camera: gf.Camera) -> float:
-    """Angular pixel scale (arcsec/pixel) at the fixed f/1.45 relay."""
+def relay_plate_scale(camera: gf.Camera) -> float:
+    """Native angular pixel scale (arcsec/pixel) at the fixed f/1.45 relay."""
     return camera.config.pixel_size_um * TTS_ARCSEC_PER_MM / 1000.0
 
 
-def tts_shape_for_scale(plate_scale: float) -> tuple[int, int]:
-    """Even-pixel ROI retaining the common 4.8 arcsec TTS field."""
-    pixels = int(np.ceil(TTS_FIELD_ARCSEC / plate_scale))
+def shape_for_field(field_arcsec: float, plate_scale: float) -> tuple[int, int]:
+    """Even-pixel ROI retaining a specified common angular field."""
+    pixels = int(np.ceil(field_arcsec / plate_scale))
     pixels += pixels % 2
     return (pixels, pixels)
+
+
+def detector_modes(candidates: tuple[DetectorCandidate, ...]) -> tuple[DetectorMode, ...]:
+    """Load only modes whose detector noise is characterized in the preset.
+
+    Available modes marked ``uncharacterized`` remain visible in the printed
+    audit, but cannot be allowed to win a noise trade without a noise model.
+    """
+    modes: list[DetectorMode] = []
+    for candidate in candidates:
+        config = gf.load_preset(candidate.preset)
+        for data in config.extra.get("detector_modes", []):
+            if data["read_noise_model"] == "uncharacterized":
+                continue
+            modes.append(
+                DetectorMode(
+                    candidate=candidate,
+                    name=str(data["name"]),
+                    binning=int(data["binning"]),
+                    read_noise_e=float(data.get("read_noise_e", config.read_noise_e)),
+                    dark_current_e_per_s=float(
+                        data.get("dark_current_e_per_s", config.dark_current_e_per_s)
+                    ),
+                    temperature_c=float(data.get("temperature_c", config.dark_current_ref_temp_c)),
+                    read_noise_model=str(data["read_noise_model"]),
+                    full_frame_max_hz=(
+                        float(data["full_frame_max_hz"]) if "full_frame_max_hz" in data else None
+                    ),
+                )
+            )
+    return tuple(modes)
+
+
+def uncharacterized_modes(candidates: tuple[DetectorCandidate, ...]) -> tuple[str, ...]:
+    """Available modes withheld from ranking because their noise is unpublished."""
+    withheld = []
+    for candidate in candidates:
+        for data in gf.load_preset(candidate.preset).extra.get("detector_modes", []):
+            if data["read_noise_model"] == "uncharacterized":
+                withheld.append(f"{candidate.label} ({data['name']})")
+    return tuple(withheld)
+
+
+def mode_camera(detector_mode: DetectorMode, native_shape: tuple[int, int]) -> gf.Camera:
+    """Instantiate documented native-pixel noise; never invent binned noise.
+
+    Digital post-read modes are simulated by reading the native-pixel image and
+    summing it afterwards. Thus the RMS read noise arises from the simulated
+    pixels (sqrt(N) times the native value), rather than from an override.
+    """
+    config = gf.load_preset(detector_mode.candidate.preset).replace(
+        resolution=native_shape,
+        read_noise_e=detector_mode.read_noise_e,
+        dark_current_e_per_s=detector_mode.dark_current_e_per_s,
+        dark_current_ref_temp_c=detector_mode.temperature_c,
+    )
+    return gf.Camera(config, default_temperature_c=detector_mode.temperature_c)
+
+
+def sampled_mode(detector_mode: DetectorMode, field_arcsec: float) -> SampledMode:
+    """Build a native-pixel simulation and its documented output-pixel geometry."""
+    base = gf.Camera(gf.load_preset(detector_mode.candidate.preset))
+    native_scale = relay_plate_scale(base)
+    output_scale = native_scale * detector_mode.binning
+    output_shape = shape_for_field(field_arcsec, output_scale)
+    native_shape = tuple(size * detector_mode.binning for size in output_shape)
+    return SampledMode(
+        detector_mode=detector_mode,
+        camera=mode_camera(detector_mode, native_shape),
+        native_plate_scale=native_scale,
+        output_plate_scale=output_scale,
+        native_shape=native_shape,
+        output_shape=output_shape,
+    )
+
+
+def bin_after_read(image: np.ndarray, binning: int) -> np.ndarray:
+    """Sum a native-pixel image into its documented digital-binning output."""
+    if binning == 1:
+        return image
+    height, width = image.shape
+    return image.reshape(height // binning, binning, width // binning, binning).sum(axis=(1, 3))
+
+
+# Compatibility adapters for the original gallery/reference entry point.  The
+# active entry point below is ``_mode_trade_main`` and does not use them.
+OperatingPoint = DetectorCandidate
+
+
+def tts_plate_scale(camera: gf.Camera) -> float:
+    return relay_plate_scale(camera)
+
+
+def tts_shape_for_scale(plate_scale: float) -> tuple[int, int]:
+    return shape_for_field(TTS_FIELD_ARCSEC, plate_scale)
+
+
+def effective_candidate(point: DetectorCandidate, shape: tuple[int, int]) -> gf.Camera:
+    return gf.Camera(gf.load_preset(point.preset).replace(resolution=shape))
 
 
 def incident_star_rates(magnitude: float) -> np.ndarray:
@@ -294,13 +469,19 @@ def closed_loop_error_arcsec(measurement_rms_arcsec: float, frame_rate_hz: float
     return float(np.hypot(noise, lag))
 
 
-def _subpixel_radius(shape: tuple[int, int], plate_scale: float, oversample: int) -> np.ndarray:
+def _subpixel_radius(
+    shape: tuple[int, int],
+    plate_scale: float,
+    oversample: int,
+    offset_arcsec: tuple[float, float] = (0.0, 0.0),
+) -> np.ndarray:
     """Angular radius at the centre of every oversampled detector sub-pixel."""
     height, width = shape
+    x_offset, y_offset = offset_arcsec
     y = (np.arange(height * oversample) + 0.5) / oversample - 0.5
     x = (np.arange(width * oversample) + 0.5) / oversample - 0.5
-    y = (y - (height - 1) / 2.0) * plate_scale
-    x = (x - (width - 1) / 2.0) * plate_scale
+    y = (y - (height - 1) / 2.0) * plate_scale - y_offset
+    x = (x - (width - 1) / 2.0) * plate_scale - x_offset
     return np.hypot(y[:, None], x[None, :])
 
 
@@ -340,9 +521,14 @@ def _integrate_pixels(
     return _normalise(pixels)
 
 
-def ao_psf(shape: tuple[int, int], plate_scale: float, oversample: int = OVERSAMPLE) -> np.ndarray:
+def ao_psf(
+    shape: tuple[int, int],
+    plate_scale: float,
+    oversample: int = OVERSAMPLE,
+    offset_arcsec: tuple[float, float] = (0.0, 0.0),
+) -> np.ndarray:
     """Pixel-integrated AO PSF with Strehl-defined Airy core and Moffat halo."""
-    radius = _subpixel_radius(shape, plate_scale, oversample)
+    radius = _subpixel_radius(shape, plate_scale, oversample, offset_arcsec)
     core = _normalise(_airy_profile(radius, TELESCOPE_DIAMETER_M))
     halo = _normalise(_moffat_profile(radius))
 
@@ -363,53 +549,20 @@ def ao_psf(shape: tuple[int, int], plate_scale: float, oversample: int = OVERSAM
     return _integrate_pixels(core_fraction * core + (1.0 - core_fraction) * halo, shape, oversample)
 
 
-def lbwfs_psf(mode: int, oversample: int = OVERSAMPLE) -> np.ndarray:
+def lbwfs_psf(
+    mode: int,
+    shape: tuple[int, int],
+    plate_scale: float,
+    oversample: int = OVERSAMPLE,
+    offset_arcsec: tuple[float, float] = (0.0, 0.0),
+) -> np.ndarray:
     """Pixel-integrated seeing PSF convolved with sub-aperture diffraction."""
-    radius = _subpixel_radius(LBWFS_SHAPE, LBWFS_PLATE_SCALE, oversample)
+    radius = _subpixel_radius(shape, plate_scale, oversample, offset_arcsec)
     subaperture_diameter = TELESCOPE_DIAMETER_M / mode
     diffraction = _normalise(_airy_profile(radius, subaperture_diameter))
     seeing = _normalise(_moffat_profile(radius))
     convolved = fftconvolve(seeing, diffraction, mode="same")
-    return _integrate_pixels(convolved, LBWFS_SHAPE, oversample)
-
-
-def effective_candidate(point: OperatingPoint, shape: tuple[int, int]) -> gf.Camera:
-    """Apply a specified effective-pixel mode and measured operating values.
-
-    ``binning`` must be traceable to an actual acquisition mode before a point
-    is admitted to the trade.  The profile ``extra`` metadata states whether a
-    vendor implements the mode in charge domain, FPGA, or software; the supplied
-    effective read noise is always the value used here, rather than a generic
-    hardware-binning noise rule.
-    """
-    native = gf.load_preset(point.preset)
-    n_native = point.binning**2
-    # The current profile model represents an effective superpixel. Full well and
-    # dark scale with the collected native-pixel area; measured effective dark/read
-    # values override the simple scaling. Whether a real camera implements the
-    # sum in charge domain, FPGA, or software is recorded in the preset metadata.
-    output_bits = native.bit_depth + int(np.ceil(np.log2(n_native)))
-    temperature_c = (
-        point.temperature_c if point.temperature_c is not None else native.dark_current_ref_temp_c
-    )
-    overrides: dict[str, Any] = {
-        "name": f"{native.name} ({point.binning}x{point.binning} effective pixels)",
-        "resolution": shape,
-        "pixel_size_um": native.pixel_size_um * point.binning,
-        # Scalar fallback for presets without wavelength-resolved QE.
-        "quantum_efficiency": point.fallback_qe_iz,
-        "full_well_e": native.full_well_e * n_native,
-        "bit_depth": output_bits,
-        "dark_current_ref_temp_c": temperature_c,
-    }
-    if point.read_noise_e is not None:
-        overrides["read_noise_e"] = point.read_noise_e
-    if point.dark_current_e_per_s is not None:
-        overrides["dark_current_e_per_s"] = point.dark_current_e_per_s
-    config = native.replace(
-        **overrides,
-    )
-    return gf.Camera(config, default_temperature_c=temperature_c)
+    return _integrate_pixels(convolved, shape, oversample)
 
 
 def strap_camera() -> gf.Camera:
@@ -434,7 +587,6 @@ def little_joe_camera() -> gf.Camera:
     """Current Keck LBWFS Little Joe/CCD39 operating point from the notebook."""
     config = gf.load_preset("scimeasure_little_joe_ccd39").replace(
         name="Keck Little Joe CCD39 operating point",
-        resolution=LBWFS_SHAPE,
         # Preserve the conservative effective electronics used by OptTTF_sim_v2;
         # the reusable preset carries the published low-frame-rate measurements.
         read_noise_e=8.0,
@@ -496,6 +648,163 @@ def _rms_and_error(squared: np.ndarray, scale: float) -> tuple[float, float]:
     return rms * scale, standard_error * scale
 
 
+def _centroid_moments(dx: np.ndarray, dy: np.ndarray, scale: float) -> CentroidMoments:
+    """Convert pixel-coordinate errors to bias, variance, and radial RMS in arcsec."""
+    radial_rms, radial_rms_se = _rms_and_error(dx**2 + dy**2, scale)
+    return CentroidMoments(
+        radial_rms=radial_rms,
+        radial_rms_se=radial_rms_se,
+        bias_x=float(np.mean(dx) * scale),
+        bias_y=float(np.mean(dy) * scale),
+        variance_x=float(np.var(dx, ddof=1) * scale**2),
+        variance_y=float(np.var(dy, ddof=1) * scale**2),
+    )
+
+
+def _motion_offsets(positions: int, half_range_arcsec: float, seed: int) -> np.ndarray:
+    """Stratified spot positions across a square tracking walk in arcseconds."""
+    if positions < 1:
+        raise ValueError("positions must be positive")
+    rng = np.random.default_rng(np.random.SeedSequence([seed, 701]))
+    unit_x = (np.arange(positions) + rng.random(positions)) / positions
+    unit_y = (rng.permutation(np.arange(positions)) + rng.random(positions)) / positions
+    return np.column_stack((2.0 * unit_x - 1.0, 2.0 * unit_y - 1.0)) * half_range_arcsec
+
+
+_MOTION_PATTERN_CACHE: dict[tuple[Any, ...], tuple[np.ndarray, ...]] = {}
+
+
+def _motion_pattern_key(
+    sampled: SampledMode, offsets: np.ndarray, psf_kind: str, geometry_mode: int | None = None
+) -> tuple[Any, ...]:
+    """Stable cache key for exact pixel-integrated PSFs at test positions."""
+    return (
+        psf_kind,
+        geometry_mode,
+        sampled.label,
+        tuple(np.round(offsets.ravel(), 10)),
+    )
+
+
+def _tts_motion_patterns(sampled: SampledMode, offsets: np.ndarray) -> tuple[np.ndarray, ...]:
+    """Exact pixel-integrated AO PSFs at the physical tracking test positions."""
+    key = _motion_pattern_key(sampled, offsets, "tts")
+    if key not in _MOTION_PATTERN_CACHE:
+        _MOTION_PATTERN_CACHE[key] = tuple(
+            ao_psf(
+                sampled.native_shape,
+                sampled.native_plate_scale,
+                offset_arcsec=(float(dx), float(dy)),
+            )
+            for dx, dy in offsets
+        )
+    return _MOTION_PATTERN_CACHE[key]
+
+
+def _lbwfs_motion_patterns(
+    sampled: SampledMode, offsets: np.ndarray, geometry_mode: int
+) -> tuple[np.ndarray, ...]:
+    """Exact pixel-integrated LBWFS PSFs at the physical tracking test positions."""
+    key = _motion_pattern_key(sampled, offsets, "lbwfs", geometry_mode)
+    if key not in _MOTION_PATTERN_CACHE:
+        _MOTION_PATTERN_CACHE[key] = tuple(
+            lbwfs_psf(
+                geometry_mode,
+                sampled.native_shape,
+                sampled.native_plate_scale,
+                offset_arcsec=(float(dx), float(dy)),
+            )
+            for dx, dy in offsets
+        )
+    return _MOTION_PATTERN_CACHE[key]
+
+
+def _master_background(
+    sampled: SampledMode,
+    sky_rate: float,
+    exposure: float,
+    calibration_frames: int,
+    threshold_sigma: float,
+    seed: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Build an exposure-matched sky+dark master and a CoG threshold map.
+
+    The standard deviation is measured from individual calibration frames, then
+    combined with the finite-master uncertainty.  Fixed dark/bias structure is
+    retained by the detector model and is therefore calibratable by this stack.
+    """
+    if calibration_frames < 2:
+        raise ValueError("calibration_frames must be at least 2")
+    camera = sampled.camera
+    zero = np.zeros(sampled.native_shape, dtype=np.float64)
+    total = np.zeros(sampled.output_shape, dtype=np.float64)
+    total_squared = np.zeros(sampled.output_shape, dtype=np.float64)
+    frames = camera.expose_series(
+        zero,
+        exposure,
+        calibration_frames,
+        background=sky_rate,
+        quantum_efficiency=1.0,
+        seed=seed,
+        include_truth=False,
+    )
+    for frame in frames:
+        output = bin_after_read(_electrons(frame, camera), sampled.detector_mode.binning)
+        total += output
+        total_squared += output**2
+    master = total / calibration_frames
+    variance = np.maximum(
+        (total_squared - total**2 / calibration_frames) / (calibration_frames - 1), 0.0
+    )
+    # Science-frame noise plus the finite master-background uncertainty.
+    threshold = threshold_sigma * np.sqrt(variance * (1.0 + 1.0 / calibration_frames))
+    return master, threshold
+
+
+def fast_thresholded_centroid(
+    image: np.ndarray,
+    master_background: np.ndarray,
+    threshold: np.ndarray,
+    center: tuple[float, float],
+    radius: float,
+) -> tuple[float, float]:
+    """Fast calibrated thresholded centre-of-gravity estimator.
+
+    This is deliberately a fixed-window O(N-pixel) estimator suitable for an
+    RTC implementation: subtract the finite master background, apply a noise
+    threshold, clip remaining negative weights, then take first moments.
+    """
+    corrected = np.asarray(image, dtype=np.float64) - master_background - threshold
+    weights = np.clip(corrected, 0.0, None)
+    yy, xx = np.mgrid[0 : weights.shape[0], 0 : weights.shape[1]]
+    mask = (xx - center[0]) ** 2 + (yy - center[1]) ** 2 <= radius**2
+    weights *= mask
+    total = float(weights.sum())
+    if total <= 0.0:
+        return center
+    return float((weights * xx).sum() / total), float((weights * yy).sum() / total)
+
+
+def _tracking_window_radius(
+    plate_scale: float, field_arcsec: float, tracking_walk_arcsec: float
+) -> float:
+    """Fixed CoG window large enough for the tested walk and seeing footprint."""
+    required_arcsec = tracking_walk_arcsec * np.sqrt(2.0) + seeing_fwhm_arcsec() / 2.0
+    return min(required_arcsec / plate_scale, field_arcsec / (2.0 * plate_scale))
+
+
+def _curve_from_moments(moments: list[CentroidMoments]) -> CentroidCurve:
+    """Stack per-magnitude centroid moments into a plotting-compatible curve."""
+    return CentroidCurve(
+        radial_rms=np.array([item.radial_rms for item in moments]),
+        radial_rms_se=np.array([item.radial_rms_se for item in moments]),
+        bias_x=np.array([item.bias_x for item in moments]),
+        bias_y=np.array([item.bias_y for item in moments]),
+        variance_x=np.array([item.variance_x for item in moments]),
+        variance_y=np.array([item.variance_y for item in moments]),
+    )
+
+
 def _tts_scene(
     pattern: np.ndarray,
     plate_scale: float,
@@ -513,6 +822,7 @@ def _tts_scene(
 
 def _lbwfs_scene(
     pattern: np.ndarray,
+    plate_scale: float,
     magnitude: float,
     mode: int,
     star_band_response: np.ndarray,
@@ -523,77 +833,121 @@ def _lbwfs_scene(
     star_electron_rate = float(np.dot(incident_star_rates(magnitude), star_band_response))
     photon_rate = pattern * star_electron_rate * (1.0 - TTS_BEAMSPLITTER) / subapertures
     sky_electron_rate = float(np.dot(incident_sky_rates(), sky_band_response))
-    sky_rate = sky_electron_rate * (1.0 - TTS_BEAMSPLITTER) * LBWFS_PLATE_SCALE**2 / subapertures
+    sky_rate = sky_electron_rate * (1.0 - TTS_BEAMSPLITTER) * plate_scale**2 / subapertures
     return photon_rate, sky_rate
 
 
 def _tts_rms_error(
-    camera: gf.Camera,
-    pattern: np.ndarray,
-    plate_scale: float,
+    sampled: SampledMode,
+    native_pattern: np.ndarray,
+    output_pattern: np.ndarray,
     magnitude: float,
     exposure: float,
     star_band_response: np.ndarray,
     sky_band_response: np.ndarray,
     trials: int,
     seed: int,
-) -> tuple[float, float]:
-    """Radial RMS TTS centroid error and its standard error, in arcsec."""
-    true_center = gf.analysis.centroid(pattern, background=0.0)
-    mask_radius = max(seeing_fwhm_arcsec() / (2.0 * plate_scale), np.sqrt(2.0))
-    photon_rate, sky_rate = _tts_scene(
-        pattern, plate_scale, magnitude, star_band_response, sky_band_response
+    calibration_frames: int,
+    threshold_sigma: float,
+    tracking_walk_arcsec: float,
+    motion_positions: int,
+) -> CentroidMoments:
+    """Centroid MSE for a moving TTS spot using calibrated fast CoG."""
+    camera = sampled.camera
+    reference_center = gf.analysis.centroid(output_pattern, background=0.0)
+    mask_radius = _tracking_window_radius(
+        sampled.output_plate_scale, TTS_FIELD_ARCSEC, tracking_walk_arcsec
     )
-    background_e = _background_electrons(camera, sky_rate, exposure)
-    squared = np.empty(trials)
-    frames = camera.expose_series(
-        photon_rate,
+    _, sky_rate = _tts_scene(
+        native_pattern,
+        sampled.native_plate_scale,
+        magnitude,
+        star_band_response,
+        sky_band_response,
+    )
+    master_background, threshold = _master_background(
+        sampled,
+        sky_rate,
         exposure,
-        trials,
-        background=sky_rate,
-        quantum_efficiency=1.0,
-        seed=seed,
-        include_truth=False,
+        calibration_frames,
+        threshold_sigma,
+        seed + 500_000,
     )
-    for trial, frame in enumerate(frames):
-        cx, cy = gf.analysis.centroid(
-            _electrons(frame, camera),
-            center=true_center,
-            r=mask_radius,
-            background=background_e,
+    offsets = _motion_offsets(motion_positions, tracking_walk_arcsec, MOTION_POSITION_SEED)
+    shifted_patterns = _tts_motion_patterns(sampled, offsets)
+    dx_error = np.empty(trials)
+    dy_error = np.empty(trials)
+    frame_seeds = np.random.SeedSequence([seed, 702]).generate_state(trials, dtype=np.uint64)
+    for trial, frame_seed in enumerate(frame_seeds):
+        position = offsets[trial % motion_positions]
+        photon_rate, _ = _tts_scene(
+            shifted_patterns[trial % motion_positions],
+            sampled.native_plate_scale,
+            magnitude,
+            star_band_response,
+            sky_band_response,
         )
-        squared[trial] = (cx - true_center[0]) ** 2 + (cy - true_center[1]) ** 2
-    return _rms_and_error(squared, plate_scale)
+        frame = camera.expose(
+            photon_rate,
+            exposure,
+            background=sky_rate,
+            quantum_efficiency=1.0,
+            seed=int(frame_seed),
+            include_truth=False,
+        )
+        true_center = (
+            reference_center[0] + position[0] / sampled.output_plate_scale,
+            reference_center[1] + position[1] / sampled.output_plate_scale,
+        )
+        cx, cy = fast_thresholded_centroid(
+            bin_after_read(_electrons(frame, camera), sampled.detector_mode.binning),
+            master_background,
+            threshold,
+            center=reference_center,
+            radius=mask_radius,
+        )
+        dx_error[trial] = cx - true_center[0]
+        dy_error[trial] = cy - true_center[1]
+    return _centroid_moments(dx_error, dy_error, sampled.output_plate_scale)
 
 
 def tts_centroid_error(
-    camera: gf.Camera,
-    pattern: np.ndarray,
+    sampled: SampledMode,
+    native_pattern: np.ndarray,
+    output_pattern: np.ndarray,
     magnitudes: np.ndarray,
-    plate_scale: float,
     ngs_sed: gf.SED,
     trials: int,
     seed: int,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Radial RMS TTS centroid error and standard error (arcsec) on the STRAP schedule."""
-    star_band_response = band_response(camera, ngs_sed)
-    sky_band_response = band_response(camera, SKY_WEIGHTING_SED)
-    errors = np.empty(magnitudes.size)
-    standard_errors = np.empty(magnitudes.size)
+    calibration_frames: int,
+    threshold_sigma: float,
+    tracking_walk_arcsec: float,
+    motion_positions: int,
+) -> CentroidCurve:
+    """TTS CoG bias/variance curve on the STRAP cadence schedule."""
+    star_band_response = band_response(sampled.camera, ngs_sed)
+    sky_band_response = band_response(sampled.camera, SKY_WEIGHTING_SED)
+    moments: list[CentroidMoments] = []
     for index, magnitude in enumerate(magnitudes):
         exposure = 1.0 / float(tts_frame_rate(float(magnitude)))
-        errors[index], standard_errors[index] = _tts_rms_error(
-            camera,
-            pattern,
-            plate_scale,
-            float(magnitude),
-            exposure,
-            star_band_response,
-            sky_band_response,
-            trials,
-            seed + 10_000 * index,
+        moments.append(
+            _tts_rms_error(
+                sampled,
+                native_pattern,
+                output_pattern,
+                float(magnitude),
+                exposure,
+                star_band_response,
+                sky_band_response,
+                trials,
+                seed + 10_000 * index,
+                calibration_frames,
+                threshold_sigma,
+                tracking_walk_arcsec,
+                motion_positions,
+            )
         )
-    return errors, standard_errors
+    return _curve_from_moments(moments)
 
 
 def _fit_noise_variance_model(
@@ -632,13 +986,17 @@ def _fit_noise_variance_model(
 
 
 def optimal_tts_cadence(
-    camera: gf.Camera,
-    pattern: np.ndarray,
+    sampled: SampledMode,
+    native_pattern: np.ndarray,
+    output_pattern: np.ndarray,
     magnitudes: np.ndarray,
-    plate_scale: float,
     ngs_sed: gf.SED,
     trials: int,
     seed: int,
+    calibration_frames: int,
+    threshold_sigma: float,
+    tracking_walk_arcsec: float,
+    motion_positions: int,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Best closed-loop radial residual (arcsec) and its frame rate (Hz) per magnitude.
 
@@ -664,42 +1022,52 @@ def optimal_tts_cadence(
     magnitude and NaN is returned (the loop cannot hold lock).
     """
     grid_rates = np.geomspace(TTS_RATE_MIN_HZ, TTS_RATE_MAX_HZ, 6)
-    star_band_response = band_response(camera, ngs_sed)
-    sky_band_response = band_response(camera, SKY_WEIGHTING_SED)
+    star_band_response = band_response(sampled.camera, ngs_sed)
+    sky_band_response = band_response(sampled.camera, SKY_WEIGHTING_SED)
     noise_gain = np.sqrt(2.0 / SERVO_BANDWIDTH_RATIO)
     lag_coefficient = tilt_disturbance_arcsec_hz() * SERVO_BANDWIDTH_RATIO
     ceiling = np.empty(grid_rates.size)
     for rate_index, rate in enumerate(grid_rates):
         # Zero-star frames (magnitude -> infinity) measure the estimator's noise
         # ceiling at this exposure: sky + dark + read noise centroided in the mask.
-        ceiling[rate_index], _ = _tts_rms_error(
-            camera,
-            pattern,
-            plate_scale,
+        ceiling[rate_index] = _tts_rms_error(
+            sampled,
+            native_pattern,
+            output_pattern,
             np.inf,
             1.0 / float(rate),
             star_band_response,
             sky_band_response,
             trials,
             seed + 99 * rate_index,
-        )
+            calibration_frames,
+            threshold_sigma,
+            tracking_walk_arcsec,
+            motion_positions,
+        ).radial_rms
     best_errors = np.full(magnitudes.size, np.nan)
     best_rates = np.full(magnitudes.size, np.nan)
     for index, magnitude in enumerate(magnitudes):
         measured = np.empty(grid_rates.size)
         measured_se = np.empty(grid_rates.size)
         for rate_index, rate in enumerate(grid_rates):
-            measured[rate_index], measured_se[rate_index] = _tts_rms_error(
-                camera,
-                pattern,
-                plate_scale,
+            moments = _tts_rms_error(
+                sampled,
+                native_pattern,
+                output_pattern,
                 float(magnitude),
                 1.0 / float(rate),
                 star_band_response,
                 sky_band_response,
                 trials,
                 seed + 10_000 * index + 101 * rate_index,
+                calibration_frames,
+                threshold_sigma,
+                tracking_walk_arcsec,
+                motion_positions,
             )
+            measured[rate_index] = moments.radial_rms
+            measured_se[rate_index] = moments.radial_rms_se
         variances = np.maximum(measured**2, 1e-20)
         log_rate_span = np.log(grid_rates[1:] / grid_rates[0])
         slopes_from_first = (np.log(variances[1:]) - np.log(variances[0])) / log_rate_span
@@ -737,67 +1105,106 @@ def optimal_tts_cadence(
 
 
 def lbwfs_centroid_error(
-    camera: gf.Camera,
-    pattern: np.ndarray,
+    sampled: SampledMode,
+    native_pattern: np.ndarray,
+    output_pattern: np.ndarray,
     magnitudes: np.ndarray,
     mode: int,
     ngs_sed: gf.SED,
     trials: int,
     seed: int,
-) -> tuple[np.ndarray, np.ndarray]:
-    """Radial RMS LBWFS matched-filter centroid error and standard error, in arcsec."""
-    # The matched-filter template defines the calibrated zero point.  This also
-    # removes the sub-oversample-pixel phase introduced by discrete convolution.
-    true_center = gf.analysis.centroid(pattern, background=0.0)
+    calibration_frames: int,
+    threshold_sigma: float,
+    tracking_walk_arcsec: float,
+    motion_positions: int,
+) -> CentroidCurve:
+    """LBWFS calibrated fast-CoG bias/variance curve for a moving sub-aperture spot."""
+    camera = sampled.camera
+    reference_center = gf.analysis.centroid(output_pattern, background=0.0)
+    mask_radius = _tracking_window_radius(
+        sampled.output_plate_scale, LBWFS_FIELD_ARCSEC, tracking_walk_arcsec
+    )
     star_band_response = band_response(camera, ngs_sed)
     sky_band_response = band_response(camera, SKY_WEIGHTING_SED)
-    errors = np.empty(magnitudes.size)
-    standard_errors = np.empty(magnitudes.size)
+    moments: list[CentroidMoments] = []
     for index, magnitude in enumerate(magnitudes):
         schedule_mag = float(magnitude) if mode == 20 else float(magnitude) - 1.5
         exposure = float(lbwfs_integration(schedule_mag))
-        photon_rate, sky_rate = _lbwfs_scene(
-            pattern, float(magnitude), mode, star_band_response, sky_band_response
+        _, sky_rate = _lbwfs_scene(
+            native_pattern,
+            sampled.native_plate_scale,
+            float(magnitude),
+            mode,
+            star_band_response,
+            sky_band_response,
         )
-        background_e = _background_electrons(camera, sky_rate, exposure)
-        squared = np.empty(trials)
-        frame_seed = seed + 10_000 * index
-        frames = camera.expose_series(
-            photon_rate,
+        master_background, threshold = _master_background(
+            sampled,
+            sky_rate,
             exposure,
-            trials,
-            background=sky_rate,
-            quantum_efficiency=1.0,
-            seed=frame_seed,
-            include_truth=False,
+            calibration_frames,
+            threshold_sigma,
+            seed + 500_000 + 10_000 * index,
         )
-        for trial, frame in enumerate(frames):
-            cx, cy = gf.analysis.matched_filter_centroid(
-                _electrons(frame, camera), pattern, background=background_e
+        offsets = _motion_offsets(motion_positions, tracking_walk_arcsec, MOTION_POSITION_SEED)
+        shifted_patterns = _lbwfs_motion_patterns(sampled, offsets, mode)
+        dx_error = np.empty(trials)
+        dy_error = np.empty(trials)
+        frame_seeds = np.random.SeedSequence([seed + 10_000 * index, 703]).generate_state(
+            trials, dtype=np.uint64
+        )
+        for trial, frame_seed in enumerate(frame_seeds):
+            position = offsets[trial % motion_positions]
+            photon_rate, _ = _lbwfs_scene(
+                shifted_patterns[trial % motion_positions],
+                sampled.native_plate_scale,
+                float(magnitude),
+                mode,
+                star_band_response,
+                sky_band_response,
             )
-            squared[trial] = (cx - true_center[0]) ** 2 + (cy - true_center[1]) ** 2
-        errors[index], standard_errors[index] = _rms_and_error(squared, LBWFS_PLATE_SCALE)
-    return errors, standard_errors
+            frame = camera.expose(
+                photon_rate,
+                exposure,
+                background=sky_rate,
+                quantum_efficiency=1.0,
+                seed=int(frame_seed),
+                include_truth=False,
+            )
+            true_center = (
+                reference_center[0] + position[0] / sampled.output_plate_scale,
+                reference_center[1] + position[1] / sampled.output_plate_scale,
+            )
+            cx, cy = fast_thresholded_centroid(
+                bin_after_read(_electrons(frame, camera), sampled.detector_mode.binning),
+                master_background,
+                threshold,
+                center=reference_center,
+                radius=mask_radius,
+            )
+            dx_error[trial] = cx - true_center[0]
+            dy_error[trial] = cy - true_center[1]
+        moments.append(_centroid_moments(dx_error, dy_error, sampled.output_plate_scale))
+    return _curve_from_moments(moments)
 
 
 def _example_frame_tts(
-    camera: gf.Camera,
-    pattern: np.ndarray,
-    plate_scale: float,
+    sampled: SampledMode,
+    native_pattern: np.ndarray,
     magnitude: float,
     ngs_sed: gf.SED,
     seed: int,
 ) -> tuple[np.ndarray, float]:
     """One bias-subtracted TTS frame in electrons at the STRAP-schedule exposure."""
     photon_rate, sky_rate = _tts_scene(
-        pattern,
-        plate_scale,
+        native_pattern,
+        sampled.native_plate_scale,
         magnitude,
-        band_response(camera, ngs_sed),
-        band_response(camera, SKY_WEIGHTING_SED),
+        band_response(sampled.camera, ngs_sed),
+        band_response(sampled.camera, SKY_WEIGHTING_SED),
     )
     exposure = 1.0 / float(tts_frame_rate(magnitude))
-    frame = camera.expose(
+    frame = sampled.camera.expose(
         photon_rate,
         exposure,
         background=sky_rate,
@@ -805,12 +1212,14 @@ def _example_frame_tts(
         seed=seed,
         include_truth=False,
     )
-    return _electrons(frame, camera), exposure
+    return bin_after_read(
+        _electrons(frame, sampled.camera), sampled.detector_mode.binning
+    ), exposure
 
 
 def _example_frame_lbwfs(
-    camera: gf.Camera,
-    pattern: np.ndarray,
+    sampled: SampledMode,
+    native_pattern: np.ndarray,
     magnitude: float,
     mode: int,
     ngs_sed: gf.SED,
@@ -818,14 +1227,15 @@ def _example_frame_lbwfs(
 ) -> tuple[np.ndarray, float]:
     """One bias-subtracted LBWFS sub-aperture frame in electrons at the scheduled exposure."""
     photon_rate, sky_rate = _lbwfs_scene(
-        pattern,
+        native_pattern,
+        sampled.native_plate_scale,
         magnitude,
         mode,
-        band_response(camera, ngs_sed),
-        band_response(camera, SKY_WEIGHTING_SED),
+        band_response(sampled.camera, ngs_sed),
+        band_response(sampled.camera, SKY_WEIGHTING_SED),
     )
     exposure = float(lbwfs_integration(magnitude))
-    frame = camera.expose(
+    frame = sampled.camera.expose(
         photon_rate,
         exposure,
         background=sky_rate,
@@ -833,21 +1243,209 @@ def _example_frame_lbwfs(
         seed=seed,
         include_truth=False,
     )
-    return _electrons(frame, camera), exposure
+    return bin_after_read(
+        _electrons(frame, sampled.camera), sampled.detector_mode.binning
+    ), exposure
+
+
+def select_mode_per_detector(
+    samples: tuple[SampledMode, ...],
+    results: dict[str, tuple[np.ndarray, np.ndarray]],
+    magnitudes: np.ndarray,
+    reference_magnitude: float,
+) -> dict[str, SampledMode]:
+    """Return the lowest-error characterized mode for each detector at one magnitude."""
+    index = int(np.argmin(np.abs(magnitudes - reference_magnitude)))
+    selected: dict[str, SampledMode] = {}
+    for sample in samples:
+        label = sample.detector_mode.candidate.label
+        if (
+            label not in selected
+            or results[sample.label][0][index] < results[selected[label].label][0][index]
+        ):
+            selected[label] = sample
+    return selected
 
 
 def _rank_candidates(
     results: dict[str, tuple[np.ndarray, np.ndarray]],
     magnitudes: np.ndarray,
     reference_magnitude: float,
-    candidates: tuple[OperatingPoint, ...],
+    candidates: tuple[DetectorCandidate, ...],
 ) -> tuple[str, str, int]:
-    """Best and worst candidate labels (presets only) at the reference magnitude."""
+    """Compatibility ranking helper for the retained original gallery code."""
     index = int(np.argmin(np.abs(magnitudes - reference_magnitude)))
-    candidate_errors = {point.label: results[point.label][0][index] for point in candidates}
-    best = min(candidate_errors, key=candidate_errors.__getitem__)
-    worst = max(candidate_errors, key=candidate_errors.__getitem__)
-    return best, worst, index
+    errors = {candidate.label: results[candidate.label][0][index] for candidate in candidates}
+    return min(errors, key=errors.__getitem__), max(errors, key=errors.__getitem__), index
+
+
+def reference_sample(
+    label: str,
+    camera: gf.Camera,
+    field_arcsec: float,
+    plate_scale: float,
+    shape: tuple[int, int] | None = None,
+) -> SampledMode:
+    """Wrap an incumbent or ideal camera in the same sampling interface."""
+    output_shape = shape or shape_for_field(field_arcsec, plate_scale)
+    candidate = DetectorCandidate("reference", label)
+    mode = DetectorMode(
+        candidate=candidate,
+        name="native",
+        binning=1,
+        read_noise_e=camera.config.read_noise_e,
+        dark_current_e_per_s=camera.config.dark_current_e_per_s,
+        temperature_c=camera.default_temperature_c,
+        read_noise_model="native",
+        full_frame_max_hz=None,
+    )
+    configured = gf.Camera(
+        camera.config.replace(resolution=output_shape),
+        default_temperature_c=camera.default_temperature_c,
+    )
+    return SampledMode(mode, configured, plate_scale, plate_scale, output_shape, output_shape)
+
+
+def _frame_extent(shape: tuple[int, int], plate_scale: float) -> tuple[float, float, float, float]:
+    """Angular plotting extent for an image with detector-pixel sampling."""
+    height, width = shape
+    return (
+        -width * plate_scale / 2.0,
+        width * plate_scale / 2.0,
+        -height * plate_scale / 2.0,
+        height * plate_scale / 2.0,
+    )
+
+
+def _best_and_worst_detector(
+    selected: dict[str, SampledMode],
+    results: dict[str, tuple[np.ndarray, np.ndarray]],
+    magnitudes: np.ndarray,
+    reference_magnitude: float,
+) -> tuple[str, str, int]:
+    """Rank the selected camera modes, excluding ideal and incumbent references."""
+    index = int(np.argmin(np.abs(magnitudes - reference_magnitude)))
+    errors = {label: results[label][0][index] for label in selected}
+    return min(errors, key=errors.__getitem__), max(errors, key=errors.__getitem__), index
+
+
+def render_mode_frame_gallery(
+    plt: Any,
+    seed: int,
+    ngs_sed: gf.SED,
+    tts_selected: dict[str, SampledMode],
+    lbwfs_selected: dict[str, SampledMode],
+    tts_display: dict[str, SampledMode],
+    lbwfs_display: dict[str, SampledMode],
+    tts_results: dict[str, tuple[np.ndarray, np.ndarray]],
+    lbwfs_results: dict[str, tuple[np.ndarray, np.ndarray]],
+    tts_pattern_map: dict[str, tuple[np.ndarray, np.ndarray]],
+    lbwfs_pattern_map: dict[str, tuple[np.ndarray, np.ndarray]],
+    magnitudes: np.ndarray,
+) -> Any:
+    """Render physical PSFs and raw frames for winner, loser, and incumbent.
+
+    The first column deliberately uses a finely sampled noiseless presentation
+    PSF rather than a particular detector's pixel grid.  Each remaining panel
+    uses the selected detector mode's real output sampling and shows its
+    reference-magnitude centroid RMS in the title.
+    """
+    fig, axes = plt.subplots(2, 4, figsize=(19, 9.5))
+
+    def show_pattern(ax: Any, pattern: np.ndarray, scale: float, title: str) -> None:
+        image = ax.imshow(
+            np.log10(np.maximum(pattern / pattern.max(), 1e-6)),
+            origin="lower",
+            extent=_frame_extent(pattern.shape, scale),
+            vmin=-5,
+            vmax=0,
+        )
+        fig.colorbar(image, ax=ax, label="log10 relative intensity")
+        ax.set(xlabel="arcsec", ylabel="arcsec")
+        ax.set_title(title, fontsize=11, pad=10)
+        ax.grid(False)
+
+    def show_frame(ax: Any, frame: np.ndarray, scale: float, title: str) -> None:
+        image = ax.imshow(frame, origin="lower", extent=_frame_extent(frame.shape, scale))
+        fig.colorbar(image, ax=ax, label="signal (e-)")
+        ax.set(xlabel="arcsec", ylabel="arcsec")
+        ax.set_title(title, fontsize=10, pad=10)
+        ax.grid(False)
+
+    def frame_title(
+        tag: str, sample: SampledMode, magnitude: float, exposure: float, error_mas: float
+    ) -> str:
+        mode = sample.detector_mode
+        return (
+            f"{tag}: {mode.candidate.label}\n"
+            f"{mode.name}\n"
+            f'I={magnitude:.0f}, {exposure:.3g} s, {sample.output_plate_scale:.3f}"/px\n'
+            f"{error_mas:.1f} mas RMS"
+        )
+
+    tts_magnitude = 18.0
+    tts_best, tts_worst, tts_index = _best_and_worst_detector(
+        tts_selected, tts_results, magnitudes, tts_magnitude
+    )
+    # A visual-only 0.05 arcsec grid over the same 4.8 arcsec field.
+    tts_presentation_scale = 0.05
+    tts_presentation = ao_psf(
+        shape_for_field(TTS_FIELD_ARCSEC, tts_presentation_scale), tts_presentation_scale
+    )
+    show_pattern(axes[0, 0], tts_presentation, tts_presentation_scale, "Underlying TTS AO PSF")
+    for column, (tag, label) in enumerate(
+        (("Best camera", tts_best), ("Worst camera", tts_worst), ("Incumbent", "STRAP")),
+        start=1,
+    ):
+        sample = tts_display[label]
+        native, _ = tts_pattern_map[sample.label]
+        frame, exposure = _example_frame_tts(
+            sample, native, tts_magnitude, ngs_sed, seed + 90_000_000 + column
+        )
+        error_mas = 1000.0 * tts_results[label][0][tts_index]
+        show_frame(
+            axes[0, column],
+            frame,
+            sample.output_plate_scale,
+            frame_title(tag, sample, tts_magnitude, exposure, error_mas),
+        )
+
+    lbwfs_magnitude = 17.0
+    lbwfs_best, lbwfs_worst, lbwfs_index = _best_and_worst_detector(
+        lbwfs_selected, lbwfs_results, magnitudes, lbwfs_magnitude
+    )
+    # Use the same common 4.672 arcsec LBWFS field for the visual-only PSF.
+    lbwfs_presentation_scale = LBWFS_FIELD_ARCSEC / 96.0
+    lbwfs_presentation = lbwfs_psf(
+        20,
+        shape_for_field(LBWFS_FIELD_ARCSEC, lbwfs_presentation_scale),
+        lbwfs_presentation_scale,
+    )
+    show_pattern(
+        axes[1, 0],
+        lbwfs_presentation,
+        lbwfs_presentation_scale,
+        "Underlying LBWFS 20x20 spot PSF",
+    )
+    for column, (tag, label) in enumerate(
+        (("Best camera", lbwfs_best), ("Worst camera", lbwfs_worst), ("Incumbent", "Little Joe")),
+        start=1,
+    ):
+        sample = lbwfs_display[label]
+        native, _ = lbwfs_pattern_map[sample.label]
+        frame, exposure = _example_frame_lbwfs(
+            sample, native, lbwfs_magnitude, 20, ngs_sed, seed + 91_000_000 + column
+        )
+        error_mas = 1000.0 * lbwfs_results[label][0][lbwfs_index]
+        show_frame(
+            axes[1, column],
+            frame,
+            sample.output_plate_scale,
+            frame_title(tag, sample, lbwfs_magnitude, exposure, error_mas),
+        )
+
+    fig.tight_layout()
+    return fig
 
 
 def render_frame_gallery(
@@ -981,6 +1579,26 @@ def _print_reference_table(
         )
 
 
+def _print_centroid_budget(
+    title: str,
+    reference_magnitude: float,
+    magnitudes: np.ndarray,
+    results: dict[str, CentroidCurve],
+) -> None:
+    """Print radial bias and random standard deviation at one operating point."""
+    index = int(np.argmin(np.abs(magnitudes - reference_magnitude)))
+    print(f"\n{title} at I={magnitudes[index]:.1f}")
+    print("  camera              radial bias     random sigma     radial RMS")
+    for label, curve in results.items():
+        bias = np.hypot(curve.bias_x[index], curve.bias_y[index])
+        random_sigma = np.sqrt(curve.variance_x[index] + curve.variance_y[index])
+        print(
+            f"  {label:<18} {1000.0 * bias:7.2f} mas "
+            f"{1000.0 * random_sigma:9.2f} mas "
+            f"{1000.0 * curve.radial_rms[index]:9.2f} mas"
+        )
+
+
 def main() -> None:
     parser = build_parser(__doc__)
     parser.add_argument(
@@ -1088,6 +1706,10 @@ def main() -> None:
             ngs_sed,
             args.trials,
             args.seed + 1_000_000 * camera_index,
+            args.calibration_frames,
+            args.centroid_threshold_sigma,
+            args.tts_walk_arcsec,
+            args.motion_positions,
         )
 
     optimal_magnitudes = magnitudes[::2]
@@ -1302,5 +1924,375 @@ def main() -> None:
     finish(plt, fig, args)
 
 
+def _mode_trade_main() -> None:
+    """Run the sampling- and mode-faithful detector trade.
+
+    ``main`` above is retained temporarily as the original plotting reference.
+    This entry point is deliberately mode-first: every plotted candidate is the
+    best *characterized* acquisition mode of one camera at the stated reference
+    magnitude, while the all-mode Monte Carlo results remain available for audit.
+    """
+    parser = build_parser(__doc__)
+    parser.add_argument("--trials", type=int, default=400)
+    parser.add_argument("--ngs-teff", type=float, default=DEFAULT_NGS_TEFF_K)
+    parser.add_argument(
+        "--calibration-frames",
+        type=int,
+        default=MASTER_BACKGROUND_FRAMES,
+        help="Matched sky+dark frames averaged into each master background (default: 64).",
+    )
+    parser.add_argument(
+        "--centroid-threshold-sigma",
+        type=float,
+        default=CENTROID_THRESHOLD_SIGMA,
+        help="Thresholded-CoG cut in calibrated single-frame noise sigmas (default: 1.5).",
+    )
+    parser.add_argument(
+        "--tts-walk-arcsec",
+        type=float,
+        default=TTS_TRACKING_WALK_ARCSEC,
+        help="Half-width of the TTS tracking-position test square (default: 0.75 arcsec).",
+    )
+    parser.add_argument(
+        "--lbwfs-walk-arcsec",
+        type=float,
+        default=LBWFS_TRACKING_WALK_ARCSEC,
+        help="Half-width of the LBWFS spot-position test square (default: 0.75 arcsec).",
+    )
+    parser.add_argument(
+        "--motion-positions",
+        type=int,
+        default=MOTION_POSITIONS,
+        help="Stratified physical spot positions sampled across each tracking walk (default: 25).",
+    )
+    args = parser.parse_args()
+    if args.trials < 2:
+        parser.error("--trials must be at least 2")
+    if args.ngs_teff <= 0:
+        parser.error("--ngs-teff must be positive")
+    if args.calibration_frames < 2:
+        parser.error("--calibration-frames must be at least 2")
+    if args.centroid_threshold_sigma < 0:
+        parser.error("--centroid-threshold-sigma must be non-negative")
+    if args.tts_walk_arcsec <= 0 or args.lbwfs_walk_arcsec <= 0:
+        parser.error("tracking walks must be positive")
+    if args.motion_positions < 1:
+        parser.error("--motion-positions must be at least 1")
+
+    ngs_sed = ngs_weighting_sed(args.ngs_teff)
+    magnitudes = np.linspace(10.0, 20.0, 21)
+    tts_mode_samples = tuple(
+        sampled_mode(mode, TTS_FIELD_ARCSEC) for mode in detector_modes(TTS_CANDIDATES)
+    )
+    lbwfs_mode_samples = tuple(
+        sampled_mode(mode, LBWFS_FIELD_ARCSEC) for mode in detector_modes(LBWFS_CANDIDATES)
+    )
+    if not tts_mode_samples or not lbwfs_mode_samples:
+        raise RuntimeError("No characterized detector modes are available for the requested trade.")
+
+    def tts_patterns(sample: SampledMode) -> tuple[np.ndarray, np.ndarray]:
+        native = ao_psf(sample.native_shape, sample.native_plate_scale)
+        return native, bin_after_read(native, sample.detector_mode.binning)
+
+    def lbwfs_patterns(sample: SampledMode, geometry_mode: int) -> tuple[np.ndarray, np.ndarray]:
+        native = lbwfs_psf(geometry_mode, sample.native_shape, sample.native_plate_scale)
+        return native, bin_after_read(native, sample.detector_mode.binning)
+
+    print("Keck LGS detector trade: fixed-relay, documented-mode selection")
+    print(f"  seeing FWHM: {seeing_fwhm_arcsec():.3f} arcsec")
+    print(f"  NGS weighting SED: {args.ngs_teff:.0f} K blackbody (sky: flat)")
+    print(
+        f"  relay: f/1.45, {TTS_ARCSEC_PER_MM:.1f} arcsec/mm; "
+        f"TTS field {TTS_FIELD_ARCSEC:.3f} arcsec; LBWFS field {LBWFS_FIELD_ARCSEC:.3f} arcsec"
+    )
+    print(
+        f"  centroid: calibrated {args.centroid_threshold_sigma:.1f} sigma thresholded CoG; "
+        f"{args.calibration_frames} sky+dark frames; {args.motion_positions} positions over "
+        f"+/-{args.tts_walk_arcsec:.2f} arcsec TTS and +/-{args.lbwfs_walk_arcsec:.2f} arcsec LBWFS"
+    )
+    withheld = (*uncharacterized_modes(TTS_CANDIDATES), *uncharacterized_modes(LBWFS_CANDIDATES))
+    if withheld:
+        print("  available but not ranked (published mode-specific noise/latency missing):")
+        for label in dict.fromkeys(withheld):
+            print(f"    {label}")
+
+    print("  TTS characterized sampling (mode: output pitch / scale / ROI):")
+    for sample in tts_mode_samples:
+        output_pitch_um = sample.camera.config.pixel_size_um * sample.detector_mode.binning
+        print(
+            f"    {sample.label:<38} {output_pitch_um:5.2f} um / "
+            f"{sample.output_plate_scale:.3f} arcsec/px / {sample.output_shape}"
+        )
+
+    tts_mode_results: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    tts_pattern_map: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    for camera_index, sample in enumerate(tts_mode_samples):
+        native, output = tts_patterns(sample)
+        tts_pattern_map[sample.label] = (native, output)
+        print(f"  simulating TTS: {sample.label}")
+        tts_mode_results[sample.label] = tts_centroid_error(
+            sample,
+            native,
+            output,
+            magnitudes,
+            ngs_sed,
+            args.trials,
+            args.seed + 1_000_000 * camera_index,
+            args.calibration_frames,
+            args.centroid_threshold_sigma,
+            args.tts_walk_arcsec,
+            args.motion_positions,
+        )
+    tts_selected = select_mode_per_detector(tts_mode_samples, tts_mode_results, magnitudes, 18.0)
+
+    strap_sample = reference_sample("STRAP", strap_camera(), 2.8, STRAP_PLATE_SCALE, STRAP_SHAPE)
+    ideal_tts_sample = reference_sample(
+        "Ideal", ideal_camera((2, 2)), TTS_FIELD_ARCSEC, 11.0 * TTS_ARCSEC_PER_MM / 1000.0
+    )
+    tts_references = (strap_sample, ideal_tts_sample)
+    for offset, sample in enumerate(tts_references, start=100):
+        native, output = tts_patterns(sample)
+        tts_pattern_map[sample.label] = (native, output)
+        tts_mode_results[sample.label] = tts_centroid_error(
+            sample,
+            native,
+            output,
+            magnitudes,
+            ngs_sed,
+            args.trials,
+            args.seed + offset * 1_000_000,
+            args.calibration_frames,
+            args.centroid_threshold_sigma,
+            args.tts_walk_arcsec,
+            args.motion_positions,
+        )
+    tts_display = {"STRAP": strap_sample, **tts_selected, "Ideal": ideal_tts_sample}
+    tts_results = {label: tts_mode_results[sample.label] for label, sample in tts_display.items()}
+
+    optimal_magnitudes = magnitudes[::2]
+    tts_optimal: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    for offset, (label, sample) in enumerate(tts_display.items()):
+        native, output = tts_pattern_map[sample.label]
+        print(f"  optimising TTS cadence: {sample.label}")
+        tts_optimal[label] = optimal_tts_cadence(
+            sample,
+            native,
+            output,
+            optimal_magnitudes,
+            ngs_sed,
+            args.trials,
+            args.seed + 30_000_000 + 1_000_000 * offset,
+            args.calibration_frames,
+            args.centroid_threshold_sigma,
+            args.tts_walk_arcsec,
+            args.motion_positions,
+        )
+
+    lbwfs_mode_results: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    lbwfs_pattern_map: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    for camera_index, sample in enumerate(lbwfs_mode_samples):
+        native, output = lbwfs_patterns(sample, 20)
+        lbwfs_pattern_map[sample.label] = (native, output)
+        print(f"  simulating LBWFS 20x20: {sample.label}")
+        lbwfs_mode_results[sample.label] = lbwfs_centroid_error(
+            sample,
+            native,
+            output,
+            magnitudes,
+            20,
+            ngs_sed,
+            args.trials,
+            args.seed + 10_000_000 + 1_000_000 * camera_index,
+            args.calibration_frames,
+            args.centroid_threshold_sigma,
+            args.lbwfs_walk_arcsec,
+            args.motion_positions,
+        )
+    lbwfs_selected = select_mode_per_detector(
+        lbwfs_mode_samples, lbwfs_mode_results, magnitudes, 17.0
+    )
+
+    little_joe_sample = reference_sample(
+        "Little Joe", little_joe_camera(), LBWFS_FIELD_ARCSEC, 24.0 * TTS_ARCSEC_PER_MM / 1000.0
+    )
+    ideal_lbwfs_sample = reference_sample(
+        "Ideal", ideal_camera((2, 2)), LBWFS_FIELD_ARCSEC, 11.0 * TTS_ARCSEC_PER_MM / 1000.0
+    )
+    for offset, sample in enumerate((little_joe_sample, ideal_lbwfs_sample), start=200):
+        native, output = lbwfs_patterns(sample, 20)
+        lbwfs_pattern_map[sample.label] = (native, output)
+        lbwfs_mode_results[sample.label] = lbwfs_centroid_error(
+            sample,
+            native,
+            output,
+            magnitudes,
+            20,
+            ngs_sed,
+            args.trials,
+            args.seed + offset * 1_000_000,
+            args.calibration_frames,
+            args.centroid_threshold_sigma,
+            args.lbwfs_walk_arcsec,
+            args.motion_positions,
+        )
+    lbwfs_display = {"Little Joe": little_joe_sample, **lbwfs_selected, "Ideal": ideal_lbwfs_sample}
+    lbwfs_results = {
+        label: lbwfs_mode_results[sample.label] for label, sample in lbwfs_display.items()
+    }
+
+    lbwfs_5_mode_results: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    lbwfs_5_selected: dict[str, SampledMode] = {}
+    for camera_index, sample in enumerate(lbwfs_mode_samples):
+        native, output = lbwfs_patterns(sample, 5)
+        lbwfs_5_mode_results[sample.label] = lbwfs_centroid_error(
+            sample,
+            native,
+            output,
+            magnitudes,
+            5,
+            ngs_sed,
+            args.trials,
+            args.seed + 20_000_000 + 1_000_000 * camera_index,
+            args.calibration_frames,
+            args.centroid_threshold_sigma,
+            args.lbwfs_walk_arcsec,
+            args.motion_positions,
+        )
+    lbwfs_5_selected = select_mode_per_detector(
+        lbwfs_mode_samples, lbwfs_5_mode_results, magnitudes, 17.0
+    )
+    for offset, sample in enumerate((little_joe_sample, ideal_lbwfs_sample), start=300):
+        native, output = lbwfs_patterns(sample, 5)
+        lbwfs_5_mode_results[sample.label] = lbwfs_centroid_error(
+            sample,
+            native,
+            output,
+            magnitudes,
+            5,
+            ngs_sed,
+            args.trials,
+            args.seed + offset * 1_000_000,
+            args.calibration_frames,
+            args.centroid_threshold_sigma,
+            args.lbwfs_walk_arcsec,
+            args.motion_positions,
+        )
+    lbwfs_5_display = {
+        "Little Joe": little_joe_sample,
+        **lbwfs_5_selected,
+        "Ideal": ideal_lbwfs_sample,
+    }
+    lbwfs_5_results = {
+        label: lbwfs_5_mode_results[sample.label] for label, sample in lbwfs_5_display.items()
+    }
+
+    def print_selection(title: str, selected: dict[str, SampledMode], reference_mag: float) -> None:
+        print(f"\n{title} selected at I={reference_mag:.1f}")
+        for detector, sample in selected.items():
+            mode = sample.detector_mode
+            effective_rn = (
+                mode.read_noise_e * mode.binning
+                if mode.read_noise_model == "digital_post_read"
+                else mode.read_noise_e
+            )
+            print(
+                f"  {detector:<14} {mode.name:<24} {sample.output_plate_scale:.3f} arcsec/px; "
+                f"modelled output read noise {effective_rn:.2f} e- ({mode.read_noise_model})"
+            )
+
+    print_selection("TTS modes", tts_selected, 18.0)
+    print_selection("LBWFS 20x20 modes", lbwfs_selected, 17.0)
+    print_selection("LBWFS 5x5 modes", lbwfs_5_selected, 17.0)
+    _print_reference_table("TTS centroid error", 18.0, magnitudes, tts_results)
+    _print_reference_table("LBWFS 20x20 centroid error", 17.0, magnitudes, lbwfs_results)
+    _print_reference_table("LBWFS 5x5 centroid error", 17.0, magnitudes, lbwfs_5_results)
+    _print_centroid_budget("TTS centroid bias/variance", 18.0, magnitudes, tts_results)
+    _print_centroid_budget("LBWFS 20x20 centroid bias/variance", 17.0, magnitudes, lbwfs_results)
+
+    reference_index = int(np.argmin(np.abs(optimal_magnitudes - 18.0)))
+    print(f"\nOptimised TTS closed-loop residual at I={optimal_magnitudes[reference_index]:.1f}")
+    for label, (residuals, rates) in tts_optimal.items():
+        if np.isnan(residuals[reference_index]):
+            print(f"  {label:<14} past limiting magnitude (loop cannot hold lock)")
+        else:
+            print(
+                f"  {label:<14} {1000.0 * residuals[reference_index]:7.2f} mas RMS "
+                f"at {rates[reference_index]:6.0f} Hz"
+            )
+
+    plt = get_pyplot(args)
+    if plt is None:
+        return
+    fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+    colors = plt.get_cmap("tab10").colors
+
+    def plot_results(
+        ax: Any,
+        results: dict[str, CentroidCurve],
+        title: str,
+        xlim: tuple[float, float],
+    ) -> None:
+        for index, (label, (values, errors)) in enumerate(results.items()):
+            color = colors[index % len(colors)]
+            ax.plot(magnitudes, 1000.0 * values, marker="o", ms=3, color=color, label=label)
+            ax.fill_between(
+                magnitudes,
+                1000.0 * (values - errors),
+                1000.0 * (values + errors),
+                color=color,
+                alpha=0.2,
+                lw=0,
+            )
+        ax.set(
+            title=title,
+            xlabel="I magnitude",
+            ylabel="radial centroid error (mas RMS, +/-1 s.e.)",
+            xlim=xlim,
+            yscale="log",
+        )
+        ax.legend(ncol=2, fontsize=8)
+
+    plot_results(axes[0, 0], tts_results, "TTS: best characterized mode per detector", (10, 20))
+    plot_results(
+        axes[1, 0], lbwfs_results, "LBWFS 20x20: best characterized mode per detector", (10, 18)
+    )
+    plot_results(
+        axes[1, 1], lbwfs_5_results, "LBWFS 5x5: best characterized mode per detector", (10, 20)
+    )
+    for index, (label, (residuals, rates)) in enumerate(tts_optimal.items()):
+        axes[0, 1].plot(
+            optimal_magnitudes, 1000.0 * residuals, marker="o", color=colors[index], label=label
+        )
+        axes[0, 1].plot(optimal_magnitudes, rates / 100.0, ls=":", color=colors[index], alpha=0.6)
+    axes[0, 1].set(
+        title="TTS closed-loop residual (dotted: rate/100)",
+        xlabel="I magnitude",
+        ylabel="mas RMS / rate scale",
+        yscale="log",
+    )
+    axes[0, 1].legend(ncol=2, fontsize=8)
+    fig.tight_layout()
+    gallery = render_mode_frame_gallery(
+        plt,
+        args.seed,
+        ngs_sed,
+        tts_selected,
+        lbwfs_selected,
+        tts_display,
+        lbwfs_display,
+        tts_results,
+        lbwfs_results,
+        tts_pattern_map,
+        lbwfs_pattern_map,
+        magnitudes,
+    )
+    if args.save:
+        root, extension = os.path.splitext(args.save)
+        gallery_path = f"{root}_frames{extension or '.png'}"
+        gallery.savefig(gallery_path)
+        print(f"\nSaved frame gallery to {gallery_path}")
+    finish(plt, fig, args)
+
+
 if __name__ == "__main__":
-    main()
+    _mode_trade_main()

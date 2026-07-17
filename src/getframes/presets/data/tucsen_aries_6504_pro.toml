@@ -39,6 +39,15 @@ temperature_c = -20.0
 read_noise_model = "native"
 full_frame_max_hz = 99.0
 
+[[extra.detector_modes]]
+name = "speed 1x1"
+binning = 1
+read_noise_e = 0.80
+dark_current_e_per_s = 0.01
+temperature_c = -20.0
+read_noise_model = "native"
+full_frame_max_hz = 297.0
+
 # Mosaic documents these as sum binning applied to original pixel data, without
 # a data-rate/frame-rate reduction.  The trade therefore models post-read sums:
 # it reads native pixels at Sensitive-mode noise and then sums them, rather than
