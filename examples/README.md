@@ -31,5 +31,4 @@ pip install -e ".[examples]"
 | [`11_radiometry_and_ir.py`](11_radiometry_and_ir.py) | AB/Vega zero points, interstellar extinction, and the IR thermal background. |
 | [`12_ml_dataset.py`](12_ml_dataset.py) | Stream raw+truth training pairs to disk with `getframes.dataset` (float32). |
 | [`13_crowded_field.py`](13_crowded_field.py) | Render a 20k-star catalog; vectorised vs. per-source, with flux conservation. |
-| [`14_keck_lgs_ttf_trade_study.py`](14_keck_lgs_ttf_trade_study.py) | Compare detector candidates for the Keck LGS tip/tilt sensor and low-bandwidth WFS. |
-| [`14_keck_lgs_ttf_trade_study.ipynb`](14_keck_lgs_ttf_trade_study.ipynb) | The same trade study as a guided, cell-by-cell notebook: PSF → radiometry → one simulated frame → calibration → centroiding → the full TTS/LBWFS trades. |
+| [`14_keck_lgs_ttf_trade_study.ipynb`](14_keck_lgs_ttf_trade_study.ipynb) | Guided, cell-by-cell trade study of detector candidates for the Keck LGS tip/tilt sensor and low-bandwidth WFS: spot model → radiometry → one simulated frame → calibration → centroiding → the full TTS/LBWFS trades. |
