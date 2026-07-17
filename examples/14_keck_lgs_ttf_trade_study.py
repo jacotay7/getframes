@@ -16,8 +16,9 @@ Compared with the exploratory notebook, this version also:
 * folds published wavelength-resolved QE through the notebook's I and Z bands,
   falling back to its measured scalar I/Z QE where no curve is available;
 * uses a matched-filter centroid for LBWFS spots, with sub-pixel peak fitting;
-* makes hardware binning assumptions explicit instead of hiding them in a camera
-  dictionary;
+* uses the f/1.45 relay's 13.7 arcsec/mm plate scale to give each candidate its
+  physical pixel scale and a common TTS field, rather than assigning every
+  camera the same angular pixel scale;
 * weights each camera's wavelength-resolved QE with a configurable NGS blackbody
   SED (``--ngs-teff``, default 3500 K --- an M-dwarf-like tip/tilt star) while
   keeping flat photon weighting for the airglow-dominated sky;
@@ -54,9 +55,10 @@ closed-loop bandwidth ``frame rate / SERVO_BANDWIDTH_RATIO``, a Tyler (1994)
 single-layer atmospheric tilt lag derived from the Fried parameter and one
 effective wind speed, and a placeholder windshake coefficient --- not a measured
 disturbance PSD.  It still does not model centroid gain calibration, spot motion
-within a frame, rolling-shutter timing, camera dead time or ROI frame-rate limits
-(``TTS_RATE_MAX_HZ`` is assumed reachable by every candidate; check vendor ROI
-row-time specifications), or measured filter/atmosphere/relay throughput curves.
+within a frame, rolling-shutter timing, camera dead time or camera-specific ROI
+frame-rate limits (the generic ``TTS_RATE_MAX_HZ`` remains an upper search bound,
+not a claim of availability in the chosen bit-depth/noise mode), or measured
+filter/atmosphere/relay throughput curves.
 Those are instrument inputs and should be added here when they become available.
 """
 
@@ -84,7 +86,12 @@ AO_STREHL = 0.05
 MOFFAT_BETA = 3.0
 TTS_BEAMSPLITTER = 0.90
 LBWFS_PLATE_SCALE = 0.292
-TTS_PLATE_SCALE = 0.15
+# The fastest relay which fits in the available TTS optical volume is f/1.45.
+# Scott's optical layout gives this measured/design plate scale.  The retained
+# 4.8 arcsec TTS field matches the former 32 pixels x 0.15 arcsec reference;
+# the number of pixels now changes with each camera's physical effective pitch.
+TTS_ARCSEC_PER_MM = 13.7
+TTS_FIELD_ARCSEC = 4.8
 STRAP_PLATE_SCALE = 1.4
 TTS_SHAPE = (32, 32)
 STRAP_SHAPE = (2, 2)
@@ -145,18 +152,50 @@ class OperatingPoint:
     label: str
     binning: int
     fallback_qe_iz: float
-    read_noise_e: float
-    dark_current_e_per_s: float
-    temperature_c: float
+    read_noise_e: float | None
+    dark_current_e_per_s: float | None
+    temperature_c: float | None
+    include_tts: bool = True
+    include_lbwfs: bool = True
 
 
 CANDIDATES = (
     OperatingPoint("andor_marana_4_2b_11", "Marana-11", 1, 0.72, 1.565, 0.637, -25.0),
     OperatingPoint("princeton_instruments_kuro_1200b", "KURO 1200B", 1, 0.72, 1.679, 0.883, -25.0),
     OperatingPoint("photometrics_prime_95b", "Prime 95B", 1, 0.73, 1.710, 0.475, -20.0),
-    OperatingPoint("qhy530_pro_ii", "QHY530", 4, 0.40, 4.4, 0.016, -20.0),
+    # QHY documents 1x1, 2x2, and 3x3 modes; the prior 4x4 effective-pixel
+    # point is not a documented hardware mode, so it is retained as a preset
+    # but excluded from the current trade until its real readout is measured.
+    OperatingPoint("qhy530_pro_ii", "QHY530", 4, 0.40, 4.4, 0.016, -20.0, False, False),
     OperatingPoint("tucsen_aries_6504_pro", "Aries 6504P", 2, 0.60, 0.86, 0.040, -20.0),
+    # The 120 x 120 mm symmetric volume around the TTS optical axis excludes
+    # all existing EMCCD camera packages. Keep their presets for other work,
+    # but do not rank them as realizable TTS options in this configuration.
+    OperatingPoint("nuvu_hnu_240", "HNü 240", 1, 0.80, None, None, -45.0, False, False),
+    OperatingPoint("nuvu_hnu_128_omega", "HNü 128Ω", 1, 0.65, None, None, -60.0, False, False),
+    OperatingPoint("andor_ocam2k", "OCAM2K", 1, 0.80, None, None, -45.0, False, False),
+    # Low-bandwidth challenger.  Its published ultra-low-noise operating point
+    # is much slower than a fast TT loop and belongs in this comparison first.
+    OperatingPoint(
+        "hamamatsu_orca_quest_2", "ORCA-Quest 2", 2, 0.50, None, None, -35.0, False, True
+    ),
+    OperatingPoint("andor_cb1_0_5mp", "CB1 0.5 MP", 1, 0.50, None, None, 10.0, True, False),
 )
+
+TTS_CANDIDATES = tuple(point for point in CANDIDATES if point.include_tts)
+LBWFS_CANDIDATES = tuple(point for point in CANDIDATES if point.include_lbwfs)
+
+
+def tts_plate_scale(camera: gf.Camera) -> float:
+    """Angular pixel scale (arcsec/pixel) at the fixed f/1.45 relay."""
+    return camera.config.pixel_size_um * TTS_ARCSEC_PER_MM / 1000.0
+
+
+def tts_shape_for_scale(plate_scale: float) -> tuple[int, int]:
+    """Even-pixel ROI retaining the common 4.8 arcsec TTS field."""
+    pixels = int(np.ceil(TTS_FIELD_ARCSEC / plate_scale))
+    pixels += pixels % 2
+    return (pixels, pixels)
 
 
 def incident_star_rates(magnitude: float) -> np.ndarray:
@@ -335,26 +374,42 @@ def lbwfs_psf(mode: int, oversample: int = OVERSAMPLE) -> np.ndarray:
 
 
 def effective_candidate(point: OperatingPoint, shape: tuple[int, int]) -> gf.Camera:
-    """Apply effective binning and measured readout-mode operating values."""
+    """Apply a specified effective-pixel mode and measured operating values.
+
+    ``binning`` must be traceable to an actual acquisition mode before a point
+    is admitted to the trade.  The profile ``extra`` metadata states whether a
+    vendor implements the mode in charge domain, FPGA, or software; the supplied
+    effective read noise is always the value used here, rather than a generic
+    hardware-binning noise rule.
+    """
     native = gf.load_preset(point.preset)
     n_native = point.binning**2
-    # Summed native pixels retain e-/ADU but need extra output bits.  Full well and
-    # dark scale with pixel count; measured effective dark/read values override the
-    # simple scaling because they are the quantities used in OptTTF_sim_v2.
+    # The current profile model represents an effective superpixel. Full well and
+    # dark scale with the collected native-pixel area; measured effective dark/read
+    # values override the simple scaling. Whether a real camera implements the
+    # sum in charge domain, FPGA, or software is recorded in the preset metadata.
     output_bits = native.bit_depth + int(np.ceil(np.log2(n_native)))
-    config = native.replace(
-        name=f"{native.name} ({point.binning}x{point.binning} effective pixels)",
-        resolution=shape,
-        pixel_size_um=native.pixel_size_um * point.binning,
-        # Scalar fallback for presets without wavelength-resolved QE.
-        quantum_efficiency=point.fallback_qe_iz,
-        full_well_e=native.full_well_e * n_native,
-        bit_depth=output_bits,
-        read_noise_e=point.read_noise_e,
-        dark_current_e_per_s=point.dark_current_e_per_s,
-        dark_current_ref_temp_c=point.temperature_c,
+    temperature_c = (
+        point.temperature_c if point.temperature_c is not None else native.dark_current_ref_temp_c
     )
-    return gf.Camera(config, default_temperature_c=point.temperature_c)
+    overrides: dict[str, Any] = {
+        "name": f"{native.name} ({point.binning}x{point.binning} effective pixels)",
+        "resolution": shape,
+        "pixel_size_um": native.pixel_size_um * point.binning,
+        # Scalar fallback for presets without wavelength-resolved QE.
+        "quantum_efficiency": point.fallback_qe_iz,
+        "full_well_e": native.full_well_e * n_native,
+        "bit_depth": output_bits,
+        "dark_current_ref_temp_c": temperature_c,
+    }
+    if point.read_noise_e is not None:
+        overrides["read_noise_e"] = point.read_noise_e
+    if point.dark_current_e_per_s is not None:
+        overrides["dark_current_e_per_s"] = point.dark_current_e_per_s
+    config = native.replace(
+        **overrides,
+    )
+    return gf.Camera(config, default_temperature_c=temperature_c)
 
 
 def strap_camera() -> gf.Camera:
@@ -406,10 +461,17 @@ def ideal_camera(shape: tuple[int, int]) -> gf.Camera:
 
 
 def _electrons(frame: gf.Frame, camera: gf.Camera) -> np.ndarray:
-    """Bias-subtract and convert a digitised getframes result back to electrons."""
-    return (
+    """Return a bias-subtracted frame in input-referred electrons.
+
+    getframes applies an EM register before output-amplifier noise and ADC.
+    Dividing by its configured gain here keeps centroiding and background models
+    in input electrons, while retaining EM excess noise and input-referred read
+    noise in the simulated data.
+    """
+    output_electrons = (
         np.asarray(frame, dtype=np.float64) - camera.config.bias_offset_adu
     ) * camera.config.gain_e_per_adu
+    return output_electrons / camera.config.em_gain
 
 
 def _background_electrons(
@@ -778,10 +840,11 @@ def _rank_candidates(
     results: dict[str, tuple[np.ndarray, np.ndarray]],
     magnitudes: np.ndarray,
     reference_magnitude: float,
+    candidates: tuple[OperatingPoint, ...],
 ) -> tuple[str, str, int]:
     """Best and worst candidate labels (presets only) at the reference magnitude."""
     index = int(np.argmin(np.abs(magnitudes - reference_magnitude)))
-    candidate_errors = {point.label: results[point.label][0][index] for point in CANDIDATES}
+    candidate_errors = {point.label: results[point.label][0][index] for point in candidates}
     best = min(candidate_errors, key=candidate_errors.__getitem__)
     worst = max(candidate_errors, key=candidate_errors.__getitem__)
     return best, worst, index
@@ -795,7 +858,8 @@ def render_frame_gallery(
     lbwfs_cameras: dict[str, gf.Camera],
     tts_results: dict[str, tuple[np.ndarray, np.ndarray]],
     lbwfs_results: dict[str, tuple[np.ndarray, np.ndarray]],
-    tts_pattern: np.ndarray,
+    tts_patterns: dict[str, np.ndarray],
+    tts_plate_scales: dict[str, float],
     strap_pattern: np.ndarray,
     lbwfs_pattern: np.ndarray,
     magnitudes: np.ndarray,
@@ -831,21 +895,26 @@ def render_frame_gallery(
         ax.grid(False)
 
     tts_reference_mag = 18.0
-    best, worst, reference = _rank_candidates(tts_results, magnitudes, tts_reference_mag)
+    best, worst, reference = _rank_candidates(
+        tts_results, magnitudes, tts_reference_mag, TTS_CANDIDATES
+    )
+    reference_tts_label = TTS_CANDIDATES[0].label
     _show_psf(
         axes[0, 0],
-        tts_pattern,
-        TTS_PLATE_SCALE,
-        f'TTS AO PSF ({TTS_PLATE_SCALE:.2f}"/px)',
+        tts_patterns[reference_tts_label],
+        tts_plate_scales[reference_tts_label],
+        f'TTS AO PSF ({tts_plate_scales[reference_tts_label]:.3f}"/px)',
     )
-    for column, (tag, label, pattern, plate_scale) in enumerate(
+    for column, (tag, label) in enumerate(
         (
-            ("Best candidate", best, tts_pattern, TTS_PLATE_SCALE),
-            ("Worst candidate", worst, tts_pattern, TTS_PLATE_SCALE),
-            ("Incumbent", "STRAP", strap_pattern, STRAP_PLATE_SCALE),
+            ("Best candidate", best),
+            ("Worst candidate", worst),
+            ("Incumbent", "STRAP"),
         ),
         start=1,
     ):
+        pattern = tts_patterns[label]
+        plate_scale = tts_plate_scales[label]
         electrons, exposure = _example_frame_tts(
             tts_cameras[label],
             pattern,
@@ -863,7 +932,9 @@ def render_frame_gallery(
         )
 
     lbwfs_reference_mag = 17.0
-    best, worst, reference = _rank_candidates(lbwfs_results, magnitudes, lbwfs_reference_mag)
+    best, worst, reference = _rank_candidates(
+        lbwfs_results, magnitudes, lbwfs_reference_mag, LBWFS_CANDIDATES
+    )
     _show_psf(
         axes[1, 0],
         lbwfs_pattern,
@@ -935,23 +1006,50 @@ def main() -> None:
     ngs_sed = ngs_weighting_sed(args.ngs_teff)
 
     magnitudes = np.linspace(10.0, 20.0, 21)
-    tts_pattern = ao_psf(TTS_SHAPE, TTS_PLATE_SCALE)
     strap_pattern = ao_psf(STRAP_SHAPE, STRAP_PLATE_SCALE)
     lbwfs_patterns = {20: lbwfs_psf(20), 5: lbwfs_psf(5)}
 
     tts_cameras: dict[str, gf.Camera] = {"STRAP": strap_camera()}
     lbwfs_cameras: dict[str, gf.Camera] = {"Little Joe": little_joe_camera()}
-    for point in CANDIDATES:
+    for point in TTS_CANDIDATES:
         tts_cameras[point.label] = effective_candidate(point, TTS_SHAPE)
+    for point in LBWFS_CANDIDATES:
         lbwfs_cameras[point.label] = effective_candidate(point, LBWFS_SHAPE)
     tts_cameras["Ideal"] = ideal_camera(TTS_SHAPE)
     lbwfs_cameras["Ideal"] = ideal_camera(LBWFS_SHAPE)
+
+    tts_plate_scales = {"STRAP": STRAP_PLATE_SCALE}
+    tts_patterns = {"STRAP": strap_pattern}
+    for label, camera in tts_cameras.items():
+        if label == "STRAP":
+            continue
+        plate_scale = tts_plate_scale(camera)
+        # Candidate cameras were first constructed with a reference shape. Rebuild
+        # their effective mode at the ROI which retains the common angular field.
+        if label != "Ideal":
+            point = next(point for point in TTS_CANDIDATES if point.label == label)
+            camera = effective_candidate(point, tts_shape_for_scale(plate_scale))
+            tts_cameras[label] = camera
+            plate_scale = tts_plate_scale(camera)
+        tts_plate_scales[label] = plate_scale
+        tts_patterns[label] = ao_psf(camera.config.resolution, plate_scale)
 
     print("Keck LGS detector trade using getframes")
     print(f"  seeing FWHM: {seeing_fwhm_arcsec():.3f} arcsec")
     print(f"  AO Strehl: {AO_STREHL:.2f} at {WAVELENGTH_M * 1e6:.1f} um")
     print(f"  Monte Carlo trials per point: {args.trials}")
     print(f"  NGS weighting SED: {args.ngs_teff:.0f} K blackbody (sky: flat)")
+    print(
+        f"  TTS relay: f/1.45, {TTS_ARCSEC_PER_MM:.1f} arcsec/mm; "
+        f"common modeled field {TTS_FIELD_ARCSEC:.1f} arcsec"
+    )
+    print("  TTS physical sampling (effective pitch / pixel scale / ROI):")
+    for point in TTS_CANDIDATES:
+        camera = tts_cameras[point.label]
+        print(
+            f"    {point.label:<14} {camera.config.pixel_size_um:5.2f} um / "
+            f"{tts_plate_scales[point.label]:.3f} arcsec/px / {camera.config.resolution}"
+        )
     star_fractions = band_fractions(ngs_sed)
     print(
         f"  TTS/LBWFS arm bandpass: {TTF_BANDPASS_NM[0]:.0f}--{TTF_BANDPASS_NM[1]:.0f} nm "
@@ -965,6 +1063,9 @@ def main() -> None:
     )
     print("  effective I/Z QE (NGS-weighted / flat-weighted):")
     qe_cameras = {"Little Joe": lbwfs_cameras["Little Joe"], **tts_cameras}
+    qe_cameras.update(
+        {label: camera for label, camera in lbwfs_cameras.items() if label not in qe_cameras}
+    )
     for label, camera in qe_cameras.items():
         star_qe = iz_effective_qe(camera, ngs_sed)
         flat_qe = iz_effective_qe(camera, SKY_WEIGHTING_SED)
@@ -976,8 +1077,8 @@ def main() -> None:
 
     tts_results: dict[str, tuple[np.ndarray, np.ndarray]] = {}
     for camera_index, (label, camera) in enumerate(tts_cameras.items()):
-        pattern = strap_pattern if label == "STRAP" else tts_pattern
-        plate_scale = STRAP_PLATE_SCALE if label == "STRAP" else TTS_PLATE_SCALE
+        pattern = tts_patterns[label]
+        plate_scale = tts_plate_scales[label]
         print(f"  simulating TTS: {label}")
         tts_results[label] = tts_centroid_error(
             camera,
@@ -992,8 +1093,8 @@ def main() -> None:
     optimal_magnitudes = magnitudes[::2]
     tts_optimal: dict[str, tuple[np.ndarray, np.ndarray]] = {}
     for camera_index, (label, camera) in enumerate(tts_cameras.items()):
-        pattern = strap_pattern if label == "STRAP" else tts_pattern
-        plate_scale = STRAP_PLATE_SCALE if label == "STRAP" else TTS_PLATE_SCALE
+        pattern = tts_patterns[label]
+        plate_scale = tts_plate_scales[label]
         print(f"  optimising TTS cadence: {label}")
         tts_optimal[label] = optimal_tts_cadence(
             camera,
@@ -1186,7 +1287,8 @@ def main() -> None:
         lbwfs_cameras,
         tts_results,
         lbwfs_results,
-        tts_pattern,
+        tts_patterns,
+        tts_plate_scales,
         strap_pattern,
         lbwfs_patterns[20],
         magnitudes,

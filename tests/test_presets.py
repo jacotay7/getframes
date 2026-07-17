@@ -41,6 +41,11 @@ def test_preset_info_shape():
     "name",
     [
         "andor_marana_4_2b_11",
+        "andor_cb1_0_5mp",
+        "andor_ocam2k",
+        "hamamatsu_orca_quest_2",
+        "nuvu_hnu_128_omega",
+        "nuvu_hnu_240",
         "photometrics_prime_95b",
         "princeton_instruments_kuro_1200b",
         "qhy530_pro_ii",
@@ -53,5 +58,45 @@ def test_keck_trade_camera_presets_have_physical_provenance(name):
     assert cfg.manufacturer
     assert cfg.model
     assert cfg.notes
-    assert cfg.read_noise_e < 5.0
-    assert cfg.dark_current_e_per_s < 1.0
+    # EMCCD profiles retain output-amplifier noise; input-referred noise is
+    # represented by read_noise_e / em_gain in the high-gain operating mode.
+    assert cfg.read_noise_e / cfg.em_gain < 5.0
+    # CB1 0.5 MP publishes 1.39 e-/pixel/s at its 10 C setpoint; the rest of
+    # the trade set is lower, but the test is a provenance check rather than a
+    # selection threshold.
+    assert cfg.dark_current_e_per_s < 2.0
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "andor_cb1_0_5mp",
+        "andor_ocam2k",
+        "hamamatsu_orca_quest_2",
+        "nuvu_hnu_128_omega",
+        "nuvu_hnu_240",
+    ],
+)
+def test_new_keck_trade_presets_have_full_visible_qe_coverage(name):
+    curve = load_preset(name).qe_curve
+    assert curve is not None
+    assert curve.wavelength_nm[0] <= 600.0
+    assert curve.wavelength_nm[-1] >= 950.0
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "andor_cb1_0_5mp",
+        "andor_marana_4_2b_11",
+        "photometrics_prime_95b",
+        "princeton_instruments_kuro_1200b",
+        "qhy530_pro_ii",
+        "tucsen_aries_6504_pro",
+    ],
+)
+def test_keck_trade_modes_are_captured_as_preset_metadata(name):
+    extra = load_preset(name).extra
+    assert extra["supported_binning"]
+    assert extra["binning_implementation"]
+    assert extra["source_modes_url"]

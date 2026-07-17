@@ -1,0 +1,29 @@
+# Nüvü HNü 128 Omega — high-speed, midband EMCCD TTS mode.
+# Manufacturer specification sheet:
+# https://www.nuvucameras.com/wp-content/uploads/nuvucameras_hnu128v3.4.6.pdf
+name = "Nüvü HNü 128 Omega"
+manufacturer = "Nüvü Camēras"
+model = "HNü 128 Omega (midband EMCCD)"
+sensor_type = "EMCCD"
+resolution = [128, 128]
+pixel_size_um = 24.0
+quantum_efficiency = 0.90
+full_well_e = 800.0
+bit_depth = 14
+gain_e_per_adu = 10.0
+bias_offset_adu = 100.0
+# <0.1 e- input referred at gain 1000 is represented by 100 e- at the output.
+read_noise_e = 100.0
+dark_current_e_per_s = 0.005
+dark_current_ref_temp_c = -60.0
+dark_current_doubling_temp_c = 6.0
+em_gain = 1000.0
+clock_induced_charge_e = 0.01
+notes = "Omega 30 MHz TTS representation: 1460 fps full frame. Published CIC is 0.01 e-/pixel/frame and dark current is 0.005 e-/pixel/s at the specified cooling condition. Analog EM multiplication retains its sqrt(2) excess-noise factor in getframes."
+
+# Midband curve manually digitized from Fig. 2 of the Nüvü HNü 128 sheet.
+# It is a typical detector curve, not an acceptance specification; the UV
+# enhanced option is deliberately not used for this visible I/Z trade.
+[qe_curve]
+wavelength_nm = [250.0, 300.0, 350.0, 400.0, 450.0, 500.0, 550.0, 600.0, 650.0, 700.0, 750.0, 800.0, 850.0, 900.0, 950.0, 1000.0, 1050.0, 1100.0]
+qe = [0.00, 0.10, 0.20, 0.42, 0.68, 0.87, 0.95, 0.94, 0.89, 0.80, 0.68, 0.53, 0.37, 0.23, 0.12, 0.05, 0.01, 0.00]

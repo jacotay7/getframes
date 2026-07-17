@@ -39,6 +39,11 @@ cam = gf.Camera(warmer)
 | `leonardo_saphira` | EAPD | HgCdTe avalanche IR array (AO wavefront sensing) |
 | `zwo_asi2600mm` | CMOS | Sony IMX571 cooled CMOS |
 | `hamamatsu_orca_fusion` | sCMOS | Back-thinned sCMOS with per-pixel read noise |
+| `hamamatsu_orca_quest_2` | sCMOS | qCMOS low-noise camera, digitized full QE curve |
+| `nuvu_hnu_240` | EMCCD | CCD220 deep-depletion EMCCD, high-gain AO mode |
+| `nuvu_hnu_128_omega` | EMCCD | 128 x 128 high-speed midband EMCCD, Omega mode |
+| `andor_ocam2k` | EMCCD | CCD220 AO EMCCD, 2000 fps high-gain mode |
+| `andor_cb1_0_5mp` | sCMOS | IMX426 global-shutter 0.5 MP CB1 |
 | `andor_marana_4_2b_11` | sCMOS | 11 µm Marana, extended-dynamic-range mode |
 | `photometrics_prime_95b` | sCMOS | 11 µm Prime 95B, combined-gain mode |
 | `princeton_instruments_kuro_1200b` | sCMOS | 11 µm KURO 1200B |
@@ -91,3 +96,9 @@ working from a clone, the preset test suite will validate it loads correctly.
 When a manufacturer only publishes a graph, record in `notes` that the curve was
 digitized and whether the ordinate is bare QE or `QE x fill factor`. Keep filters,
 windows, atmosphere, and relay optics as separate throughput curves.
+
+For facts that are useful to a particular instrument trade but do not belong in
+the generic detector-noise model—such as a camera body's mechanical envelope,
+supported binning modes, or the implementation of binning—use an `[extra]` TOML
+table with a source URL. These values are exposed as `CameraConfig.extra`; a
+consumer should treat an absent value as unknown, not as a pass/fail result.

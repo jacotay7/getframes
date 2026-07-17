@@ -22,6 +22,12 @@ nonlinearity = 0.005
 dark_current_nonuniformity = 0.03
 notes = "Published peak-QE/full-frame specification; characterize the selected readout mode for quantitative work."
 
+[extra]
+supported_binning = ["software/off-chip only"]
+binning_implementation = "No on-chip binning documented for this sCMOS family; software summing occurs after read noise."
+readout_modes = ["12-bit", "16-bit", "rolling shutter", "effective global shutter"]
+source_modes_url = "https://www.teledynevisionsolutions.com/learn/learning-center/imaging-fundamentals/new-scientific-cmos-cameras-with-back-illuminated-technology/"
+
 # KURO sCMOS back-illuminated QE (all incident angles), digitized from Teledyne
 # Photometrics/Princeton Instruments' published QE comparison plot (UV peak near
 # 240 nm, ~95% plateau at 550-560 nm, NIR etaloning ripple near 830-850 nm).

@@ -1,0 +1,26 @@
+# Hamamatsu ORCA-Quest 2 C15550-22UP — low-noise qCMOS mode.
+# Manufacturer catalog:
+# https://www.hamamatsu.com/content/dam/hamamatsu-photonics/sites/documents/99_SALES_LIBRARY/sys/SCAS0166E_C15550-22UP.pdf
+name = "Hamamatsu ORCA-Quest 2"
+manufacturer = "Hamamatsu Photonics"
+model = "C15550-22UP"
+sensor_type = "SCMOS"
+resolution = [4096, 2304]
+pixel_size_um = 4.6
+quantum_efficiency = 0.85
+full_well_e = 7000.0
+bit_depth = 16
+gain_e_per_adu = 0.107
+bias_offset_adu = 200.0
+read_noise_e = 0.43
+dark_current_e_per_s = 0.016
+dark_current_ref_temp_c = -20.0
+dark_current_doubling_temp_c = 6.0
+notes = "Standard-scan mode: 0.43 e- RMS at 120 fps full frame. Maximum-cooling dark current is 0.006 e-/pixel/s at -35 C; the supplied operating point can select that temperature. QE is a typical curve digitized from the catalog figure."
+
+# Typical qCMOS spectral response digitized from the Hamamatsu catalog chart.
+# The anchor values 50% at 300 nm, 85% at 460 nm, and 30% at 900 nm are stated
+# explicitly in the catalog. Values are plot-resolution-limited, not guaranteed.
+[qe_curve]
+wavelength_nm = [250.0, 275.0, 300.0, 325.0, 350.0, 375.0, 400.0, 425.0, 450.0, 475.0, 500.0, 550.0, 600.0, 650.0, 700.0, 750.0, 800.0, 850.0, 900.0, 950.0, 1000.0, 1050.0, 1100.0]
+qe = [0.03, 0.06, 0.50, 0.60, 0.66, 0.72, 0.80, 0.83, 0.85, 0.83, 0.80, 0.70, 0.62, 0.55, 0.50, 0.46, 0.40, 0.33, 0.30, 0.20, 0.09, 0.02, 0.00]

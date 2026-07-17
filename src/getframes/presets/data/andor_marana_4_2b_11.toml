@@ -22,6 +22,13 @@ nonlinearity = 0.003                  # published linearity >99.7%
 dark_current_nonuniformity = 0.03
 notes = "Extended-dynamic-range mode; published sensor QE curve and liquid-cooled dark current."
 
+[extra]
+supported_binning = ["1x1", "2x2", "3x3", "4x4", "8x8", "user-defined"]
+binning_implementation = "FPGA post-readout; it does not reduce sCMOS sensor readout time."
+readout_modes = ["16-bit high dynamic range", "12-bit fast speed"]
+roi_minimum_pixels = [25, 1]
+source_modes_url = "https://andor.oxinst.com/downloads/uploads/Andor_Marana_Specifications.pdf"
+
 # Marana 4.2B-11 sensor QE from Andor's published camera-window selector data
 # (selector key SONA11MARA11). The optical window and instrument throughput are
 # separate spectral terms and are not folded into this curve.

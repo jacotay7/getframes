@@ -1,0 +1,33 @@
+# Nüvü HNü 240 — CCD220 deep-depletion EMCCD, high-gain TTS mode.
+# Manufacturer specification sheet:
+# https://www.nuvucameras.com/wp-content/uploads/nuvucameras_hnu240_v3.4.7.pdf
+name = "Nüvü HNü 240"
+manufacturer = "Nüvü Camēras"
+model = "HNü 240 (CCD220 deep depletion)"
+sensor_type = "EMCCD"
+resolution = [240, 240]
+pixel_size_um = 24.0
+quantum_efficiency = 0.95
+# High-EM-gain model.  The sheet specifies <0.2 e- input-referred noise at
+# EM gain 1000; 200 e- is the corresponding output-amplifier noise used here.
+full_well_e = 500.0
+bit_depth = 14
+gain_e_per_adu = 10.0
+bias_offset_adu = 100.0
+read_noise_e = 200.0
+dark_current_e_per_s = 0.0
+dark_current_ref_temp_c = -45.0
+dark_current_doubling_temp_c = 6.0
+em_gain = 1000.0
+clock_induced_charge_e = 0.003
+notes = "30 MHz / 3015 fps high-EM-gain TTS representation. The published <0.003 e-/pixel/frame value is modeled as CIC because the datasheet does not separate CIC from dark signal. Do not use for long-exposure performance without measured dark/glow data."
+
+# Deep-depletion CCD220/ER1 curve manually digitized from Teledyne e2v's
+# current CCD220 datasheet, "Typical QE at -40 C" graph. The same datasheet
+# tabulates guaranteed minima at 500--900 nm (65, 75, 80, 85, 80, 80, 75, 65,
+# and 50 percent, respectively), which are below this typical curve. Window
+# and instrument throughput are not included.
+# https://www.teledynespaceimaging.com/en-us/Products_/Documents/ccd-datasheets/CCD220-00%20BSI%20Datasheet%20%28v4%29.pdf
+[qe_curve]
+wavelength_nm = [400.0, 425.0, 450.0, 475.0, 500.0, 525.0, 550.0, 575.0, 600.0, 625.0, 650.0, 675.0, 700.0, 725.0, 750.0, 775.0, 800.0, 825.0, 850.0, 875.0, 900.0, 925.0, 950.0, 975.0, 1000.0]
+qe = [0.38, 0.45, 0.55, 0.65, 0.74, 0.80, 0.85, 0.89, 0.91, 0.93, 0.945, 0.952, 0.955, 0.955, 0.95, 0.94, 0.92, 0.88, 0.84, 0.78, 0.70, 0.58, 0.46, 0.33, 0.21]

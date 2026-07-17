@@ -1,0 +1,33 @@
+# Andor / First Light Imaging OCAM2K — CCD220 deep-depletion AO EMCCD.
+# Manufacturer product and specification page:
+# https://andor.oxinst.com/products/ocam-emccd-camera-series/ocam
+name = "Andor OCAM2K"
+manufacturer = "Andor / First Light Imaging"
+model = "OCAM2K (Teledyne e2v CCD220)"
+sensor_type = "EMCCD"
+resolution = [240, 240]
+pixel_size_um = 24.0
+quantum_efficiency = 0.90
+# At multiplication gain about 600, 240 e- output noise corresponds to the
+# specified 0.4 e- mean input-referred noise at 2000 fps.
+full_well_e = 250.0
+bit_depth = 14
+gain_e_per_adu = 10.0
+bias_offset_adu = 100.0
+read_noise_e = 240.0
+dark_current_e_per_s = 0.0
+dark_current_ref_temp_c = -45.0
+dark_current_doubling_temp_c = 6.0
+em_gain = 600.0
+clock_induced_charge_e = 0.01
+notes = "2000 fps / multiplication-gain ~600 TTS representation. The published <0.01 e-/pixel/frame dark signal at -45 C is conservatively treated as per-frame CIC/background because no dark-current-only value is published. Do not extrapolate this profile to long LBWFS exposures."
+
+# CCD220 deep-depletion/ER1 QE curve. OCAM2K identifies CCD220 as its detector;
+# values are digitized from Teledyne e2v's current theoretical -40 C CCD220
+# graph, cross-checked against the guaranteed 500--900 nm table in that sheet.
+# This is a detector curve, not an OCAM2K camera-window measurement; replace it
+# with OCAM2K acceptance data if supplied.
+# https://www.teledynespaceimaging.com/en-us/Products_/Documents/ccd-datasheets/CCD220-00%20BSI%20Datasheet%20%28v4%29.pdf
+[qe_curve]
+wavelength_nm = [400.0, 425.0, 450.0, 475.0, 500.0, 525.0, 550.0, 575.0, 600.0, 625.0, 650.0, 675.0, 700.0, 725.0, 750.0, 775.0, 800.0, 825.0, 850.0, 875.0, 900.0, 925.0, 950.0, 975.0, 1000.0]
+qe = [0.38, 0.45, 0.55, 0.65, 0.74, 0.80, 0.85, 0.89, 0.91, 0.93, 0.945, 0.952, 0.955, 0.955, 0.95, 0.94, 0.92, 0.88, 0.84, 0.78, 0.70, 0.58, 0.46, 0.33, 0.21]
