@@ -11,35 +11,31 @@ full_well_e = 9700.0
 bit_depth = 12
 gain_e_per_adu = 2.4                  # representative full-well/ADC conversion
 bias_offset_adu = 100.0
-read_noise_e = 1.1                    # lowest published operating point
+read_noise_e = 1.17                   # maximum-gain operating point; applies to 1x1 and 2x2 FD modes
 dark_current_e_per_s = 0.001
 dark_current_ref_temp_c = -20.0
 dark_current_doubling_temp_c = 6.0
 prnu = 0.01
 dark_current_nonuniformity = 0.03
-notes = "Global-shutter IMX530; QE is an I-band operating assumption, while geometry/noise/dark/full well are published specifications. The documented true charge-domain binning modes are 2x2 and 3x3; do not treat a 4x4 software sum as the same operating mode."
+notes = "Global-shutter IMX530; QE is an I-band operating assumption, while geometry/noise/dark/full well are published specifications. The documented true charge-domain binning mode is 2x2 FD; maximum-gain read noise is approximately 1.17 e- in both 1x1 and 2x2 modes."
 
 [extra]
-supported_binning = ["1x1", "2x2", "3x3"]
-binning_implementation = "2x2 and 3x3 FD charge-domain binning; 2x2 raises full-frame rate to 61 fps (USB3, 8-bit)."
+supported_binning = ["1x1", "2x2"]
+binning_implementation = "2x2 FD charge-domain binning; 2x2 raises full-frame rate to 61 fps (USB3, 8-bit)."
 source_modes_url = "https://www.qhyccd.com/qhy530pro-ii/"
 
 [[extra.detector_modes]]
 name = "native 1x1"
 binning = 1
+read_noise_e = 1.17
 read_noise_model = "native"
 
-# 2x2 and 3x3 are documented charge-domain modes, but no mode-specific
-# read-noise value is published for this profile; retain them outside ranking.
+# Maximum-gain read noise is approximately the same in native and 2x2 FD modes.
 [[extra.detector_modes]]
 name = "FD charge-domain 2x2"
 binning = 2
-read_noise_model = "uncharacterized"
-
-[[extra.detector_modes]]
-name = "FD charge-domain 3x3"
-binning = 3
-read_noise_model = "uncharacterized"
+read_noise_e = 1.17
+read_noise_model = "native"
 
 # QHY530 absolute-response QE, digitized from QHYCCD's published "QHY530 QE" plot
 # (peak ~88% near 460-470 nm, shoulders near 500-530 nm and 690-720 nm, rolling
