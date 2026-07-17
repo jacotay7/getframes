@@ -20,18 +20,13 @@ dark_current_doubling_temp_c = 6.0
 prnu = 0.005
 nonlinearity = 0.005
 dark_current_nonuniformity = 0.03
-notes = "Published peak-QE/full-frame specification; characterize the selected readout mode for quantitative work."
+supported_binnings = [1, 2, 4]               
+binning_method = "digital"
+notes = "Published peak-QE/full-frame specification; characterize the selected readout mode for quantitative work. No on-chip binning documented for this sCMOS family; any software summing is digital (post-read) and is not characterized here."
 
 [extra]
-supported_binning = ["software/off-chip only"]
-binning_implementation = "No on-chip binning documented for this sCMOS family; software summing occurs after read noise."
 readout_modes = ["12-bit", "16-bit", "rolling shutter", "effective global shutter"]
 source_modes_url = "https://www.teledynevisionsolutions.com/learn/learning-center/imaging-fundamentals/new-scientific-cmos-cameras-with-back-illuminated-technology/"
-
-[[extra.detector_modes]]
-name = "16-bit 1x1"
-binning = 1
-read_noise_model = "native"
 
 # KURO sCMOS back-illuminated QE (all incident angles), digitized from Teledyne
 # Photometrics/Princeton Instruments' published QE comparison plot (UV peak near

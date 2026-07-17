@@ -185,6 +185,81 @@ def test_all_effects_together_are_deterministic():
 
 
 # --- Validation -------------------------------------------------------------
+# --- Pre- vs post-digitization binning --------------------------------------
+def _read_noise_e(camera, binning, mode, n=48):
+    """Empirical read-noise RMS (electrons, gain=1) from zero-light frames."""
+    stds = [
+        float(
+            np.std(
+                np.asarray(
+                    camera.expose(
+                        0.0, 0.0, binning=binning, binning_mode=mode, seed=s, include_truth=False
+                    ).data
+                )
+            )
+        )
+        for s in range(n)
+    ]
+    return float(np.mean(stds))
+
+
+@pytest.fixture
+def read_noise_camera():
+    # Pure read noise: gain 1 so ADU std equals electron read noise.
+    return Camera(
+        load_preset("generic_ccd").replace(
+            resolution=(64, 64),
+            read_noise_e=5.0,
+            dark_current_e_per_s=0.0,
+            gain_e_per_adu=1.0,
+            read_noise_nonuniformity=0.0,
+        )
+    )
+
+
+def test_digital_binning_scales_read_noise_by_root_n(read_noise_camera):
+    native = _read_noise_e(read_noise_camera, 1, "digital")
+    binned = _read_noise_e(read_noise_camera, 2, "digital")
+    # Post-read summation adds four independent read noises in quadrature -> 2x.
+    assert binned / native == pytest.approx(2.0, rel=0.1)
+
+
+def test_on_chip_binning_keeps_single_read_noise(read_noise_camera):
+    native = _read_noise_e(read_noise_camera, 1, "digital")
+    binned = _read_noise_e(read_noise_camera, 2, "on_chip")
+    # Charge combined before the one amplifier read -> read noise unchanged.
+    assert binned / native == pytest.approx(1.0, rel=0.1)
+
+
+def test_binning_shape_and_signal_sum():
+    cam = Camera(
+        load_preset("generic_ccd").replace(
+            resolution=(32, 32),
+            read_noise_e=0.0,
+            dark_current_e_per_s=0.0,
+            bias_offset_adu=0.0,
+            quantum_efficiency=1.0,
+            gain_e_per_adu=1.0,
+        )
+    )
+    for mode in ("digital", "on_chip"):
+        frame = cam.expose(100.0, 1.0, binning=2, binning_mode=mode, seed=1)
+        assert frame.shape == (16, 16)
+        # Both modes sum the signal identically (4 pixels of ~100 e- -> ~400).
+        assert frame.data.mean() == pytest.approx(400.0, rel=0.05)
+        assert frame.truth.mean_electrons.shape == (16, 16)
+
+
+def test_binning_rejects_bad_args():
+    cam = Camera(load_preset("generic_ccd").replace(resolution=(15, 15)))
+    with pytest.raises(ValueError):
+        cam.expose(0.0, 0.0, binning=2)  # 15 not divisible by 2
+    with pytest.raises(ValueError):
+        cam.expose(0.0, 0.0, binning=0)
+    with pytest.raises(ValueError):
+        cam.expose(0.0, 0.0, binning=2, binning_mode="bogus")
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [

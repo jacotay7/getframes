@@ -23,6 +23,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   cross-correlation centroid with sub-pixel peak refinement.
 - `Frame.binned(factor, method=...)`, post-read digital binning of a frame into
   `factor x factor` super-pixels (sum or mean).
+- `CameraConfig.supported_binnings` and `CameraConfig.binning_method` — binning is
+  now a first-class config parameter. The Keck-trade presets set these directly and
+  drop the `extra.detector_modes` per-binning tables; cameras with more than one
+  read-noise operating point keep a slim `extra.read_modes` list instead.
+- Native pixel binning in the signal chain: `Camera.expose`, `Camera.expose_series`,
+  and `noise.simulate_frame` accept `binning` and `binning_mode`. `"digital"`
+  (post-read, the default) reads each native pixel with its own read noise then sums,
+  so binned read noise grows as `binning`; `"on_chip"` (pre-read charge-domain /
+  hardware binning) sums the charge before the amplifier, so a single read noise is
+  applied per super-pixel. Exposed `noise.block_sum` for the super-pixel summation.
 - `getframes.analysis.centroid` now accepts a per-pixel array `background` (e.g. a
   master sky+dark frame) and an optional `threshold` (scalar or per-pixel noise
   map), making it a calibrated thresholded centre-of-gravity estimator suitable

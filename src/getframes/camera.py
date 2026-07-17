@@ -202,6 +202,8 @@ class Camera:
         background: PhotonRate = 0.0,
         quantum_efficiency: float | None = None,
         extra_electrons: PhotonRate = 0.0,
+        binning: int = 1,
+        binning_mode: str = "digital",
         seed: int | None = None,
         include_truth: bool = True,
     ) -> Frame:
@@ -230,6 +232,16 @@ class Camera:
             Additive noise-free signal in electrons (scalar or array) injected
             before shot noise. Used by :meth:`observe_series` to carry latent charge
             from image persistence; most callers leave it ``0.0``.
+        binning:
+            Combine ``binning x binning`` native pixels into each output pixel
+            (``1`` = no binning). :attr:`resolution` is the native grid and must be
+            divisible by ``binning``; the returned frame is ``resolution // binning``.
+        binning_mode:
+            ``"digital"`` (post-read software binning, the default) reads each native
+            pixel with its own read noise then sums the digitised values, so binned
+            read noise grows as ``binning``. ``"on_chip"`` (pre-read charge-domain /
+            hardware binning) sums the charge before the amplifier, so one read noise
+            is applied per super-pixel. See :func:`getframes.noise.simulate_frame`.
         seed:
             If given, use a fresh generator seeded with this value for a fully
             reproducible frame.
@@ -247,6 +259,8 @@ class Camera:
             background_photon_rate=background,
             quantum_efficiency=quantum_efficiency,
             extra_electrons=extra_electrons,
+            binning=binning,
+            binning_mode=binning_mode,
             rng=rng,
             float_dtype=self._float_dtype,
         )
@@ -254,7 +268,7 @@ class Camera:
             FrameTruth(
                 mean_electrons=result.mean_photoelectrons
                 + result.mean_dark_electrons
-                + np.asarray(extra_electrons, dtype=self._float_dtype),
+                + self._binned_extra(extra_electrons, binning),
                 mean_photoelectrons=result.mean_photoelectrons,
                 photon_rate=result.photon_rate,
             )
@@ -262,7 +276,19 @@ class Camera:
             else None
         )
         metadata = self._metadata("light", exposure, temp, seed)
+        if binning > 1:
+            metadata["binning"] = binning
+            metadata["binning_mode"] = binning_mode
         return Frame(data=result.adu, metadata=metadata, truth=truth)
+
+    def _binned_extra(self, extra_electrons: PhotonRate, binning: int) -> NDArray[Any]:
+        """The ``extra_electrons`` truth term summed to match a binned frame's grid."""
+        extra = np.asarray(extra_electrons, dtype=self._float_dtype)
+        if binning == 1:
+            return extra
+        if extra.ndim == 0:
+            return extra * float(binning * binning)
+        return noise.block_sum(extra, binning)
 
     def flat_frame(
         self,
@@ -378,6 +404,8 @@ class Camera:
         *,
         background: PhotonRate = 0.0,
         quantum_efficiency: float | None = None,
+        binning: int = 1,
+        binning_mode: str = "digital",
         seed: int | None = None,
         include_truth: bool = True,
     ) -> Iterator[Frame]:
@@ -388,6 +416,8 @@ class Camera:
         frames are independent but the whole series repeats. ``quantum_efficiency``
         has the same meaning as in :meth:`expose`; pass ``1.0`` when
         ``photon_rate`` and ``background`` are already expressed as electron rates.
+        ``binning`` and ``binning_mode`` are passed through to :meth:`expose`, so a
+        calibration series bins exactly as its science frames do.
         """
         for i, frame_seed in enumerate(self._series_seeds(seed, n_frames)):
             frame = self.expose(
@@ -396,6 +426,8 @@ class Camera:
                 temperature,
                 background=background,
                 quantum_efficiency=quantum_efficiency,
+                binning=binning,
+                binning_mode=binning_mode,
                 seed=frame_seed,
                 include_truth=include_truth,
             )

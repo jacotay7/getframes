@@ -28,7 +28,7 @@ A dark frame is simply the special case ``photon_rate = 0``.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, Any, NamedTuple
 
 import numpy as np
 from scipy import ndimage
@@ -535,6 +535,17 @@ def frame_electrons(
     return electrons
 
 
+def block_sum(array: NDArray[Any], factor: int) -> NDArray[Any]:
+    """Sum an array into ``factor x factor`` super-pixel blocks (both dims divisible)."""
+    if factor == 1:
+        return array
+    height, width = array.shape
+    binned: NDArray[Any] = array.reshape(height // factor, factor, width // factor, factor).sum(
+        axis=(1, 3)
+    )
+    return binned
+
+
 def simulate_frame(
     config: CameraConfig,
     photon_rate: PhotonRate,
@@ -544,6 +555,8 @@ def simulate_frame(
     background_photon_rate: PhotonRate = 0.0,
     quantum_efficiency: float | None = None,
     extra_electrons: PhotonRate = 0.0,
+    binning: int = 1,
+    binning_mode: str = "digital",
     rng: np.random.Generator | None = None,
     seed: int | None = None,
     float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
@@ -571,6 +584,19 @@ def simulate_frame(
         injected before shot noise and the gain stage. Used to carry latent charge
         from image persistence across the frames of an observation; it is real
         charge in the well, so it picks up shot noise and any EM/avalanche gain.
+    binning:
+        Combine ``binning x binning`` pixels into each output pixel (``1`` = no
+        binning). ``config.resolution`` is the native sensor grid and must be
+        divisible by ``binning``; the returned frame is ``resolution // binning``.
+    binning_mode:
+        How the binning combines charge relative to the read amplifier. ``"digital"``
+        (post-read / software binning, the default) reads every native pixel with its
+        own read noise and then sums the digitised values, so binned read noise grows
+        as ``binning`` (in quadrature over the ``binning**2`` pixels). ``"on_chip"``
+        (pre-read / charge-domain / hardware binning) sums the collected charge
+        *before* the amplifier, so a single read noise is applied to each super-pixel
+        (the CCD/charge-domain advantage). Both sum the signal identically; they
+        differ only in how read noise accumulates.
     rng, seed:
         Provide an existing generator, or a seed to build a fresh one.
     float_dtype:
@@ -581,6 +607,10 @@ def simulate_frame(
     """
     if exposure_s < 0:
         raise ValueError("exposure_s must be non-negative.")
+    if binning < 1:
+        raise ValueError("binning must be a positive integer.")
+    if binning_mode not in ("digital", "on_chip"):
+        raise ValueError("binning_mode must be 'digital' or 'on_chip'.")
     if rng is None:
         rng = np.random.default_rng(seed)
 
@@ -589,9 +619,36 @@ def simulate_frame(
     )
     mean_dark = dark_signal_map(config, exposure_s, temperature_c, float_dtype)
     mean_total = mean_photo + mean_dark + np.asarray(extra_electrons, dtype=float_dtype)
-    electrons = frame_electrons(config, mean_total, rng, exposure_s)
-    adu = digitize(electrons, config, rng)
-    return SimulationResult(adu, mean_photo, mean_dark, photon_rate)
+
+    if binning > 1:
+        height, width = config.resolution
+        if height % binning or width % binning:
+            raise ValueError(
+                f"resolution {config.resolution} is not divisible by binning {binning}."
+            )
+
+    if binning == 1:
+        electrons = frame_electrons(config, mean_total, rng, exposure_s)
+        adu = digitize(electrons, config, rng)
+    elif binning_mode == "on_chip":
+        # Charge is summed before the amplifier: read out each super-pixel once, so a
+        # single read noise applies. The summing well holds ~binning**2 more charge.
+        binned_shape = (config.resolution[0] // binning, config.resolution[1] // binning)
+        binned_config = config.replace(
+            resolution=binned_shape, full_well_e=config.full_well_e * binning * binning
+        )
+        electrons = frame_electrons(binned_config, block_sum(mean_total, binning), rng, exposure_s)
+        adu = digitize(electrons, binned_config, rng)
+    else:
+        # Digital / post-read: read every native pixel (its own read noise), then sum
+        # the digitised values, so read noise adds in quadrature over binning**2 pixels.
+        electrons = frame_electrons(config, mean_total, rng, exposure_s)
+        native_adu = digitize(electrons, config, rng)
+        adu = block_sum(native_adu.astype(np.uint64), binning).astype(np.uint32)
+
+    return SimulationResult(
+        adu, block_sum(mean_photo, binning), block_sum(mean_dark, binning), photon_rate
+    )
 
 
 def generate_dark_frame(
@@ -627,6 +684,7 @@ __all__ = [
     "apply_gain_stage",
     "apply_ipc",
     "apply_nonlinearity",
+    "block_sum",
     "dark_frame_electrons",
     "dark_signal_map",
     "digitize",

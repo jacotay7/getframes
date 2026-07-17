@@ -97,16 +97,22 @@ When a manufacturer only publishes a graph, record in `notes` that the curve was
 digitized and whether the ordinate is bare QE or `QE x fill factor`. Keep filters,
 windows, atmosphere, and relay optics as separate throughput curves.
 
-For facts that are useful to a particular instrument trade but do not belong in
-the generic detector-noise model—such as a camera body's mechanical envelope,
-supported binning modes, or the implementation of binning—use an `[extra]` TOML
-table with a source URL. These values are exposed as `CameraConfig.extra`; a
+Binning is a first-class part of the config. Set `supported_binnings` (the integer
+factors the sensor supports, always including `1`) and `binning_method`
+(`"digital"` for post-read software summation, where binned read noise grows as the
+factor, or `"on_chip"` for pre-read charge-domain/hardware binning, where one read
+noise applies per super-pixel). `Camera.expose(binning=…, binning_mode=…)` then
+produces the correct binned frame — you never store a per-binning read-noise value.
+
+For facts that are useful to a particular instrument trade but do not belong in the
+generic detector-noise model—such as a camera body's mechanical envelope or source
+URLs—use an `[extra]` TOML table. These are exposed as `CameraConfig.extra`; a
 consumer should treat an absent value as unknown, not as a pass/fail result.
 
-When a trade needs to compare documented acquisition modes, it can carry an
-`[[extra.detector_modes]]` array. Each entry should identify the readout mode,
-binning, the native read-noise model (`native`, `digital_post_read`, or
-`uncharacterized`), and any mode-specific temperature, dark current, or rate.
-Do not infer binned read noise from a pixel pitch alone. A mode marked
-`uncharacterized` should be reported as available but excluded from a
-performance ranking until its read noise and timing are measured or published.
+When a camera has more than one *read mode* (distinct read-noise operating points,
+e.g. a standard and an ultra-quiet mode), carry the alternates in an
+`[[extra.read_modes]]` array. Each entry gives the mode `name`, its `read_noise_e`,
+and any mode-specific `dark_current_e_per_s`, `temperature_c`, or narrower
+`supported_binnings`; the binning factors and method otherwise come from the
+config. This replaces the old per-binning `detector_modes` list — binned read noise
+now comes from the model, not from a stored table.

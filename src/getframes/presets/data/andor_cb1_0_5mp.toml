@@ -16,20 +16,14 @@ read_noise_e = 2.35
 dark_current_e_per_s = 1.39
 dark_current_ref_temp_c = 10.0
 dark_current_doubling_temp_c = 6.0
+supported_binnings = [1]                # no 2x2 binning offered for the CB1 0.5 MP
 notes = "CB1 0.5 MP high-gain / 24 dB mode: 2.35 e- typical read noise at 50 us. The specification sheet gives 1594 fps at 8 bit and 941 fps at 12 bit; the profile uses the 12-bit trade mode. QE is the full published CB1 spectral-response plot for the visible Sony Pregius family, with a 73% IMX426 check at 529 nm from Allied Vision."
 
 [extra]
 body_dimensions_mm = [154.3, 76.2, 64.1]
 body_dimensions_order = "length, width, height; confirm mounting/cable clearance in the Keck envelope"
-supported_binning = ["1x1"]
-binning_implementation = "No 2x2 binning is offered for the CB1 0.5 MP model."
 readout_modes = ["8-bit", "12-bit", "14-bit HDR"]
 source_modes_url = "https://andor.oxinst.com/assets/uploads/products/andor/documents/c-blue-one-specifications.pdf"
-
-[[extra.detector_modes]]
-name = "12-bit high gain 1x1"
-binning = 1
-read_noise_model = "native"
 
 # CB1's manufacturer QE plot manually digitized at 25--50 nm spacing. The
 # curve is typical (not guaranteed) and represents the visible IMX426 response;

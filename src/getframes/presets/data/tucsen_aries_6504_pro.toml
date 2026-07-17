@@ -19,55 +19,33 @@ dark_current_ref_temp_c = -20.0
 dark_current_doubling_temp_c = 6.0
 prnu = 0.003                           # published 0.3%
 dark_current_nonuniformity = 0.03
-notes = "Sensitive-mode read noise with HDR-mode full well; QE x fill-factor curve digitized from Gpixel's published GSENSE6504BSI plot. Select one characterized readout mode for final design work."
+supported_binnings = [1, 2, 4]         # Mosaic sum binning on original pixel data (digital post-read)
+binning_method = "digital"
+notes = "Sensitive-mode read noise with HDR-mode full well; QE x fill-factor curve digitized from Gpixel's published GSENSE6504BSI plot. Speed mode (0.80 e-) is an alternate read mode, offered at 1x1 only here. Mosaic documents binning as sum on original pixel data with unchanged data volume/frame rate; modeled as digital post-read summation. Confirm Aries-specific SDK behavior and ROI timing before final design."
 
 [extra]
 body_dimensions_mm = [80.0, 80.0, 108.0]
 body_dimensions_order = "width, height, depth; bare camera body only, excluding connectors and adapters"
-supported_binning = ["1x1", "2x2", "4x4"]
-binning_implementation = "Mosaic documents sum binning on original pixel data with unchanged data volume/frame rate; modeled here as digital post-read summation. Confirm Aries-specific SDK behavior and ROI timing before final design."
 readout_modes = ["sensitive", "HDR", "speed"]
 source_modes_url = "https://www.tucsen.com/aries-6504-pro-product/"
 binning_source_url = "https://www.tucsen.com/uploads/Mosaic2.4_EN.pdf"
 
-[[extra.detector_modes]]
-name = "sensitive 1x1"
-binning = 1
+# Alternate read (operating) modes: distinct read-noise points. Sensitive supports
+# the config-level 1/2/4 binnings; speed is characterized at 1x1 only.
+[[extra.read_modes]]
+name = "sensitive"
 read_noise_e = 0.43
 dark_current_e_per_s = 0.01
 temperature_c = -20.0
-read_noise_model = "native"
 full_frame_max_hz = 99.0
 
-[[extra.detector_modes]]
-name = "speed 1x1"
-binning = 1
+[[extra.read_modes]]
+name = "speed"
 read_noise_e = 0.80
 dark_current_e_per_s = 0.01
 temperature_c = -20.0
-read_noise_model = "native"
+supported_binnings = [1]
 full_frame_max_hz = 297.0
-
-# Mosaic documents these as sum binning applied to original pixel data, without
-# a data-rate/frame-rate reduction.  The trade therefore models post-read sums:
-# it reads native pixels at Sensitive-mode noise and then sums them, rather than
-# assigning 0.43 e- to a binned output pixel. This is not an Aries-specific
-# binned-noise measurement; obtain one before hardware selection.
-[[extra.detector_modes]]
-name = "sensitive 2x2"
-binning = 2
-read_noise_e = 0.43
-dark_current_e_per_s = 0.01
-temperature_c = -20.0
-read_noise_model = "digital_post_read"
-
-[[extra.detector_modes]]
-name = "sensitive 4x4"
-binning = 4
-read_noise_e = 0.43
-dark_current_e_per_s = 0.01
-temperature_c = -20.0
-read_noise_model = "digital_post_read"
 
 # GSENSE6504BSI QE x fill factor, digitized at 10 nm spacing from Gpixel's
 # published high-resolution graph. The trace accuracy is limited by the source

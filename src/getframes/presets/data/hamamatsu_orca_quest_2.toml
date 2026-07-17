@@ -16,65 +16,27 @@ read_noise_e = 0.43
 dark_current_e_per_s = 0.016
 dark_current_ref_temp_c = -20.0
 dark_current_doubling_temp_c = 6.0
-notes = "Standard-scan mode: 0.43 e- RMS at 120 fps full frame. Maximum-cooling dark current is 0.006 e-/pixel/s at -35 C. The manual specifies that 2x2 and 4x4 are digital binning after per-pixel photon-number resolution, so their read noise must be propagated from native pixels rather than treated as a single read. QE is a typical curve digitized from the catalog figure."
+supported_binnings = [1, 2, 4]         # digital, applied after per-pixel photon-number resolution
+binning_method = "digital"
+notes = "Standard-scan mode: 0.43 e- RMS at 120 fps full frame. Maximum-cooling dark current is 0.006 e-/pixel/s at -35 C. The manual specifies that 2x2 and 4x4 are digital binning after per-pixel photon-number resolution, so their read noise is propagated from native pixels rather than treated as a single read. Ultra-quiet mode (0.30 e- at 25.4 fps) is an alternate read mode. QE is a typical curve digitized from the catalog figure."
 
 [extra]
-supported_binning = ["1x1", "2x2", "4x4"]
-binning_implementation = "Digital binning; 2x2 and 4x4 are applied after photon-number resolution at each native pixel."
 source_modes_url = "https://camera.hamamatsu.com/content/dam/hamamatsu-photonics/sites/static/sys/en/manual/C15550-22UP_IM_En.pdf"
 
-[[extra.detector_modes]]
-name = "standard 1x1"
-binning = 1
+# Alternate read (operating) modes: distinct read-noise points at the deep-cooled
+# -35 C setpoint. Binning factors and method are shared (config-level, digital).
+[[extra.read_modes]]
+name = "standard"
 read_noise_e = 0.43
 dark_current_e_per_s = 0.006
 temperature_c = -35.0
-read_noise_model = "native"
 full_frame_max_hz = 120.0
 
-[[extra.detector_modes]]
-name = "standard 2x2"
-binning = 2
-read_noise_e = 0.43
-dark_current_e_per_s = 0.006
-temperature_c = -35.0
-read_noise_model = "digital_post_read"
-full_frame_max_hz = 120.0
-
-[[extra.detector_modes]]
-name = "standard 4x4"
-binning = 4
-read_noise_e = 0.43
-dark_current_e_per_s = 0.006
-temperature_c = -35.0
-read_noise_model = "digital_post_read"
-full_frame_max_hz = 120.0
-
-[[extra.detector_modes]]
-name = "ultra quiet 1x1"
-binning = 1
+[[extra.read_modes]]
+name = "ultra quiet"
 read_noise_e = 0.30
 dark_current_e_per_s = 0.006
 temperature_c = -35.0
-read_noise_model = "native"
-full_frame_max_hz = 25.4
-
-[[extra.detector_modes]]
-name = "ultra quiet 2x2"
-binning = 2
-read_noise_e = 0.30
-dark_current_e_per_s = 0.006
-temperature_c = -35.0
-read_noise_model = "digital_post_read"
-full_frame_max_hz = 25.4
-
-[[extra.detector_modes]]
-name = "ultra quiet 4x4"
-binning = 4
-read_noise_e = 0.30
-dark_current_e_per_s = 0.006
-temperature_c = -35.0
-read_noise_model = "digital_post_read"
 full_frame_max_hz = 25.4
 
 # Typical qCMOS spectral response digitized from the Hamamatsu catalog chart.

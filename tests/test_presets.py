@@ -96,19 +96,19 @@ def test_new_keck_trade_presets_have_full_visible_qe_coverage(name):
         "tucsen_aries_6504_pro",
     ],
 )
-def test_keck_trade_modes_are_captured_as_preset_metadata(name):
-    extra = load_preset(name).extra
-    assert extra["supported_binning"]
-    assert extra["binning_implementation"]
-    assert extra["source_modes_url"]
-    assert extra["detector_modes"]
-    for mode in extra["detector_modes"]:
+def test_keck_trade_binning_is_first_class(name):
+    cfg = load_preset(name)
+    # Supported binning and its method are normal config parameters (not metadata).
+    assert cfg.supported_binnings and 1 in cfg.supported_binnings
+    assert all(b >= 1 for b in cfg.supported_binnings)
+    assert cfg.binning_method in {"digital", "on_chip"}
+    assert cfg.extra["source_modes_url"]
+    # Alternate read (operating) modes, when a camera has more than one, are the
+    # only remaining per-mode metadata; each is well-formed.
+    for mode in cfg.extra.get("read_modes", []):
         assert mode["name"]
-        assert mode["binning"] >= 1
-        if mode["binning"] > 1:
-            assert f"{mode['binning']}x{mode['binning']}" in extra["supported_binning"]
-        assert mode["read_noise_model"] in {
-            "native",
-            "digital_post_read",
-            "uncharacterized",
-        }
+        assert mode["read_noise_e"] >= 0
+        for binning in mode.get("supported_binnings", cfg.supported_binnings):
+            assert binning in cfg.supported_binnings
+    # The old per-binning detector_modes list is gone.
+    assert "detector_modes" not in cfg.extra

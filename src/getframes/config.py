@@ -65,6 +65,15 @@ class CameraConfig:
         switches to spectral mode and computes a colour-dependent effective QE from
         each source's SED and the band's spectral response, instead of the scalar
         ``quantum_efficiency``. ``None`` keeps the band-averaged model.
+    supported_binnings:
+        Integer pixel-binning factors this sensor supports (must include ``1``).
+        Passed to :meth:`Camera.expose`'s ``binning`` argument. Advisory metadata:
+        the model bins whatever factor you ask for.
+    binning_method:
+        How this sensor combines binned pixels: ``"digital"`` (post-read software
+        binning, read noise grows as the binning factor) or ``"on_chip"`` (pre-read
+        charge-domain/hardware binning, one read noise per super-pixel). Consumed by
+        :meth:`Camera.expose`'s ``binning_mode`` argument.
     full_well_e:
         Full-well capacity in electrons. Signal saturates here before digitization.
     bit_depth:
@@ -217,6 +226,8 @@ class CameraConfig:
     read_noise_e: float
     dark_current_e_per_s: float
     qe_curve: QE | None = None
+    supported_binnings: tuple[int, ...] = (1,)
+    binning_method: str = "digital"
     detector_glow_e_per_s: float = 0.0
     prnu: float = 0.0
     read_noise_nonuniformity: float = 0.0
@@ -255,6 +266,9 @@ class CameraConfig:
         object.__setattr__(self, "sensor_type", SensorType.coerce(self.sensor_type))
         object.__setattr__(self, "resolution", tuple(int(n) for n in self.resolution))
         object.__setattr__(self, "amplifier_layout", tuple(int(n) for n in self.amplifier_layout))
+        object.__setattr__(
+            self, "supported_binnings", tuple(int(n) for n in self.supported_binnings)
+        )
         if self.nonlinearity_coeffs is not None:
             object.__setattr__(
                 self, "nonlinearity_coeffs", tuple(float(c) for c in self.nonlinearity_coeffs)
@@ -272,6 +286,12 @@ class CameraConfig:
             raise ValueError("gain_e_per_adu must be positive.")
         if self.read_noise_e < 0:
             raise ValueError("read_noise_e must be non-negative.")
+        if not self.supported_binnings or any(n < 1 for n in self.supported_binnings):
+            raise ValueError("supported_binnings must be positive ints.")
+        if 1 not in self.supported_binnings:
+            raise ValueError("supported_binnings must include 1 (unbinned readout).")
+        if self.binning_method not in ("digital", "on_chip"):
+            raise ValueError("binning_method must be 'digital' or 'on_chip'.")
         if self.prnu < 0:
             raise ValueError("prnu must be non-negative.")
         if self.read_noise_nonuniformity < 0:
