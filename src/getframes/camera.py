@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any, ClassVar
 
 import numpy as np
@@ -280,6 +281,77 @@ class Camera:
             metadata["binning"] = binning
             metadata["binning_mode"] = binning_mode
         return Frame(data=result.adu, metadata=metadata, truth=truth)
+
+    def expose_spectral(
+        self,
+        photon_rate_cube: NDArray[np.floating[Any]],
+        wavelengths_nm: NDArray[np.floating[Any]],
+        exposure: float,
+        temperature: float | None = None,
+        *,
+        background: NDArray[np.floating[Any]] | float = 0.0,
+        seed: int | None = None,
+        binning: int = 1,
+        binning_mode: str = "digital",
+        include_truth: bool = True,
+    ) -> Frame:
+        """Expose a wavelength-resolved photon-rate cube.
+
+        ``photon_rate_cube`` is incident photons/s/native pixel with shape
+        ``(n_wavelength, height, width)``. The configured :class:`~getframes.spectral.QE`
+        is evaluated at each node and applied before the ordinary detector signal
+        chain. The detector stochastic model is therefore executed exactly once;
+        ``FrameTruth.mean_photoelectrons`` contains the QE-weighted result while
+        ``FrameTruth.photon_rate`` retains the integrated incident photon map.
+
+        This method is separate from :meth:`expose` so scalar callers remain
+        unchanged and callers cannot accidentally apply QE twice. A configured
+        ``qe_curve`` is required.
+        """
+        if self.config.qe_curve is None:
+            raise ValueError("expose_spectral requires CameraConfig.qe_curve")
+        cube = np.asarray(photon_rate_cube, dtype=self._float_dtype)
+        wavelengths = np.asarray(wavelengths_nm, dtype=np.float64)
+        if cube.ndim != 3:
+            raise ValueError("photon_rate_cube must have shape (wavelength, height, width)")
+        if cube.shape[1:] != self.resolution:
+            raise ValueError(
+                f"photon_rate_cube spatial shape {cube.shape[1:]} does not match camera "
+                f"resolution {self.resolution}"
+            )
+        if wavelengths.ndim != 1 or wavelengths.size != cube.shape[0]:
+            raise ValueError("wavelengths_nm must be a 1-D array matching cube axis 0")
+        if wavelengths.size == 0 or not np.all(np.isfinite(wavelengths)):
+            raise ValueError("wavelengths_nm must contain finite values")
+        if not np.all(np.isfinite(cube)) or np.any(cube < 0):
+            raise ValueError("photon_rate_cube must be finite and non-negative")
+        qe = np.asarray(self.config.qe_curve(wavelengths), dtype=self._float_dtype)
+        electron_rate = np.tensordot(qe, cube, axes=(0, 0))
+        integrated_rate = np.sum(cube, axis=0)
+        frame = self.expose(
+            electron_rate,
+            exposure,
+            temperature,
+            background=background,
+            quantum_efficiency=1.0,
+            binning=binning,
+            binning_mode=binning_mode,
+            seed=seed,
+            include_truth=include_truth,
+        )
+        frame.metadata["spectral"] = True
+        frame.metadata["spectral_wavelengths_nm"] = [float(value) for value in wavelengths]
+        if frame.truth is not None:
+            frame = replace(
+                frame,
+                truth=replace(
+                    frame.truth,
+                    photon_rate=integrated_rate,
+                    spectral_photon_rate=cube,
+                    wavelengths_nm=wavelengths,
+                ),
+            )
+        return frame
 
     def _binned_extra(self, extra_electrons: PhotonRate, binning: int) -> NDArray[Any]:
         """The ``extra_electrons`` truth term summed to match a binned frame's grid."""

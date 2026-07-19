@@ -8,6 +8,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `Camera.expose_spectral`, a single-pass wavelength-resolved photon-cube
+  detector entry point. It applies the configured QE curve exactly once and
+  preserves integrated and spectral photon-rate truth arrays.
 - Five scientific-camera presets used by the Keck tip/tilt and low-bandwidth WFS
   detector trade example: KURO 1200B, Prime 95B, Marana 4.2B-11, QHY530 Pro II,
   and Aries 6504 Pro. All five now include a wavelength-resolved `qe_curve`:

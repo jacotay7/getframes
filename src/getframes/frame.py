@@ -29,11 +29,20 @@ class FrameTruth:
     photon_rate:
         The incident photon rate the frame was exposed to, in photons/s/pixel, as
         provided by the caller (a scalar for uniform illumination, else an array).
+    spectral_photon_rate:
+        Optional wavelength-resolved incident photon-rate cube with shape
+        ``(n_wavelength, height, width)``. This is populated by
+        :meth:`~getframes.camera.Camera.expose_spectral` and is kept separate from
+        the integrated ``photon_rate`` field.
+    wavelengths_nm:
+        Wavelength nodes corresponding to ``spectral_photon_rate``.
     """
 
     mean_electrons: NDArray[np.float64]
     mean_photoelectrons: NDArray[np.float64]
     photon_rate: NDArray[np.float64] | float
+    spectral_photon_rate: NDArray[np.float64] | None = None
+    wavelengths_nm: NDArray[np.float64] | None = None
 
 
 @dataclass(frozen=True)

@@ -5,6 +5,7 @@ import numpy as np
 import pytest
 
 from getframes import Camera, Frame, FrameTruth
+from getframes.spectral import QE
 
 
 @pytest.fixture
@@ -29,6 +30,31 @@ def test_more_light_means_more_signal(cam):
     dim = cam.expose(10.0, 1.0, -20.0, seed=1).stats()["mean"]
     bright = cam.expose(1000.0, 1.0, -20.0, seed=1).stats()["mean"]
     assert bright > dim
+
+
+def test_expose_spectral_applies_qe_once_and_preserves_cube_truth(cam):
+    cam = cam.with_config(
+        resolution=[8, 8],
+        quantum_efficiency=0.5,
+        qe_curve=QE.from_arrays([500.0, 700.0], [0.2, 0.8]),
+    )
+    cube = np.stack([np.full(cam.resolution, 100.0), np.full(cam.resolution, 50.0)])
+    frame = cam.expose_spectral(cube, np.array([500.0, 700.0]), exposure=1.0, seed=3)
+    assert frame.truth is not None
+    np.testing.assert_allclose(frame.truth.mean_photoelectrons, 60.0)
+    np.testing.assert_allclose(frame.truth.photon_rate, 150.0)
+    np.testing.assert_allclose(frame.truth.spectral_photon_rate, cube)
+    np.testing.assert_allclose(frame.truth.wavelengths_nm, [500.0, 700.0])
+    assert frame.metadata["spectral"] is True
+
+
+def test_expose_spectral_rejects_missing_curve_and_bad_shapes(cam):
+    cube = np.ones((2, *cam.resolution))
+    with pytest.raises(ValueError, match="qe_curve"):
+        cam.expose_spectral(cube, np.array([500.0, 700.0]), exposure=1.0)
+    spectral_cam = cam.with_config(qe_curve=QE.from_arrays([500.0, 700.0], [0.5, 0.5]))
+    with pytest.raises(ValueError, match="shape"):
+        spectral_cam.expose_spectral(np.ones(cam.resolution), np.array([500.0]), exposure=1.0)
 
 
 def test_truth_photoelectrons_match_qe_relation(cam):
