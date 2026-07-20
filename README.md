@@ -21,12 +21,14 @@ photon → electron → ADU signal path, with optional opt-in spectral mode.
 > **Status:** stable. `getframes` 2.0 freezes the full public surface — the
 > detector, scene, calibration, observation, radiometry, and dataset APIs — under
 > [Semantic Versioning](https://semver.org/spec/v2.0.0.html); see
-> [API stability](docs/stability.md).
+> [API stability](docs/stability.md). An optional CuPy backend now keeps the
+> photon → electron → ADU detector path and truth arrays on NVIDIA GPUs.
 
 ## Install
 
 ```bash
 pip install getframes
+pip install 'getframes[gpu]'  # optional CUDA 12.x / CuPy detector backend
 ```
 
 From source (for development):
@@ -82,6 +84,45 @@ cam = gf.Camera(
 )
 frame = cam.dark_frame(exposure=30.0, temperature=-10.0)
 ```
+
+### Run the detector on a GPU
+
+```python
+import cupy as cp
+import getframes as gf
+
+cam = gf.Camera.from_preset("andor_ocam2k", device="gpu", precision="float32")
+rate = cp.full(cam.resolution, 2.0e6, dtype=cp.float32)  # photons/s/pixel
+frame = cam.expose(rate, exposure=1.0e-3, seed=0)
+
+frame.data                  # CuPy uint32 ADU array; no host copy
+frame.truth.mean_electrons  # CuPy truth array
+host_adu = gf.to_numpy(frame.data)  # explicit device-to-host boundary
+```
+
+CPU and GPU use independent random-number streams: a seed repeats exactly on a
+fixed backend, while parity across backends means matching detector statistics,
+not identical pixels. See the [GPU guide](docs/guides/gpu.md).
+
+## CPU/GPU throughput
+
+Warm bulk-frame throughput on an AMD Ryzen 9 9950X3D and NVIDIA RTX 5090
+(`float32`, truth enabled, persistent camera, device-resident input/output, no
+host transfers) is:
+
+| Workflow | Native shape | CPU (frames/s) | GPU (frames/s) | Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| Pyramid WFS CMOS | 80x80 | 4,874.7 | 7,459.7 | 1.53x |
+| Shack-Hartmann WFS CMOS | 160x160 | 1,290.1 | 7,432.4 | 5.76x |
+| OCAM2K EMCCD | 240x240 | 346.3 | 3,349.1 | 9.67x |
+| SAPHIRA eAPD | 256x320 | 268.6 | 3,187.1 | 11.86x |
+| Large science CMOS | 1024x1024 | 28.5 | 1,053.8 | 37.01x |
+
+Higher is better. CUDA was synchronized around every timed region; construction
+was excluded. GPU launch overhead limits the smallest case, while larger arrays
+and gain-stage detectors expose much more parallel work. See the
+[full snapshot](benchmarks/device-results.md), [raw JSON](benchmarks/device-results.json),
+and [GPU benchmark methodology](docs/guides/gpu.md#reference-throughput).
 
 ### Observe a simulated star field
 

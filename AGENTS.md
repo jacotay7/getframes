@@ -35,6 +35,7 @@ removals. A JOSS paper + citation remain a post-2.0 follow-up.
 | --- | --- |
 | `config.py` | `CameraConfig` (frozen dataclass of detector params) and `SensorType` enum. Pure data + validation + temperature scaling. No randomness. |
 | `noise.py` | The physics. Pure functions: `CameraConfig` + exposure + temperature + seeded `Generator` → electrons/ADU. This is where noise models live. |
+| `backend.py` | Optional NumPy/CuPy array and RNG boundary, explicit host conversion, and backend convolution. NumPy is the reference/default. |
 | `frame.py` | `Frame` container: a NumPy array (ADU) plus metadata; array-like; optional FITS export. |
 | `camera.py` | `Camera`, the main user-facing object. Orchestrates config + scene + noise into `Frame`s. Holds the RNG and high-level methods (`dark_frame`, `dark_series`, `expose`, `observe`, `*_series`, `master_*`). |
 | `calibrate.py` | Master-frame builders (`combine`) and `calibrate` reduction — the raw → reduced → truth loop (phase 1.1). |
@@ -46,7 +47,7 @@ removals. A JOSS paper + citation remain a post-2.0 follow-up.
 | `cli.py` | The `getframes` console entry point (phase 1.6): `presets` / `generate` / `dataset` subcommands driven by a TOML config. |
 | `presets/` | Preset library. TOML data files in `presets/data/`, loaded via `importlib.resources`. `load_preset`, `available_presets`, `preset_info`. |
 
-Data flows one way: `presets` → `CameraConfig` → `Scene` → `Camera` → `noise` →
+Data flows one way: `presets` → `CameraConfig` → `Scene` → `Camera` → `backend`/`noise` →
 `Frame` (→ `calibrate`/`analysis`). Keep `config`, `noise`, `scene`, and
 `spectral` free of side effects and global state; never reach back up the chain
 (e.g. `scene` must not import `camera`).
@@ -59,8 +60,10 @@ Data flows one way: `presets` → `CameraConfig` → `Scene` → `Camera` → `n
    mirror an existing constructor/method shape before inventing a new one. Every
    new public name goes in the subpackage `__all__` **and** the top-level
    `getframes/__init__.py` `__all__`.
-2. **Reproducibility.** All randomness goes through a `numpy.random.Generator`.
-   Every generation method accepts a `seed`. Never call the global `np.random.*`.
+2. **Reproducibility.** All per-frame randomness goes through the selected
+   backend's camera-owned generator. Every generation method accepts a `seed`.
+   Never call global NumPy/CuPy random state. CPU and GPU streams repeat within
+   a backend but are statistically, not pixel-for-pixel, matched across devices.
 3. **Physics is auditable.** Noise models live as small, documented, pure functions
    in `noise.py`. Document the units (electrons vs. ADU) and the model in the
    docstring. State assumptions; cite the model form.
@@ -94,6 +97,10 @@ beyond a fixed seed. Run the full gate before declaring done:
 ```bash
 ruff check . && ruff format --check . && mypy && pytest
 ```
+
+With CUDA 12 CuPy and a device available, additionally run
+`python -m pytest -q -m gpu`; GPU tests are optional and ordinary CI remains
+CUDA-independent.
 
 ## CI / release
 
@@ -150,11 +157,12 @@ verified, say so plainly; when a step was skipped or a test fails, say *that*.
 
 ## Things to avoid
 
-- Don't add heavy runtime dependencies. Core runtime deps are `numpy`, `scipy`, and
+- Don't add heavy core runtime dependencies. Core runtime deps are `numpy`, `scipy`, and
   `astropy` (+ `tomli` backport on <3.11). `astropy` became core at the 2.0 cut
   (FITS I/O, WCS pixel↔world projection, catalogs); still import it *lazily* inside
   the functions that use it (it is slow to import) — never at module top level, so
   `import getframes` stays fast. Keep `matplotlib` in the optional `examples` extra.
+  CuPy belongs only to the optional `gpu` extra and must be imported lazily.
 - Don't introduce global mutable state or module-level RNGs.
 - Don't break the one-way data flow or reach from `config`/`noise`/`scene`/
   `spectral` back into `camera`/`presets`.

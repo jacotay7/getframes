@@ -31,6 +31,8 @@ pip install getframes
 - **[The noise model](guides/noise-model.md)** — the physics, step by step.
 - **[Observing scenes](guides/scenes.md)** — sources, PSFs, and telescopes.
 - **[Spectral mode](guides/spectral.md)** — wavelength-resolved QE and SEDs.
+- **[GPU execution and benchmarks](guides/gpu.md)** — device-resident frames and
+  synchronized CPU/GPU throughput.
 - **[Camera presets](guides/presets.md)** — the built-in library and adding your own.
 - **[API reference](reference.md)** — every public class and function.
 - **[API stability](stability.md)** — what 1.0 guarantees.

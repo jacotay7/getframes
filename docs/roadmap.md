@@ -128,6 +128,7 @@ src/getframes/
 | ✅ | **1.5** | Radiometry & IR | AB system, ugriz/Gaia/2MASS bands, transmission-product loading, extinction, true spectral flux integration, **IR thermal background + glow** | quantitative photometry, honest IR |
 | ✅ | **1.6** | Scale & datasets | float32 path, chunked/vectorised rendering, `dataset` generator for raw+truth pairs at scale, a `getframes` CLI, benchmarks | ML training data, large detectors |
 | ✅ | **2.0** | Stability | promote new APIs to stable, `astropy` as a core dep, validation suite vs. published characterisations, full docs (JOSS paper + citation deferred post-release) | — |
+| ✅ | **post-2.0** | GPU detector execution | optional CuPy photon → electron → ADU chain, device RNG/truth/fixed structure, CPU/GPU statistical parity, synchronized benchmarks | end-to-end GPU AO simulation |
 
 Persistence (1.2) is the one item explicitly deferred from the 1.0 series; it lands
 once 1.2 introduces cross-frame state via `Observation`.
@@ -218,6 +219,19 @@ The artifacts a calibration pipeline must survive:
   (`tests/test_validation.py`) plus a [validation guide](guides/validation.md).
 - [x] **Full docs**: guides for every shipped capability, worked examples 11–13.
 - [ ] **JOSS paper + citation** — *deferred to a post-2.0 follow-up.*
+
+### Post-2.0 — GPU detector execution ✅
+
+- [x] Add optional `Camera(..., device="gpu")` execution without making CuPy a
+  core dependency or changing the default NumPy behavior.
+- [x] Keep incident rate maps, electron expectations, stochastic samples,
+  detector artifacts, spectral truth, and digitised ADU arrays on device.
+- [x] Cache fixed detector maps on the persistent camera and retain seeded
+  reproducibility within each backend.
+- [x] Validate all detector families and the full artifact chain on CUDA, with
+  CPU/GPU statistical parity rather than pixel-identical random streams.
+- [x] Add explicit host conversion, user documentation, and synchronized CPU/GPU
+  benchmark modes.
 
 ---
 
@@ -338,8 +352,9 @@ These were open during planning and are now settled (they shape the phases above
    2.0 cut.)*
 3. **Not a spectrograph simulator.** Spectral work is capped at broadband
    synthetic photometry. No dispersed IFU/slit/grism frames — see non-goals.
-4. **GPU is out of scope for 2.0.** The scale work (1.6) is CPU-only: float32 +
-   chunking + vectorised rendering. A `cupy`/GPU path may be revisited post-2.0.
+4. **GPU was out of scope for 2.0 and landed post-2.0.** The 1.6 scale work
+   remains the CPU reference; the later optional CuPy backend preserves the same
+   detector equations and uses statistical cross-backend parity.
 
 ## 10. Non-goals (scope guardrails)
 

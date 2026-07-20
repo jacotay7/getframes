@@ -41,18 +41,33 @@ def _report(label: str, seconds: float, detail: str) -> None:
     print(f"  {label:<34} {seconds * 1e3:8.1f} ms   {detail}")
 
 
-def bench_signal_chain(shape: tuple[int, int], repeats: int) -> None:
+def _sync(device: str) -> None:
+    if device == "gpu":
+        gf.get_backend("gpu").xp.cuda.Stream.null.synchronize()
+
+
+def bench_signal_chain(shape: tuple[int, int], repeats: int, devices: tuple[str, ...]) -> None:
     """Bare detector path (uniform illumination) in float64 vs. float32."""
     pixels = shape[0] * shape[1]
     print(f"Signal chain  ({shape[0]}x{shape[1]}, {pixels / 1e6:.1f} Mpix)")
-    for precision in ("float64", "float32"):
-        cam = gf.Camera.from_preset("generic_cmos", precision=precision).with_config(
-            resolution=list(shape)
-        )
-        seconds = _best_time(
-            lambda c=cam: c.expose(photon_rate=200.0, exposure=5.0, seed=0), repeats
-        )
-        _report(f"expose [{precision}]", seconds, f"{pixels / 1e6 / seconds:7.1f} Mpix/s")
+    for device in devices:
+        for precision in ("float64", "float32"):
+            cam = gf.Camera.from_preset(
+                "generic_cmos", precision=precision, device=device
+            ).with_config(resolution=list(shape))
+            cam.expose(photon_rate=200.0, exposure=5.0, seed=0)
+            _sync(device)
+
+            def expose(c: gf.Camera = cam, selected: str = device) -> None:
+                c.expose(photon_rate=200.0, exposure=5.0, seed=0)
+                _sync(selected)
+
+            seconds = _best_time(expose, repeats)
+            _report(
+                f"expose [{device}/{precision}]",
+                seconds,
+                f"{pixels / 1e6 / seconds:7.1f} Mpix/s",
+            )
 
 
 def bench_catalog(shape: tuple[int, int], n_stars: int, repeats: int) -> None:
@@ -106,6 +121,12 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="getframes throughput benchmarks.")
     parser.add_argument("--quick", action="store_true", help="Smaller, faster sizes.")
     parser.add_argument("--repeats", type=int, default=3, help="Best-of-N timing repeats.")
+    parser.add_argument(
+        "--device",
+        choices=("cpu", "gpu", "both"),
+        default="cpu",
+        help="Detector device(s) to benchmark.",
+    )
     args = parser.parse_args(argv)
 
     if args.quick:
@@ -114,7 +135,8 @@ def main(argv: list[str] | None = None) -> int:
         shape, n_stars, n_frames = (1024, 1024), 50_000, 16
 
     print(f"getframes {gf.__version__} benchmarks (best of {args.repeats})\n")
-    bench_signal_chain(shape, args.repeats)
+    devices = ("cpu", "gpu") if args.device == "both" else (args.device,)
+    bench_signal_chain(shape, args.repeats, devices)
     print()
     bench_catalog(shape, n_stars, args.repeats)
     print()

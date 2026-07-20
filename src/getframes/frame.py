@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from .backend import get_array_module, to_numpy
+
 if TYPE_CHECKING:
     from numpy.typing import NDArray
 
@@ -38,19 +40,20 @@ class FrameTruth:
         Wavelength nodes corresponding to ``spectral_photon_rate``.
     """
 
-    mean_electrons: NDArray[np.float64]
-    mean_photoelectrons: NDArray[np.float64]
-    photon_rate: NDArray[np.float64] | float
-    spectral_photon_rate: NDArray[np.float64] | None = None
-    wavelengths_nm: NDArray[np.float64] | None = None
+    mean_electrons: Any
+    mean_photoelectrons: Any
+    photon_rate: Any
+    spectral_photon_rate: Any | None = None
+    wavelengths_nm: Any | None = None
 
 
 @dataclass(frozen=True)
 class Frame:
     """A single simulated image plus the metadata describing how it was made.
 
-    The pixel values live in :attr:`data` as a 2-D NumPy array in ADU. The object
-    is array-like: ``np.asarray(frame)`` and most NumPy operations work directly.
+    The pixel values live in :attr:`data` as a 2-D NumPy or CuPy array in ADU.
+    ``np.asarray(frame)`` remains an explicit request for host NumPy storage and
+    therefore copies a GPU frame; use ``frame.data`` to keep processing on device.
 
     Attributes
     ----------
@@ -64,7 +67,7 @@ class Frame:
         built from, for ground-truth comparisons. ``None`` if not requested.
     """
 
-    data: NDArray[np.floating[Any] | np.integer[Any]]
+    data: Any
     metadata: dict[str, Any] = field(default_factory=dict)
     truth: FrameTruth | None = None
 
@@ -73,11 +76,19 @@ class Frame:
         return tuple(self.data.shape)
 
     @property
-    def dtype(self) -> np.dtype[Any]:
+    def dtype(self) -> Any:
         return self.data.dtype
 
-    def __array__(self, dtype: Any = None) -> NDArray[Any]:
-        return np.asarray(self.data, dtype=dtype)
+    @property
+    def device(self) -> str:
+        """Storage device for :attr:`data` (``"cpu"`` or ``"gpu"``)."""
+        return "gpu" if get_array_module(self.data).__name__ == "cupy" else "cpu"
+
+    def __array__(self, dtype: Any = None, copy: bool | None = None) -> NDArray[Any]:
+        host = to_numpy(self.data)
+        if copy is False and host is not self.data:
+            raise ValueError("a GPU Frame cannot become a NumPy array without copying")
+        return np.asarray(host, dtype=dtype).copy() if copy else np.asarray(host, dtype=dtype)
 
     def binned(self, factor: int, *, method: str = "sum") -> Frame:
         """Digitally bin the frame into ``factor x factor`` super-pixels after readout.
@@ -108,7 +119,7 @@ class Frame:
             raise ValueError("binning factor must be a positive integer.")
         if method not in ("sum", "mean"):
             raise ValueError("method must be 'sum' or 'mean'.")
-        data = np.asarray(self.data)
+        data = self.data
         height, width = data.shape
         if height % factor or width % factor:
             raise ValueError(
@@ -124,8 +135,8 @@ class Frame:
         return Frame(data=binned, metadata=metadata, truth=None)
 
     def stats(self) -> dict[str, float]:
-        """Common summary statistics of the pixel values (mean/median/std/min/max)."""
-        arr = np.asarray(self.data, dtype=float)
+        """Common host summary statistics (copies GPU data to NumPy)."""
+        arr = np.asarray(to_numpy(self.data), dtype=float)
         return {
             "mean": float(arr.mean()),
             "median": float(np.median(arr)),
@@ -148,7 +159,7 @@ class Frame:
                 "reinstall with: pip install getframes"
             ) from exc
 
-        hdu = fits.PrimaryHDU(data=np.asarray(self.data))
+        hdu = fits.PrimaryHDU(data=to_numpy(self.data))
         for key, value in self.metadata.items():
             if isinstance(value, (str, int, float, bool)):
                 hdu.header[key[:8].upper()] = value

@@ -35,6 +35,7 @@ nav:
       - Spectral mode: guides/spectral.md
       - Radiometry & the infrared: guides/radiometry.md
       - Scale & datasets: guides/datasets.md
+      - GPU detector execution: guides/gpu.md
       - Camera presets: guides/presets.md
       - Validation: guides/validation.md
   - API reference: reference.md

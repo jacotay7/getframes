@@ -18,6 +18,16 @@
 
 ::: getframes.frame.FrameTruth
 
+## Array backends
+
+::: getframes.backend.ArrayBackend
+
+::: getframes.backend.get_backend
+
+::: getframes.backend.get_array_module
+
+::: getframes.backend.to_numpy
+
 ## Calibration
 
 ::: getframes.calibrate

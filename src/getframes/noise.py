@@ -3,7 +3,7 @@
 
 The models here are deliberately small, composable, and well-documented so that
 the physics is auditable. Each function takes a configuration, exposure, and a
-seeded :class:`numpy.random.Generator`, and returns electrons or ADU.
+seeded backend-native generator, and returns electrons or ADU on that backend.
 
 Signal chain (:func:`simulate_frame`)
 -------------------------------------
@@ -31,7 +31,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 import numpy as np
-from scipy import ndimage
+
+from .backend import ArrayBackend, get_backend
 
 if TYPE_CHECKING:
     from numpy.typing import DTypeLike, NDArray
@@ -57,7 +58,18 @@ _FPN_STREAM_BIAS = 5
 _FPN_STREAM_DEFECT = 6
 
 
-def _fixed_pattern_rng(config: CameraConfig, stream: int) -> np.random.Generator:
+class FixedPatternMaps(NamedTuple):
+    """Device-resident, immutable detector structure cached by :class:`Camera`."""
+
+    dark_multiplier: Any
+    prnu_multiplier: Any
+    amplifier_gain: Any
+    amplifier_offset: Any
+    bias_structure: Any
+    defect_mask: Any | None
+
+
+def _fixed_pattern_rng(config: CameraConfig, stream: int, backend: ArrayBackend) -> Any:
     """A deterministic generator for the sensor's fixed-pattern noise.
 
     Seeded only by ``config.fixed_pattern_seed`` (not the per-frame seed), so the
@@ -65,7 +77,48 @@ def _fixed_pattern_rng(config: CameraConfig, stream: int) -> np.random.Generator
     it removable by a master flat or dark.
     """
     seq = np.random.SeedSequence([int(config.fixed_pattern_seed), stream])
-    return np.random.default_rng(seq)
+    if backend.is_cpu:
+        return backend.default_rng(seq)
+    seed = int(seq.generate_state(1, dtype=np.uint64)[0])
+    return backend.default_rng(seed)
+
+
+def fixed_pattern_maps(
+    config: CameraConfig,
+    *,
+    backend: ArrayBackend | None = None,
+    float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
+) -> FixedPatternMaps:
+    """Build all repeatable per-pixel detector maps once on the selected device."""
+    resolved = backend or get_backend()
+    xp = resolved.xp
+    shape = config.resolution
+    needs_dark_map = config.dark_current_nonuniformity > 0 or config.hot_pixel_fraction > 0
+    dark: Any = xp.ones(shape, dtype=float_dtype) if needs_dark_map else 1.0
+    if config.dark_current_nonuniformity > 0:
+        sigma = config.dark_current_nonuniformity
+        rng = _fixed_pattern_rng(config, _FPN_STREAM_DSNU, resolved)
+        dark *= rng.lognormal(mean=-0.5 * sigma**2, sigma=sigma, size=shape)
+    if config.hot_pixel_fraction > 0:
+        rng = _fixed_pattern_rng(config, _FPN_STREAM_HOT, resolved)
+        hot_mask = rng.random(shape) < config.hot_pixel_fraction
+        dark[hot_mask] *= config.hot_pixel_factor
+
+    prnu: Any = xp.ones(shape, dtype=float_dtype) if config.prnu > 0 else 1.0
+    if config.prnu > 0:
+        sigma = config.prnu
+        rng = _fixed_pattern_rng(config, _FPN_STREAM_PRNU, resolved)
+        prnu *= rng.lognormal(mean=-0.5 * sigma**2, sigma=sigma, size=shape)
+
+    gain, offset = _amplifier_maps(config, resolved)
+    return FixedPatternMaps(
+        dark,
+        prnu,
+        gain,
+        offset,
+        _bias_structure_map(config, resolved),
+        _defect_mask(config, resolved),
+    )
 
 
 def dark_signal_map(
@@ -73,7 +126,10 @@ def dark_signal_map(
     exposure_s: float,
     temperature_c: float,
     float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
-) -> NDArray[np.float64]:
+    *,
+    backend: ArrayBackend | None = None,
+    fixed_patterns: FixedPatternMaps | None = None,
+) -> Any:
     """Per-pixel *mean* dark signal in electrons, including fixed-pattern structure.
 
     This is the noise-free expectation per pixel; shot noise is applied separately.
@@ -86,21 +142,25 @@ def dark_signal_map(
     ``float_dtype`` selects the working precision (``float64`` exact default, or
     ``float32`` for the memory-light fast path).
     """
+    resolved = backend or get_backend()
+    xp = resolved.xp
     height, width = config.resolution
     mean_dark = config.dark_current_at(temperature_c) * exposure_s
-    signal = np.full((height, width), mean_dark, dtype=float_dtype)
+    signal = xp.full((height, width), mean_dark, dtype=float_dtype)
 
     # Dark-signal non-uniformity: log-normal so the per-pixel gain stays positive
     # with unit mean. Drawn from the fixed-pattern stream (same every frame).
-    if config.dark_current_nonuniformity > 0 and mean_dark > 0:
+    if fixed_patterns is not None and mean_dark > 0:
+        signal *= fixed_patterns.dark_multiplier
+    elif config.dark_current_nonuniformity > 0 and mean_dark > 0:
         sigma = config.dark_current_nonuniformity
-        rng = _fixed_pattern_rng(config, _FPN_STREAM_DSNU)
+        rng = _fixed_pattern_rng(config, _FPN_STREAM_DSNU, resolved)
         dsnu = rng.lognormal(mean=-0.5 * sigma**2, sigma=sigma, size=signal.shape)
         signal *= dsnu
 
     # Hot pixels: a sparse, *fixed* population with strongly elevated dark current.
-    if config.hot_pixel_fraction > 0 and mean_dark > 0:
-        rng = _fixed_pattern_rng(config, _FPN_STREAM_HOT)
+    if fixed_patterns is None and config.hot_pixel_fraction > 0 and mean_dark > 0:
+        rng = _fixed_pattern_rng(config, _FPN_STREAM_HOT, resolved)
         hot_mask = rng.random(signal.shape) < config.hot_pixel_fraction
         signal[hot_mask] *= config.hot_pixel_factor
 
@@ -120,7 +180,10 @@ def photo_signal_map(
     background_photon_rate: PhotonRate,
     quantum_efficiency: float | None = None,
     float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
-) -> NDArray[np.float64]:
+    *,
+    backend: ArrayBackend | None = None,
+    fixed_patterns: FixedPatternMaps | None = None,
+) -> Any:
     """Per-pixel *mean* photo-generated signal in electrons (noise-free).
 
     Converts an incident photon rate (photons/s/pixel, plus an additive
@@ -137,23 +200,27 @@ def photo_signal_map(
     ``quantum_efficiency = 1.0``. ``float_dtype`` selects the working precision
     (``float64`` default, or ``float32`` for the memory-light fast path).
     """
+    resolved = backend or get_backend()
+    xp = resolved.xp
     height, width = config.resolution
     qe = config.quantum_efficiency if quantum_efficiency is None else quantum_efficiency
-    rate = np.asarray(photon_rate, dtype=np.float64)
-    background = np.asarray(background_photon_rate, dtype=np.float64)
+    rate = resolved.asarray(photon_rate, dtype=float_dtype)
+    background = resolved.asarray(background_photon_rate, dtype=float_dtype)
     if rate.ndim not in (0, 2) or background.ndim not in (0, 2):
         raise ValueError("photon_rate/background must be a scalar or a 2-D array.")
 
-    mean_photo = np.zeros((height, width), dtype=float_dtype)
+    mean_photo = xp.zeros((height, width), dtype=float_dtype)
     # Broadcasts a scalar or an (h, w) array; a mismatched array shape raises here.
     mean_photo += (rate + background) * exposure_s * qe
 
     # Photo-response non-uniformity: a fixed log-normal multiplier with unit mean,
     # applied only where there is light. Drawn from the fixed-pattern stream so it is
     # the same pattern in every frame (a master flat can remove it).
-    if config.prnu > 0 and np.any(mean_photo > 0):
+    if fixed_patterns is not None and config.prnu > 0:
+        mean_photo *= fixed_patterns.prnu_multiplier
+    elif config.prnu > 0 and bool(resolved.scalar(xp.any(mean_photo > 0))):
         sigma = config.prnu
-        rng = _fixed_pattern_rng(config, _FPN_STREAM_PRNU)
+        rng = _fixed_pattern_rng(config, _FPN_STREAM_PRNU, resolved)
         prnu = rng.lognormal(mean=-0.5 * sigma**2, sigma=sigma, size=mean_photo.shape)
         mean_photo *= prnu
 
@@ -164,8 +231,10 @@ def apply_gain_stage(
     electrons: NDArray[np.float64],
     gain: float,
     excess_noise_factor: float,
-    rng: np.random.Generator,
-) -> NDArray[np.float64]:
+    rng: Any,
+    *,
+    backend: ArrayBackend | None = None,
+) -> Any:
     r"""Apply a stochastic multiplication stage (EM register or APD avalanche).
 
     A single model covers both EMCCDs and avalanche photodiodes, parameterised by
@@ -186,6 +255,8 @@ def apply_gain_stage(
 
     Pixels with zero input electrons produce zero output.
     """
+    resolved = backend or get_backend()
+    xp = resolved.xp
     if gain <= 1.0:
         return electrons
     if excess_noise_factor <= 1.0:
@@ -194,9 +265,9 @@ def apply_gain_stage(
     f2 = excess_noise_factor**2
     alpha = 1.0 / (f2 - 1.0)
     theta = gain * (f2 - 1.0)
-    out = np.zeros_like(electrons)
+    out = xp.zeros_like(electrons)
     nonzero = electrons > 0
-    if np.any(nonzero):
+    if bool(resolved.scalar(xp.any(nonzero))):
         out[nonzero] = rng.gamma(shape=electrons[nonzero] * alpha, scale=theta)
     return out
 
@@ -204,19 +275,23 @@ def apply_gain_stage(
 def apply_em_gain(
     electrons: NDArray[np.float64],
     em_gain: float,
-    rng: np.random.Generator,
-) -> NDArray[np.float64]:
+    rng: Any,
+    *,
+    backend: ArrayBackend | None = None,
+) -> Any:
     """Backwards-compatible EMCCD multiplication (``F = sqrt(2)`` gain stage).
 
     Thin wrapper over :func:`apply_gain_stage`; prefer that for new code.
     """
-    return apply_gain_stage(electrons, em_gain, np.sqrt(2.0), rng)
+    return apply_gain_stage(electrons, em_gain, np.sqrt(2.0), rng, backend=backend)
 
 
 def apply_nonlinearity(
     electrons: NDArray[np.float64],
     config: CameraConfig,
-) -> NDArray[np.float64]:
+    *,
+    backend: ArrayBackend | None = None,
+) -> Any:
     """Bend the charge response near full well (detector nonlinearity).
 
     Two models, both deterministic (no randomness):
@@ -231,23 +306,26 @@ def apply_nonlinearity(
 
     The polynomial model takes precedence when both are configured.
     """
+    xp = (backend or get_backend()).xp
     if config.nonlinearity_coeffs is not None:
-        u = np.clip(electrons, 0.0, None) / config.full_well_e
-        factor = np.ones_like(u)
+        u = xp.clip(electrons, 0.0, None) / config.full_well_e
+        factor = xp.ones_like(u)
         for power, coeff in enumerate(config.nonlinearity_coeffs, start=1):
             factor = factor + coeff * u**power
-        bent: NDArray[np.float64] = electrons * np.clip(factor, 0.0, None)
+        bent: NDArray[np.float64] = electrons * xp.clip(factor, 0.0, None)
         return bent
     if config.nonlinearity <= 0:
         return electrons
-    factor = 1.0 - config.nonlinearity * np.clip(electrons, 0.0, None) / config.full_well_e
-    return electrons * np.clip(factor, 0.0, None)
+    factor = 1.0 - config.nonlinearity * xp.clip(electrons, 0.0, None) / config.full_well_e
+    return electrons * xp.clip(factor, 0.0, None)
 
 
 def apply_blooming(
     electrons: NDArray[np.float64],
     full_well_e: float,
-) -> NDArray[np.float64]:
+    *,
+    backend: ArrayBackend | None = None,
+) -> Any:
     """Bleed charge above full well along columns (CCD blooming).
 
     Charge exceeding ``full_well_e`` in a pixel floods symmetrically into the
@@ -256,23 +334,25 @@ def apply_blooming(
     full well until the charge is absorbed or runs off the array edge. Deterministic
     and charge-conserving except for charge that bleeds off the top/bottom edge.
     """
-    out = np.array(electrons, copy=True)
-    excess = np.clip(out - full_well_e, 0.0, None)
-    if not excess.any():
+    resolved = backend or get_backend()
+    xp = resolved.xp
+    out = xp.array(electrons, copy=True)
+    excess = xp.clip(out - full_well_e, 0.0, None)
+    if not bool(resolved.scalar(xp.any(excess))):
         return out
     n_rows, width = out.shape
-    out = np.minimum(out, full_well_e)
+    out = xp.minimum(out, full_well_e)
     # Split the overflow and flood it outward, each direction in a single sweep with
     # a per-column carry; a vacant pixel can only ever be filled up to full well, so
     # charge never flows back into an already-saturated pixel (no oscillation).
     down_share = 0.5 * excess
     up_share = excess - down_share
     for source, rows in ((down_share, range(n_rows)), (up_share, range(n_rows - 1, -1, -1))):
-        carry = np.zeros(width, dtype=out.dtype)
+        carry = xp.zeros(width, dtype=out.dtype)
         for r in rows:
             incoming = carry + source[r]
             room = full_well_e - out[r]
-            fill = np.minimum(incoming, room)
+            fill = xp.minimum(incoming, room)
             out[r] += fill
             carry = incoming - fill
         # Any charge still carried past the edge bleeds off the array.
@@ -282,7 +362,9 @@ def apply_blooming(
 def apply_cti(
     electrons: NDArray[np.float64],
     cti: float,
-) -> NDArray[np.float64]:
+    *,
+    backend: ArrayBackend | None = None,
+) -> Any:
     """Smear charge by charge-transfer inefficiency (CTI) during readout.
 
     A first-order, charge-conserving model: the readout register is row 0, so a
@@ -293,10 +375,11 @@ def apply_cti(
     """
     if cti <= 0:
         return electrons
-    out = np.array(electrons, copy=True)
+    xp = (backend or get_backend()).xp
+    out = xp.array(electrons, copy=True)
     n_rows = out.shape[0]
-    transfers = np.arange(n_rows, dtype=np.float64).reshape(n_rows, 1)
-    deferred = np.minimum(cti * transfers * out, out)
+    transfers = xp.arange(n_rows, dtype=np.float64).reshape(n_rows, 1)
+    deferred = xp.minimum(cti * transfers * out, out)
     out -= deferred
     out[1:] += deferred[:-1]
     return out
@@ -305,7 +388,9 @@ def apply_cti(
 def apply_ipc(
     electrons: NDArray[np.float64],
     coupling: float,
-) -> NDArray[np.float64]:
+    *,
+    backend: ArrayBackend | None = None,
+) -> Any:
     """Couple a fraction of each pixel into its four neighbours (inter-pixel capacitance).
 
     Convolves with the charge-conserving 3x3 kernel whose centre is
@@ -315,17 +400,18 @@ def apply_ipc(
     """
     if coupling <= 0:
         return electrons
-    kernel = np.array(
+    resolved = backend or get_backend()
+    kernel = resolved.xp.array(
         [[0.0, coupling, 0.0], [coupling, 1.0 - 4.0 * coupling, coupling], [0.0, coupling, 0.0]],
         dtype=np.float64,
     )
-    convolved = ndimage.convolve(electrons, kernel, mode="constant", cval=0.0)
+    convolved = resolved.convolve(electrons, kernel)
     # Preserve the input dtype (the float32 fast path) — convolve upcasts to float64.
     result: NDArray[np.float64] = convolved.astype(electrons.dtype, copy=False)
     return result
 
 
-def _amplifier_maps(config: CameraConfig) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+def _amplifier_maps(config: CameraConfig, backend: ArrayBackend | None = None) -> tuple[Any, Any]:
     """Per-pixel conversion-gain (e-/ADU) and extra bias-offset (ADU) maps.
 
     Tiles the sensor into ``amplifier_layout`` blocks, each with its own small,
@@ -334,25 +420,27 @@ def _amplifier_maps(config: CameraConfig) -> tuple[NDArray[np.float64], NDArray[
     """
     height, width = config.resolution
     n_r, n_c = config.amplifier_layout
-    gain = np.full((height, width), config.gain_e_per_adu, dtype=np.float64)
-    offset = np.zeros((height, width), dtype=np.float64)
+    resolved = backend or get_backend()
+    xp = resolved.xp
     if n_r * n_c <= 1 or (config.amp_gain_nonuniformity <= 0 and config.amp_offset_spread_adu <= 0):
-        return gain, offset
-    g_rng = _fixed_pattern_rng(config, _FPN_STREAM_AMP_GAIN)
-    o_rng = _fixed_pattern_rng(config, _FPN_STREAM_AMP_OFFSET)
+        return config.gain_e_per_adu, 0.0
+    gain = xp.full((height, width), config.gain_e_per_adu, dtype=np.float64)
+    offset = xp.zeros((height, width), dtype=np.float64)
+    g_rng = _fixed_pattern_rng(config, _FPN_STREAM_AMP_GAIN, resolved)
+    o_rng = _fixed_pattern_rng(config, _FPN_STREAM_AMP_OFFSET, resolved)
     g_dev = g_rng.normal(0.0, config.amp_gain_nonuniformity, size=(n_r, n_c))
     o_dev = o_rng.normal(0.0, config.amp_offset_spread_adu, size=(n_r, n_c))
-    row_blocks = np.array_split(np.arange(height), n_r)
-    col_blocks = np.array_split(np.arange(width), n_c)
+    row_blocks = xp.array_split(xp.arange(height), n_r)
+    col_blocks = xp.array_split(xp.arange(width), n_c)
     for i, rows in enumerate(row_blocks):
         for j, cols in enumerate(col_blocks):
-            block = np.ix_(rows, cols)
+            block = xp.ix_(rows, cols)
             gain[block] = config.gain_e_per_adu * (1.0 + g_dev[i, j])
             offset[block] = o_dev[i, j]
     return gain, offset
 
 
-def _bias_structure_map(config: CameraConfig) -> NDArray[np.float64]:
+def _bias_structure_map(config: CameraConfig, backend: ArrayBackend | None = None) -> Any:
     """A fixed, structured bias pattern in ADU (a gradient plus per-column offsets).
 
     Zero everywhere when ``bias_structure_amplitude_adu`` is zero. Otherwise a
@@ -360,23 +448,25 @@ def _bias_structure_map(config: CameraConfig) -> NDArray[np.float64]:
     magnitude is ``bias_structure_amplitude_adu``.
     """
     height, width = config.resolution
+    resolved = backend or get_backend()
+    xp = resolved.xp
     if config.bias_structure_amplitude_adu <= 0:
-        return np.zeros((height, width), dtype=np.float64)
-    rng = _fixed_pattern_rng(config, _FPN_STREAM_BIAS)
-    yy = np.linspace(-1.0, 1.0, height).reshape(height, 1)
-    xx = np.linspace(-1.0, 1.0, width).reshape(1, width)
+        return 0.0
+    rng = _fixed_pattern_rng(config, _FPN_STREAM_BIAS, resolved)
+    yy = xp.linspace(-1.0, 1.0, height).reshape(height, 1)
+    xx = xp.linspace(-1.0, 1.0, width).reshape(1, width)
     a, b = rng.uniform(-1.0, 1.0, size=2)
     plane = a * xx + b * yy
     col_offsets = rng.normal(0.0, 1.0, size=width).reshape(1, width)
     pattern = 0.6 * plane + 0.4 * col_offsets
-    peak = float(np.max(np.abs(pattern)))
+    peak = resolved.scalar(xp.max(xp.abs(pattern)))
     if peak == 0.0:
-        return np.zeros((height, width), dtype=np.float64)
+        return xp.zeros((height, width), dtype=np.float64)
     scaled: NDArray[np.float64] = pattern / peak * config.bias_structure_amplitude_adu
-    return np.broadcast_to(scaled, (height, width)).astype(np.float64)
+    return xp.broadcast_to(scaled, (height, width)).astype(np.float64)
 
 
-def _defect_mask(config: CameraConfig) -> NDArray[np.bool_] | None:
+def _defect_mask(config: CameraConfig, backend: ArrayBackend | None = None) -> Any | None:
     """A fixed boolean map of dead pixels/columns (``True`` = no response), or ``None``.
 
     Deterministic (keyed on ``fixed_pattern_seed``): a fraction of whole columns and
@@ -386,8 +476,10 @@ def _defect_mask(config: CameraConfig) -> NDArray[np.bool_] | None:
     height, width = config.resolution
     if config.bad_column_fraction <= 0 and config.dead_pixel_fraction <= 0:
         return None
-    rng = _fixed_pattern_rng(config, _FPN_STREAM_DEFECT)
-    mask = np.zeros((height, width), dtype=np.bool_)
+    resolved = backend or get_backend()
+    xp = resolved.xp
+    rng = _fixed_pattern_rng(config, _FPN_STREAM_DEFECT, resolved)
+    mask = xp.zeros((height, width), dtype=np.bool_)
     if config.dead_pixel_fraction > 0:
         mask |= rng.random((height, width)) < config.dead_pixel_fraction
     if config.bad_column_fraction > 0:
@@ -400,8 +492,10 @@ def add_cosmic_rays(
     electrons: NDArray[np.float64],
     config: CameraConfig,
     exposure_s: float,
-    rng: np.random.Generator,
-) -> NDArray[np.float64]:
+    rng: Any,
+    *,
+    backend: ArrayBackend | None = None,
+) -> Any:
     """Deposit cosmic-ray charge bursts into random pixels.
 
     The number of hits is Poisson with mean ``rate * area * exposure``; each hit
@@ -411,11 +505,13 @@ def add_cosmic_rays(
     in-plane direction (a glancing muon) and spreads its charge evenly along the
     track --- the extended morphology a real rejection pipeline must handle.
     """
+    resolved = backend or get_backend()
+    xp = resolved.xp
     height, width = electrons.shape
     pixel_cm = config.pixel_size_um * 1e-4
     area_cm2 = height * width * pixel_cm**2
     expected = config.cosmic_ray_rate_per_cm2_s * area_cm2 * exposure_s
-    n_hits = int(rng.poisson(expected))
+    n_hits = int(resolved.scalar(rng.poisson(expected)))
     if n_hits == 0:
         return electrons
     ys = rng.integers(0, height, n_hits)
@@ -424,25 +520,28 @@ def add_cosmic_rays(
     charges = rng.gamma(shape=2.0, scale=5000.0, size=n_hits)
 
     if config.cosmic_ray_track_length_px <= 0:
-        np.add.at(electrons, (ys, xs), charges)
+        xp.add.at(electrons, (ys, xs), charges)
         return electrons
 
     lengths = rng.exponential(config.cosmic_ray_track_length_px, size=n_hits)
     angles = rng.uniform(0.0, 2.0 * np.pi, size=n_hits)
     for x0, y0, charge, length, angle in zip(xs, ys, charges, lengths, angles):
-        n_steps = max(1, round(float(length)))
-        steps = np.arange(n_steps)
-        tx = np.clip(np.round(x0 + np.cos(angle) * steps).astype(int), 0, width - 1)
-        ty = np.clip(np.round(y0 + np.sin(angle) * steps).astype(int), 0, height - 1)
-        np.add.at(electrons, (ty, tx), charge / n_steps)
+        n_steps = max(1, round(resolved.scalar(length)))
+        steps = xp.arange(n_steps)
+        tx = xp.clip(xp.round(x0 + xp.cos(angle) * steps).astype(int), 0, width - 1)
+        ty = xp.clip(xp.round(y0 + xp.sin(angle) * steps).astype(int), 0, height - 1)
+        xp.add.at(electrons, (ty, tx), charge / n_steps)
     return electrons
 
 
 def digitize(
     electrons: NDArray[np.float64],
     config: CameraConfig,
-    rng: np.random.Generator,
-) -> NDArray[np.uint32]:
+    rng: Any,
+    *,
+    backend: ArrayBackend | None = None,
+    fixed_patterns: FixedPatternMaps | None = None,
+) -> Any:
     """Add read/reset noise, convert electrons to ADU, then saturate and quantise.
 
     Read noise is referenced to the sensor output amplifier. When
@@ -454,12 +553,16 @@ def digitize(
     applies per-block conversion gain and offset; and a fixed structured-bias
     pattern rides on the flat pedestal.
     """
-    signal = np.clip(electrons, 0.0, None)
-    signal = np.minimum(signal, config.full_well_e)
+    resolved = backend or get_backend()
+    xp = resolved.xp
+    signal = xp.clip(electrons, 0.0, None)
+    signal = xp.minimum(signal, config.full_well_e)
 
     # Dead pixels/columns: a fixed defect map that collects no charge (they still
     # carry read/reset noise and the bias pedestal, so they read as dark defects).
-    defects = _defect_mask(config)
+    defects = (
+        fixed_patterns.defect_mask if fixed_patterns is not None else _defect_mask(config, resolved)
+    )
     if defects is not None:
         signal[defects] = 0.0
 
@@ -479,27 +582,35 @@ def digitize(
         else:
             signal += rng.normal(0.0, config.read_noise_e, size=signal.shape)
 
-    gain_map, amp_offset = _amplifier_maps(config)
-    adu = signal / gain_map + config.bias_offset_adu + amp_offset + _bias_structure_map(config)
-    adu = np.clip(np.round(adu), 0, config.max_adu)
+    if fixed_patterns is None:
+        gain_map, amp_offset = _amplifier_maps(config, resolved)
+        bias_structure = _bias_structure_map(config, resolved)
+    else:
+        gain_map = fixed_patterns.amplifier_gain
+        amp_offset = fixed_patterns.amplifier_offset
+        bias_structure = fixed_patterns.bias_structure
+    adu = signal / gain_map + config.bias_offset_adu + amp_offset + bias_structure
+    adu = xp.clip(xp.round(adu), 0, config.max_adu)
     return adu.astype(np.uint32)
 
 
 class SimulationResult(NamedTuple):
     """The output of :func:`simulate_frame`: the digitised frame plus ground truth."""
 
-    adu: NDArray[np.uint32]
-    mean_photoelectrons: NDArray[np.float64]
-    mean_dark_electrons: NDArray[np.float64]
+    adu: Any
+    mean_photoelectrons: Any
+    mean_dark_electrons: Any
     photon_rate: PhotonRate
 
 
 def frame_electrons(
     config: CameraConfig,
     mean_electrons: NDArray[np.float64],
-    rng: np.random.Generator,
+    rng: Any,
     exposure_s: float = 0.0,
-) -> NDArray[np.float64]:
+    *,
+    backend: ArrayBackend | None = None,
+) -> Any:
     """Apply shot noise, CIC, cosmic rays, nonlinearity, and any gain stage.
 
     Takes the noise-free expected electrons per pixel and returns a realised
@@ -507,35 +618,40 @@ def frame_electrons(
     only to scale the cosmic-ray rate. The working dtype follows ``mean_electrons``
     (``float64`` exact, or ``float32`` for the memory-light fast path).
     """
+    resolved = backend or get_backend()
     electrons = rng.poisson(mean_electrons).astype(mean_electrons.dtype)
 
     if config.clock_induced_charge_e > 0:
         electrons += rng.poisson(config.clock_induced_charge_e, size=electrons.shape)
 
     if config.cosmic_ray_rate_per_cm2_s > 0 and exposure_s > 0:
-        electrons = add_cosmic_rays(electrons, config, exposure_s, rng)
+        electrons = add_cosmic_rays(electrons, config, exposure_s, rng, backend=resolved)
 
     if config.blooming:
-        electrons = apply_blooming(electrons, config.full_well_e)
+        electrons = apply_blooming(electrons, config.full_well_e, backend=resolved)
 
     if config.cti > 0:
-        electrons = apply_cti(electrons, config.cti)
+        electrons = apply_cti(electrons, config.cti, backend=resolved)
 
     if config.ipc_coupling > 0:
-        electrons = apply_ipc(electrons, config.ipc_coupling)
+        electrons = apply_ipc(electrons, config.ipc_coupling, backend=resolved)
 
     if config.nonlinearity > 0 or config.nonlinearity_coeffs is not None:
-        electrons = apply_nonlinearity(electrons, config)
+        electrons = apply_nonlinearity(electrons, config, backend=resolved)
 
     if config.has_gain_stage:
         electrons = apply_gain_stage(
-            electrons, config.em_gain, config.gain_excess_noise_factor, rng
+            electrons,
+            config.em_gain,
+            config.gain_excess_noise_factor,
+            rng,
+            backend=resolved,
         )
 
     return electrons
 
 
-def block_sum(array: NDArray[Any], factor: int) -> NDArray[Any]:
+def block_sum(array: Any, factor: int) -> Any:
     """Sum an array into ``factor x factor`` super-pixel blocks (both dims divisible)."""
     if factor == 1:
         return array
@@ -557,9 +673,11 @@ def simulate_frame(
     extra_electrons: PhotonRate = 0.0,
     binning: int = 1,
     binning_mode: str = "digital",
-    rng: np.random.Generator | None = None,
+    rng: Any | None = None,
     seed: int | None = None,
     float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
+    backend: ArrayBackend | None = None,
+    fixed_patterns: FixedPatternMaps | None = None,
 ) -> SimulationResult:
     """Simulate one frame end-to-end, returning ADU and the noise-free truth.
 
@@ -605,6 +723,7 @@ def simulate_frame(
         detectors and bulk dataset generation. The digitised ADU stay integer
         regardless; only the floating-point signal chain and the truth arrays change.
     """
+    resolved = backend or get_backend()
     if exposure_s < 0:
         raise ValueError("exposure_s must be non-negative.")
     if binning < 1:
@@ -612,13 +731,27 @@ def simulate_frame(
     if binning_mode not in ("digital", "on_chip"):
         raise ValueError("binning_mode must be 'digital' or 'on_chip'.")
     if rng is None:
-        rng = np.random.default_rng(seed)
+        rng = resolved.default_rng(seed)
 
     mean_photo = photo_signal_map(
-        config, photon_rate, exposure_s, background_photon_rate, quantum_efficiency, float_dtype
+        config,
+        photon_rate,
+        exposure_s,
+        background_photon_rate,
+        quantum_efficiency,
+        float_dtype,
+        backend=resolved,
+        fixed_patterns=fixed_patterns,
     )
-    mean_dark = dark_signal_map(config, exposure_s, temperature_c, float_dtype)
-    mean_total = mean_photo + mean_dark + np.asarray(extra_electrons, dtype=float_dtype)
+    mean_dark = dark_signal_map(
+        config,
+        exposure_s,
+        temperature_c,
+        float_dtype,
+        backend=resolved,
+        fixed_patterns=fixed_patterns,
+    )
+    mean_total = mean_photo + mean_dark + resolved.asarray(extra_electrons, dtype=float_dtype)
 
     if binning > 1:
         height, width = config.resolution
@@ -628,8 +761,8 @@ def simulate_frame(
             )
 
     if binning == 1:
-        electrons = frame_electrons(config, mean_total, rng, exposure_s)
-        adu = digitize(electrons, config, rng)
+        electrons = frame_electrons(config, mean_total, rng, exposure_s, backend=resolved)
+        adu = digitize(electrons, config, rng, backend=resolved, fixed_patterns=fixed_patterns)
     elif binning_mode == "on_chip":
         # Charge is summed before the amplifier: read out each super-pixel once, so a
         # single read noise applies. The summing well holds ~binning**2 more charge.
@@ -637,13 +770,18 @@ def simulate_frame(
         binned_config = config.replace(
             resolution=binned_shape, full_well_e=config.full_well_e * binning * binning
         )
-        electrons = frame_electrons(binned_config, block_sum(mean_total, binning), rng, exposure_s)
-        adu = digitize(electrons, binned_config, rng)
+        electrons = frame_electrons(
+            binned_config, block_sum(mean_total, binning), rng, exposure_s, backend=resolved
+        )
+        # On-chip binning changes the pixel grid, so native cached maps do not apply.
+        adu = digitize(electrons, binned_config, rng, backend=resolved)
     else:
         # Digital / post-read: read every native pixel (its own read noise), then sum
         # the digitised values, so read noise adds in quadrature over binning**2 pixels.
-        electrons = frame_electrons(config, mean_total, rng, exposure_s)
-        native_adu = digitize(electrons, config, rng)
+        electrons = frame_electrons(config, mean_total, rng, exposure_s, backend=resolved)
+        native_adu = digitize(
+            electrons, config, rng, backend=resolved, fixed_patterns=fixed_patterns
+        )
         adu = block_sum(native_adu.astype(np.uint64), binning).astype(np.uint32)
 
     return SimulationResult(
@@ -655,12 +793,22 @@ def generate_dark_frame(
     config: CameraConfig,
     exposure_s: float,
     temperature_c: float,
-    rng: np.random.Generator | None = None,
+    rng: Any | None = None,
     seed: int | None = None,
-) -> NDArray[np.uint32]:
+    *,
+    backend: ArrayBackend | None = None,
+    fixed_patterns: FixedPatternMaps | None = None,
+) -> Any:
     """End-to-end dark frame in ADU (the ``photon_rate = 0`` case of ``simulate_frame``)."""
     return simulate_frame(
-        config, 0.0, exposure_s, temperature_c=temperature_c, rng=rng, seed=seed
+        config,
+        0.0,
+        exposure_s,
+        temperature_c=temperature_c,
+        rng=rng,
+        seed=seed,
+        backend=backend,
+        fixed_patterns=fixed_patterns,
     ).adu
 
 
@@ -668,14 +816,18 @@ def dark_frame_electrons(
     config: CameraConfig,
     exposure_s: float,
     temperature_c: float,
-    rng: np.random.Generator,
-) -> NDArray[np.float64]:
+    rng: Any,
+    *,
+    backend: ArrayBackend | None = None,
+) -> Any:
     """Electron-domain dark frame prior to digitisation (kept for convenience)."""
-    mean_dark = dark_signal_map(config, exposure_s, temperature_c)
-    return frame_electrons(config, mean_dark, rng, exposure_s)
+    resolved = backend or get_backend()
+    mean_dark = dark_signal_map(config, exposure_s, temperature_c, backend=resolved)
+    return frame_electrons(config, mean_dark, rng, exposure_s, backend=resolved)
 
 
 __all__ = [
+    "FixedPatternMaps",
     "SimulationResult",
     "add_cosmic_rays",
     "apply_blooming",
@@ -688,6 +840,7 @@ __all__ = [
     "dark_frame_electrons",
     "dark_signal_map",
     "digitize",
+    "fixed_pattern_maps",
     "frame_electrons",
     "generate_dark_frame",
     "photo_signal_map",

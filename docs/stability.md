@@ -26,6 +26,7 @@ gf.Sky, gf.Thermal, gf.WCSInfo, gf.Vignetting, gf.RadialDistortion
 gf.PSF, gf.GaussianPSF, gf.MoffatPSF, gf.AiryPSF, gf.ArrayPSF, gf.EllipticalGaussianPSF
 gf.LightCurve, gf.Observation, gf.ObservationTruth, gf.Pointing
 gf.QE, gf.SED, gf.Spectrum, gf.SpectralBandpass
+gf.ArrayBackend, gf.get_backend, gf.get_array_module, gf.to_numpy
 gf.analysis.aperture_sum, gf.analysis.centroid, gf.analysis.matched_filter_centroid
 gf.analysis.photon_transfer_curve
 gf.dataset.pairs, gf.dataset.random_star_fields, gf.dataset.PairDataset
@@ -40,6 +41,9 @@ series we guarantee:
 - The **signal chain stays reproducible**: a given config + inputs + `seed`
   produces the same frame on the same NumPy version. (Bit-for-bit output is not
   guaranteed across NumPy releases that change their RNG internals.)
+- GPU seeds repeat on the same CuPy/backend version. CPU and GPU streams are
+  intentionally independent, so cross-device parity is statistical rather than
+  pixel-identical.
 
 ## What is *not* covered
 

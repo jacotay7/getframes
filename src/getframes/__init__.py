@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from . import analysis, dataset
 from .__about__ import __version__
+from .backend import ArrayBackend, get_array_module, get_backend, to_numpy
 from .calibrate import calibrate, combine
 from .camera import Camera
 from .config import CameraConfig, SensorType
@@ -51,6 +52,7 @@ __all__ = [
     "QE",
     "SED",
     "AiryPSF",
+    "ArrayBackend",
     "ArrayPSF",
     "Bandpass",
     "Camera",
@@ -87,5 +89,8 @@ __all__ = [
     "calibrate",
     "combine",
     "dataset",
+    "get_array_module",
+    "get_backend",
     "load_preset",
+    "to_numpy",
 ]

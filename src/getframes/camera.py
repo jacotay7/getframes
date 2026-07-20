@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 import numpy as np
 
 from . import noise
+from .backend import ArrayBackend, get_backend
 from .config import CameraConfig
 from .frame import Frame, FrameTruth
 from .observation import Observation, ObservationTruth, Pointing
@@ -56,6 +57,11 @@ class Camera:
         per-pixel memory, useful for large detectors and bulk dataset generation.
         The digitised ADU stay integer either way; only the floating-point arrays
         (including each frame's ground truth) change.
+    device:
+        Execution device for detector arrays and random sampling: ``"cpu"``
+        (NumPy, default) or ``"gpu"`` (optional CuPy). GPU frames keep their ADU
+        and truth arrays on device; CPU and GPU seeds are reproducible within a
+        backend but intentionally do not produce identical random samples.
     """
 
     _PRECISIONS: ClassVar[dict[str, type[np.floating[Any]]]] = {
@@ -70,6 +76,7 @@ class Camera:
         default_temperature_c: float | None = None,
         seed: int | None = None,
         precision: str = "float64",
+        device: str = "cpu",
     ) -> None:
         if not isinstance(config, CameraConfig):
             raise TypeError("config must be a CameraConfig instance.")
@@ -85,7 +92,11 @@ class Camera:
         )
         self.precision = precision
         self._float_dtype = self._PRECISIONS[precision]
-        self._rng = np.random.default_rng(seed)
+        self._backend: ArrayBackend = get_backend(device)
+        self._rng = self._backend.default_rng(seed)
+        self._fixed_patterns = noise.fixed_pattern_maps(
+            config, backend=self._backend, float_dtype=self._float_dtype
+        )
 
     # ------------------------------------------------------------------
     # Constructors
@@ -115,19 +126,25 @@ class Camera:
     def sensor_type(self) -> str:
         return self.config.sensor_type.value
 
+    @property
+    def device(self) -> str:
+        """Execution device (``"cpu"`` or ``"gpu"``)."""
+        return self._backend.device
+
     def with_config(self, **changes: Any) -> Camera:
         """Return a new camera with configuration fields overridden."""
         return Camera(
             self.config.replace(**changes),
             default_temperature_c=self.default_temperature_c,
             precision=self.precision,
+            device=self.device,
         )
 
     # ------------------------------------------------------------------
     # Frame generation
     # ------------------------------------------------------------------
-    def _resolve_rng(self, seed: int | None) -> np.random.Generator:
-        return np.random.default_rng(seed) if seed is not None else self._rng
+    def _resolve_rng(self, seed: int | None) -> Any:
+        return self._backend.default_rng(seed) if seed is not None else self._rng
 
     @staticmethod
     def _series_seeds(seed: int | None, n_frames: int) -> list[int | None]:
@@ -173,7 +190,14 @@ class Camera:
         """
         temp = self.default_temperature_c if temperature is None else temperature
         rng = self._resolve_rng(seed)
-        data = noise.generate_dark_frame(self.config, exposure, temp, rng=rng)
+        data = noise.generate_dark_frame(
+            self.config,
+            exposure,
+            temp,
+            rng=rng,
+            backend=self._backend,
+            fixed_patterns=self._fixed_patterns,
+        )
         return Frame(data=data, metadata=self._metadata("dark", exposure, temp, seed))
 
     def dark_series(
@@ -264,6 +288,8 @@ class Camera:
             binning_mode=binning_mode,
             rng=rng,
             float_dtype=self._float_dtype,
+            backend=self._backend,
+            fixed_patterns=self._fixed_patterns,
         )
         truth = (
             FrameTruth(
@@ -310,8 +336,9 @@ class Camera:
         """
         if self.config.qe_curve is None:
             raise ValueError("expose_spectral requires CameraConfig.qe_curve")
-        cube = np.asarray(photon_rate_cube, dtype=self._float_dtype)
-        wavelengths = np.asarray(wavelengths_nm, dtype=np.float64)
+        xp = self._backend.xp
+        cube = self._backend.asarray(photon_rate_cube, dtype=self._float_dtype)
+        wavelengths_host = np.asarray(self._backend.to_numpy(wavelengths_nm), dtype=np.float64)
         if cube.ndim != 3:
             raise ValueError("photon_rate_cube must have shape (wavelength, height, width)")
         if cube.shape[1:] != self.resolution:
@@ -319,15 +346,17 @@ class Camera:
                 f"photon_rate_cube spatial shape {cube.shape[1:]} does not match camera "
                 f"resolution {self.resolution}"
             )
-        if wavelengths.ndim != 1 or wavelengths.size != cube.shape[0]:
+        if wavelengths_host.ndim != 1 or wavelengths_host.size != cube.shape[0]:
             raise ValueError("wavelengths_nm must be a 1-D array matching cube axis 0")
-        if wavelengths.size == 0 or not np.all(np.isfinite(wavelengths)):
+        if wavelengths_host.size == 0 or not np.all(np.isfinite(wavelengths_host)):
             raise ValueError("wavelengths_nm must contain finite values")
-        if not np.all(np.isfinite(cube)) or np.any(cube < 0):
+        if not bool(self._backend.scalar(xp.all(xp.isfinite(cube)))) or bool(
+            self._backend.scalar(xp.any(cube < 0))
+        ):
             raise ValueError("photon_rate_cube must be finite and non-negative")
-        qe = np.asarray(self.config.qe_curve(wavelengths), dtype=self._float_dtype)
-        electron_rate = np.tensordot(qe, cube, axes=(0, 0))
-        integrated_rate = np.sum(cube, axis=0)
+        qe = self._backend.asarray(self.config.qe_curve(wavelengths_host), dtype=self._float_dtype)
+        electron_rate = xp.tensordot(qe, cube, axes=(0, 0))
+        integrated_rate = xp.sum(cube, axis=0)
         frame = self.expose(
             electron_rate,
             exposure,
@@ -340,7 +369,7 @@ class Camera:
             include_truth=include_truth,
         )
         frame.metadata["spectral"] = True
-        frame.metadata["spectral_wavelengths_nm"] = [float(value) for value in wavelengths]
+        frame.metadata["spectral_wavelengths_nm"] = [float(value) for value in wavelengths_host]
         if frame.truth is not None:
             frame = replace(
                 frame,
@@ -348,14 +377,14 @@ class Camera:
                     frame.truth,
                     photon_rate=integrated_rate,
                     spectral_photon_rate=cube,
-                    wavelengths_nm=wavelengths,
+                    wavelengths_nm=self._backend.asarray(wavelengths_host, dtype=np.float64),
                 ),
             )
         return frame
 
-    def _binned_extra(self, extra_electrons: PhotonRate, binning: int) -> NDArray[Any]:
+    def _binned_extra(self, extra_electrons: PhotonRate, binning: int) -> Any:
         """The ``extra_electrons`` truth term summed to match a binned frame's grid."""
-        extra = np.asarray(extra_electrons, dtype=self._float_dtype)
+        extra = self._backend.asarray(extra_electrons, dtype=self._float_dtype)
         if binning == 1:
             return extra
         if extra.ndim == 0:
@@ -635,18 +664,26 @@ class Camera:
         exposure: float,
         background: PhotonRate,
         qe: float | None,
-    ) -> NDArray[np.float64]:
+    ) -> Any:
         """Advance the latent-charge state after a frame.
 
         Trapped charge releases ``persistence_decay`` of itself into the frame just
         exposed (``released``) and captures ``persistence_fraction`` of that frame's
         noise-free photo-signal. The remainder stays trapped for the next frame.
         """
-        signal = noise.photo_signal_map(self.config, rate, exposure, background, qe)
+        signal = noise.photo_signal_map(
+            self.config,
+            rate,
+            exposure,
+            background,
+            qe,
+            backend=self._backend,
+            fixed_patterns=self._fixed_patterns,
+        )
         captured = self.config.persistence_fraction * signal
-        latent_arr = np.asarray(latent, dtype=np.float64)
-        released_arr = np.asarray(released, dtype=np.float64)
-        updated: NDArray[np.float64] = latent_arr - released_arr + captured
+        latent_arr = self._backend.asarray(latent, dtype=np.float64)
+        released_arr = self._backend.asarray(released, dtype=np.float64)
+        updated = latent_arr - released_arr + captured
         return updated
 
     @staticmethod
@@ -746,6 +783,7 @@ class Camera:
             "read_noise_e": self.config.read_noise_e,
             "gain_e_per_adu": self.config.gain_e_per_adu,
             "em_gain": self.config.em_gain,
+            "device": self.device,
             "seed": seed,
         }
 
@@ -753,5 +791,5 @@ class Camera:
         h, w = self.config.resolution
         return (
             f"Camera(name={self.config.name!r}, sensor={self.config.sensor_type.value!r}, "
-            f"resolution={h}x{w})"
+            f"resolution={h}x{w}, device={self.device!r})"
         )

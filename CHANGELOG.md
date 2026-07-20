@@ -6,6 +6,27 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Optional CuPy detector execution via `Camera(..., device="gpu")`. Photon-rate,
+  electron, `FrameTruth`, and digitised ADU arrays remain device-resident through
+  scalar and spectral exposure paths, including all detector artifact models and
+  both binning modes. `Frame.device`, `get_backend`, `get_array_module`, and
+  `to_numpy` make the execution and host-copy boundaries explicit.
+- CUDA parity tests cover seeded reproducibility, CPU/GPU statistics, spectral
+  truth, CCD/CMOS/sCMOS/EMCCD/eAPD paths, fixed structure, gain, and detector
+  artifacts. The benchmark runner accepts `--device gpu|both`.
+- Added a reproducible paired-device bulk-throughput suite, self-describing JSON
+  artifact, rendered reference table, and README/GPU-guide CPU-versus-GPU results
+  for representative WFS, EMCCD, eAPD, and large science-frame workflows.
+
+### Changed
+
+- Fixed PRNU/DSNU/hot-pixel, amplifier, bias-structure, and defect maps are built
+  once on persistent `Camera` construction rather than regenerated for every
+  frame. This preserves the fixed-pattern contract and materially improves both
+  CPU and GPU warm exposure throughput.
+
 ## [2.1.0] - 2026-07-19
 
 ### Added
