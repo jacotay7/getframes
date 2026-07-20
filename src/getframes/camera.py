@@ -289,7 +289,7 @@ class Camera:
         exposure: float,
         temperature: float | None = None,
         *,
-        background: NDArray[np.floating[Any]] | float = 0.0,
+        background: PhotonRate = 0.0,
         seed: int | None = None,
         binning: int = 1,
         binning_mode: str = "digital",
