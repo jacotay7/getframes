@@ -40,7 +40,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 # NumPy 2.0 renamed ``trapz`` to ``trapezoid``; support both at runtime.
-_trapezoid = getattr(np, "trapezoid", None) or np.trapz  # noqa: NPY201
+_trapezoid = getattr(np, "trapezoid", None) or getattr(np, "trapz")  # noqa: B009
 
 # Planck/physical constants (SI), used only for blackbody SED shapes.
 _H_PLANCK = 6.62607015e-34  # J s

@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from .optics import Telescope
 
 # NumPy 2.0 renamed ``trapz`` to ``trapezoid``; support both at runtime.
-_trapezoid = getattr(np, "trapezoid", None) or np.trapz  # noqa: NPY201
+_trapezoid = getattr(np, "trapezoid", None) or getattr(np, "trapz")  # noqa: B009
 
 # Physical constants (SI).
 _H_PLANCK = 6.62607015e-34  # J s

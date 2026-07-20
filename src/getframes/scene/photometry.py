@@ -25,7 +25,7 @@ from numpy.typing import ArrayLike, NDArray
 from ..spectral import QE, SED, SpectralBandpass, Spectrum, effective_qe, overlap_integral
 
 # NumPy 2.0 renamed ``trapz`` to ``trapezoid``; support both at runtime.
-_trapezoid = getattr(np, "trapezoid", None) or np.trapz  # noqa: NPY201
+_trapezoid = getattr(np, "trapezoid", None) or getattr(np, "trapz")  # noqa: B009
 
 # Physical constants (SI), used for the AB zero point and extinction.
 _H_PLANCK = 6.62607015e-34  # J s
