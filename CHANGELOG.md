@@ -297,8 +297,8 @@ together in 1.0.
 - Documentation, runnable examples, and CI (lint, type-check, test matrix, PyPI
   release via Trusted Publishing).
 
-[Unreleased]: https://github.com/jacotay7/getframes/compare/v2.1.0...HEAD
-[2.1.0]: https://github.com/jacotay7/getframes/compare/v2.0.0...v2.1.0
-[2.0.0]: https://github.com/jacotay7/getframes/compare/v1.0.0...v2.0.0
-[1.0.0]: https://github.com/jacotay7/getframes/compare/v0.1.0...v1.0.0
-[0.1.0]: https://github.com/jacotay7/getframes/releases/tag/v0.1.0
+[Unreleased]: https://github.com/jacotay7/getframes/compare/2.1.0...HEAD
+[2.1.0]: https://github.com/jacotay7/getframes/compare/2.0.0...2.1.0
+[2.0.0]: https://github.com/jacotay7/getframes/compare/1.0.0...2.0.0
+[1.0.0]: https://github.com/jacotay7/getframes/compare/0.1.0...1.0.0
+[0.1.0]: https://github.com/jacotay7/getframes/releases/tag/0.1.0

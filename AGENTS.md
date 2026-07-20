@@ -98,12 +98,12 @@ ruff check . && ruff format --check . && mypy && pytest
 ## CI / release
 
 - `.github/workflows/ci.yml` — ruff (lint + format), mypy, pytest matrix (3.10–3.13, Linux/macOS/Windows).
-- `.github/workflows/release.yml` — builds and publishes to PyPI on a `vX.Y.Z` tag
+- `.github/workflows/release.yml` — builds and publishes to PyPI on an `X.Y.Z` tag
   via **Trusted Publishing (OIDC)** — no API tokens. `workflow_dispatch` targets TestPyPI.
 - `.github/workflows/docs.yml` — deploys MkDocs to GitHub Pages.
 
 To cut a release: bump `src/getframes/__about__.py` and the `CHANGELOG.md`, tag
-`vX.Y.Z`, and push the tag.
+`X.Y.Z`, and push the tag.
 
 ## Keeping the repo healthy
 
