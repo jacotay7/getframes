@@ -112,15 +112,15 @@ host transfers) is:
 
 | Workflow | Native shape | CPU (frames/s) | GPU (frames/s) | Speedup |
 | --- | ---: | ---: | ---: | ---: |
-| Pyramid WFS CMOS | 80x80 | 4,874.7 | 7,459.7 | 1.53x |
-| Shack-Hartmann WFS CMOS | 160x160 | 1,290.1 | 7,432.4 | 5.76x |
-| OCAM2K EMCCD | 240x240 | 346.3 | 3,349.1 | 9.67x |
-| SAPHIRA eAPD | 256x320 | 268.6 | 3,187.1 | 11.86x |
-| Large science CMOS | 1024x1024 | 28.5 | 1,053.8 | 37.01x |
+| Pyramid WFS CMOS | 80x80 | 5,264.9 | 10,565.4 | 2.01x |
+| Shack-Hartmann WFS CMOS | 160x160 | 1,372.0 | 10,538.1 | 7.68x |
+| OCAM2K EMCCD | 240x240 | 347.7 | 8,057.1 | 23.17x |
+| SAPHIRA eAPD | 256x320 | 283.2 | 7,481.8 | 26.42x |
+| Large science CMOS | 1024x1024 | 31.5 | 1,431.9 | 45.39x |
 
 Higher is better. CUDA was synchronized around every timed region; construction
-was excluded. GPU launch overhead limits the smallest case, while larger arrays
-and gain-stage detectors expose much more parallel work. See the
+was excluded. Even the smallest case reaches about 2x, while larger arrays and
+gain-stage detectors expose much more parallel work. See the
 [full snapshot](benchmarks/device-results.md), [raw JSON](benchmarks/device-results.json),
 and [GPU benchmark methodology](docs/guides/gpu.md#reference-throughput).
 

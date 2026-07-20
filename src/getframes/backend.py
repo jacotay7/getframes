@@ -16,23 +16,40 @@ from typing import Any, cast
 import numpy as np
 
 
+def _cupy_seed(seed: Any) -> int | None:
+    """Map NumPy-compatible seed input onto CuPy RandomState's uint32 seed."""
+    if seed is None:
+        return None
+    return int(np.random.SeedSequence(int(seed)).generate_state(1, dtype=np.uint32)[0])
+
+
 class _CuPyGenerator:
     """Expose the NumPy Generator spellings over a fast CuPy RandomState."""
 
-    def __init__(self, generator: Any, xp: Any) -> None:
+    def __init__(self, generator: Any, xp: Any, float_dtype: Any) -> None:
         self._generator = generator
         self._xp = xp
+        self._float_dtype = float_dtype
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._generator, name)
 
     def normal(self, loc: Any = 0.0, scale: Any = 1.0, size: Any = None) -> Any:
-        """Draw a normal variate using CuPy's available standard-normal method."""
-        return loc + scale * self._generator.standard_normal(size=size)
+        """Draw a scaled normal variate directly in the working precision."""
+        return self._generator.normal(loc=loc, scale=scale, size=size, dtype=self._float_dtype)
+
+    def standard_normal(self, size: Any = None, dtype: Any = None) -> Any:
+        """Draw a standard normal variate in the working precision."""
+        selected_dtype = self._float_dtype if dtype is None else dtype
+        return self._generator.standard_normal(size=size, dtype=selected_dtype)
 
     def lognormal(self, mean: Any = 0.0, sigma: Any = 1.0, size: Any = None) -> Any:
         """Draw a log-normal variate without falling back to global RNG state."""
         return self._xp.exp(self.normal(mean, sigma, size))
+
+    def gamma(self, shape: Any, scale: Any = 1.0, size: Any = None) -> Any:
+        """Draw Gamma variates directly in the detector working precision."""
+        return self._generator.gamma(shape=shape, scale=scale, size=size, dtype=self._float_dtype)
 
     def integers(self, low: Any, high: Any = None, size: Any = None) -> Any:
         """NumPy-Generator spelling for CuPy RandomState's ``randint``."""
@@ -41,6 +58,10 @@ class _CuPyGenerator:
     def random(self, size: Any = None) -> Any:
         """NumPy-Generator spelling for CuPy RandomState's uniform sampler."""
         return self._generator.random_sample(size=size)
+
+    def seed(self, seed: Any) -> None:
+        """Reset this private per-call stream without rebuilding cuRAND state."""
+        self._generator.seed(_cupy_seed(seed))
 
 
 @dataclass(frozen=True)
@@ -59,7 +80,7 @@ class ArrayBackend:
         """Convert ``value`` to an array on this backend."""
         return self.xp.asarray(value, dtype=dtype)
 
-    def default_rng(self, seed: Any = None) -> Any:
+    def default_rng(self, seed: Any = None, *, float_dtype: Any = np.float64) -> Any:
         """Create a backend-native random generator."""
         if self.is_cpu:
             return self.xp.random.default_rng(seed)
@@ -67,12 +88,7 @@ class ArrayBackend:
         # slower than RandomState for the per-exposure seed contract. RandomState
         # still owns an independent, backend-native cuRAND stream and exposes all
         # distributions used by the detector chain.
-        gpu_seed = (
-            None
-            if seed is None
-            else int(np.random.SeedSequence(int(seed)).generate_state(1, dtype=np.uint32)[0])
-        )
-        return _CuPyGenerator(self.xp.random.RandomState(gpu_seed), self.xp)
+        return _CuPyGenerator(self.xp.random.RandomState(_cupy_seed(seed)), self.xp, float_dtype)
 
     def convolve(self, array: Any, kernel: Any) -> Any:
         """Convolve with constant-zero boundary conditions on this backend."""

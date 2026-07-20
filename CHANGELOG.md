@@ -26,6 +26,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   once on persistent `Camera` construction rather than regenerated for every
   frame. This preserves the fixed-pattern contract and materially improves both
   CPU and GPU warm exposure throughput.
+- Optimized warm detector execution with in-place signal construction and
+  digitization, direct full-array Gamma sampling, working-precision CPU/GPU
+  Gaussian and Gamma draws, and a reusable per-call GPU seed stream. The RTX
+  5090 reference improves GPU CMOS throughput by 1.36x–1.42x and GPU EMCCD/eAPD
+  throughput by 2.35x–2.41x over the initial implementation without changing the
+  detector distributions.
 
 ## [2.1.0] - 2026-07-19
 

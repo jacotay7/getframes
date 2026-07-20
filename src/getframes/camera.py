@@ -93,7 +93,12 @@ class Camera:
         self.precision = precision
         self._float_dtype = self._PRECISIONS[precision]
         self._backend: ArrayBackend = get_backend(device)
-        self._rng = self._backend.default_rng(seed)
+        self._rng = self._backend.default_rng(seed, float_dtype=self._float_dtype)
+        self._seeded_rng = (
+            None
+            if self._backend.is_cpu
+            else self._backend.default_rng(0, float_dtype=self._float_dtype)
+        )
         self._fixed_patterns = noise.fixed_pattern_maps(
             config, backend=self._backend, float_dtype=self._float_dtype
         )
@@ -144,7 +149,12 @@ class Camera:
     # Frame generation
     # ------------------------------------------------------------------
     def _resolve_rng(self, seed: int | None) -> Any:
-        return self._backend.default_rng(seed) if seed is not None else self._rng
+        if seed is None:
+            return self._rng
+        if self._seeded_rng is not None:
+            self._seeded_rng.seed(seed)
+            return self._seeded_rng
+        return self._backend.default_rng(seed)
 
     @staticmethod
     def _series_seeds(seed: int | None, n_frames: int) -> list[int | None]:

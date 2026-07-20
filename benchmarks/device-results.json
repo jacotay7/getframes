@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
-  "generated_at_utc": "2026-07-20T03:34:06.501101+00:00",
+  "generated_at_utc": "2026-07-20T04:33:30.758487+00:00",
   "command": "/localhome/dev/miniconda3/envs/cuda312/bin/python benchmarks/bench_devices.py --seconds 2 --warmup 10 --device both --output benchmarks/device-results.json",
-  "revision": "2addf8ee34ba6a7d27ffbd587bb38d49b78eb000",
+  "revision": "238f4063586166ef041b1689c47c6069de672ae5",
   "source_dirty": true,
   "python": "3.12.0 | packaged by conda-forge | (main, Oct  3 2023, 08:43:22) [GCC 12.3.0]",
   "platform": "Linux-6.17.0-35-generic-x86_64-with-glibc2.39",
@@ -40,11 +40,11 @@
       "exposure_s": 0.001,
       "photon_rate_per_s": 2000000.0,
       "device": "cpu",
-      "frames": 9750,
-      "elapsed_s": 2.0001206193119287,
-      "frame_s": 0.000205140576339685,
-      "frames_per_s": 4874.70600815772,
-      "megapixels_per_s": 31.198118452209414
+      "frames": 10530,
+      "elapsed_s": 2.0000432902015746,
+      "frame_s": 0.0001899376343971106,
+      "frames_per_s": 5264.886041011009,
+      "megapixels_per_s": 33.69527066247045
     },
     {
       "workflow": "pyramid_cmos_80",
@@ -59,11 +59,11 @@
       "exposure_s": 0.001,
       "photon_rate_per_s": 2000000.0,
       "device": "gpu",
-      "frames": 14920,
-      "elapsed_s": 2.000090317800641,
-      "frame_s": 0.00013405431084454698,
-      "frames_per_s": 7459.663129816296,
-      "megapixels_per_s": 47.741844030824296
+      "frames": 21131,
+      "elapsed_s": 2.0000232993625104,
+      "frame_s": 9.464877664864467e-05,
+      "frames_per_s": 10565.376916726578,
+      "megapixels_per_s": 67.6184122670501
     },
     {
       "workflow": "shack_hartmann_cmos_160",
@@ -78,11 +78,11 @@
       "exposure_s": 0.001,
       "photon_rate_per_s": 2000000.0,
       "device": "cpu",
-      "frames": 2581,
-      "elapsed_s": 2.0006659300997853,
-      "frame_s": 0.000775151464587286,
-      "frames_per_s": 1290.0704516277087,
-      "megapixels_per_s": 33.02580356166934
+      "frames": 2745,
+      "elapsed_s": 2.0006756116636097,
+      "frame_s": 0.0007288435743765427,
+      "frames_per_s": 1372.036518062749,
+      "megapixels_per_s": 35.12413486240638
     },
     {
       "workflow": "shack_hartmann_cmos_160",
@@ -97,11 +97,11 @@
       "exposure_s": 0.001,
       "photon_rate_per_s": 2000000.0,
       "device": "gpu",
-      "frames": 14865,
-      "elapsed_s": 2.0000219750218093,
-      "frame_s": 0.00013454570972228788,
-      "frames_per_s": 7432.418336222483,
-      "megapixels_per_s": 190.26990940729556
+      "frames": 21077,
+      "elapsed_s": 2.000071608927101,
+      "frame_s": 9.48935621258766e-05,
+      "frames_per_s": 10538.12268817032,
+      "megapixels_per_s": 269.77594081716023
     },
     {
       "workflow": "ocam2k_emccd_240",
@@ -116,11 +116,11 @@
       "exposure_s": 0.001,
       "photon_rate_per_s": 2000000.0,
       "device": "cpu",
-      "frames": 693,
-      "elapsed_s": 2.0012217010371387,
-      "frame_s": 0.0028877658023623936,
-      "frames_per_s": 346.2884695088259,
-      "megapixels_per_s": 19.946215843708373
+      "frames": 696,
+      "elapsed_s": 2.0018276078626513,
+      "frame_s": 0.002876189091756683,
+      "frames_per_s": 347.68228655968943,
+      "megapixels_per_s": 20.026499705838113
     },
     {
       "workflow": "ocam2k_emccd_240",
@@ -135,11 +135,11 @@
       "exposure_s": 0.001,
       "photon_rate_per_s": 2000000.0,
       "device": "gpu",
-      "frames": 6699,
-      "elapsed_s": 2.0002197842113674,
-      "frame_s": 0.0002985848312003832,
-      "frames_per_s": 3349.1319568370504,
-      "megapixels_per_s": 192.9100007138141
+      "frames": 16115,
+      "elapsed_s": 2.0000911187380552,
+      "frame_s": 0.00012411362821830935,
+      "frames_per_s": 8057.132922107897,
+      "megapixels_per_s": 464.09085631341486
     },
     {
       "workflow": "saphira_eapd_256x320",
@@ -154,11 +154,11 @@
       "exposure_s": 0.001,
       "photon_rate_per_s": 2000000.0,
       "device": "cpu",
-      "frames": 538,
-      "elapsed_s": 2.0028213472105563,
-      "frame_s": 0.003722716258755681,
-      "frames_per_s": 268.6210633561018,
-      "megapixels_per_s": 22.00543751013186
+      "frames": 567,
+      "elapsed_s": 2.002231440972537,
+      "frame_s": 0.0035312723826676135,
+      "frames_per_s": 283.1840457587626,
+      "megapixels_per_s": 23.19843702855783
     },
     {
       "workflow": "saphira_eapd_256x320",
@@ -173,11 +173,11 @@
       "exposure_s": 0.001,
       "photon_rate_per_s": 2000000.0,
       "device": "gpu",
-      "frames": 6375,
-      "elapsed_s": 2.00022228108719,
-      "frame_s": 0.0003137603578175984,
-      "frames_per_s": 3187.1457788856183,
-      "megapixels_per_s": 261.09098220630983
+      "frames": 15002,
+      "elapsed_s": 2.005128486081958,
+      "frame_s": 0.0001336574114172749,
+      "frames_per_s": 7481.814808443556,
+      "megapixels_per_s": 612.9102691076961
     },
     {
       "workflow": "science_cmos_1024",
@@ -192,11 +192,11 @@
       "exposure_s": 5.0,
       "photon_rate_per_s": 200.0,
       "device": "cpu",
-      "frames": 57,
-      "elapsed_s": 2.0018601189367473,
-      "frame_s": 0.03512035296380259,
-      "frames_per_s": 28.4735179350466,
-      "megapixels_per_s": 29.856647542259424
+      "frames": 64,
+      "elapsed_s": 2.0285297511145473,
+      "frame_s": 0.0316957773611648,
+      "frames_per_s": 31.54994397535264,
+      "megapixels_per_s": 33.082514053899374
     },
     {
       "workflow": "science_cmos_1024",
@@ -211,11 +211,11 @@
       "exposure_s": 5.0,
       "photon_rate_per_s": 200.0,
       "device": "gpu",
-      "frames": 2143,
-      "elapsed_s": 2.0335226799361408,
-      "frame_s": 0.0009489139897042188,
-      "frames_per_s": 1053.8362916450467,
-      "megapixels_per_s": 1105.0274433479965
+      "frames": 2908,
+      "elapsed_s": 2.0308143231086433,
+      "frame_s": 0.0006983543064335087,
+      "frames_per_s": 1431.9379014171102,
+      "megapixels_per_s": 1501.4957169163476
     }
   ]
 }

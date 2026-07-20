@@ -209,9 +209,16 @@ def photo_signal_map(
     if rate.ndim not in (0, 2) or background.ndim not in (0, 2):
         raise ValueError("photon_rate/background must be a scalar or a 2-D array.")
 
-    mean_photo = xp.zeros((height, width), dtype=float_dtype)
-    # Broadcasts a scalar or an (h, w) array; a mismatched array shape raises here.
-    mean_photo += (rate + background) * exposure_s * qe
+    # Write broadcast addition and scaling into one owned output buffer.  Keeping
+    # this mutable avoids two full-frame temporaries on both NumPy and CuPy.
+    mean_photo = xp.empty((height, width), dtype=float_dtype)
+    try:
+        xp.add(rate, background, out=mean_photo)
+    except ValueError as exc:
+        raise ValueError(
+            f"photon_rate/background must broadcast to detector shape {(height, width)}."
+        ) from exc
+    mean_photo *= exposure_s * qe
 
     # Photo-response non-uniformity: a fixed log-normal multiplier with unit mean,
     # applied only where there is light. Drawn from the fixed-pattern stream so it is
@@ -255,8 +262,6 @@ def apply_gain_stage(
 
     Pixels with zero input electrons produce zero output.
     """
-    resolved = backend or get_backend()
-    xp = resolved.xp
     if gain <= 1.0:
         return electrons
     if excess_noise_factor <= 1.0:
@@ -265,11 +270,10 @@ def apply_gain_stage(
     f2 = excess_noise_factor**2
     alpha = 1.0 / (f2 - 1.0)
     theta = gain * (f2 - 1.0)
-    out = xp.zeros_like(electrons)
-    nonzero = electrons > 0
-    if bool(resolved.scalar(xp.any(nonzero))):
-        out[nonzero] = rng.gamma(shape=electrons[nonzero] * alpha, scale=theta)
-    return out
+    # Both NumPy and CuPy define Gamma(shape=0) as exactly zero.  Sampling the
+    # full shape therefore preserves the model while avoiding a mask, gather,
+    # scatter, and (on GPU) a synchronizing ``any`` reduction.
+    return rng.gamma(shape=electrons * alpha, scale=theta).astype(electrons.dtype, copy=False)
 
 
 def apply_em_gain(
@@ -555,8 +559,10 @@ def digitize(
     """
     resolved = backend or get_backend()
     xp = resolved.xp
-    signal = xp.clip(electrons, 0.0, None)
-    signal = xp.minimum(signal, config.full_well_e)
+    # ``electrons`` is a private realised-frame buffer at this point. Reusing it
+    # for readout avoids several detector-sized temporaries in the hot path.
+    signal = electrons
+    xp.clip(signal, 0.0, config.full_well_e, out=signal)
 
     # Dead pixels/columns: a fixed defect map that collects no charge (they still
     # carry read/reset noise and the bias pedestal, so they read as dark defects).
@@ -566,10 +572,17 @@ def digitize(
     if defects is not None:
         signal[defects] = 0.0
 
+    def normal_noise(sigma: Any) -> Any:
+        if resolved.is_cpu and signal.dtype == np.dtype(np.float32):
+            draw = rng.standard_normal(signal.shape, dtype=np.float32)
+            draw *= sigma
+            return draw
+        return rng.normal(0.0, sigma, size=signal.shape)
+
     # kTC / reset noise: an independent per-pixel, per-frame Gaussian (electrons).
     # Added in place so the working dtype (e.g. the float32 fast path) is preserved.
     if config.reset_noise_e > 0:
-        signal += rng.normal(0.0, config.reset_noise_e, size=signal.shape)
+        signal += normal_noise(config.reset_noise_e)
 
     # Read noise in electrons, added at the amplifier.
     if config.read_noise_e > 0:
@@ -578,9 +591,9 @@ def digitize(
             sigma_map = config.read_noise_e * rng.lognormal(
                 mean=-0.5 * spread**2, sigma=spread, size=signal.shape
             )
-            signal += rng.standard_normal(signal.shape) * sigma_map
+            signal += normal_noise(sigma_map)
         else:
-            signal += rng.normal(0.0, config.read_noise_e, size=signal.shape)
+            signal += normal_noise(config.read_noise_e)
 
     if fixed_patterns is None:
         gain_map, amp_offset = _amplifier_maps(config, resolved)
@@ -589,9 +602,13 @@ def digitize(
         gain_map = fixed_patterns.amplifier_gain
         amp_offset = fixed_patterns.amplifier_offset
         bias_structure = fixed_patterns.bias_structure
-    adu = signal / gain_map + config.bias_offset_adu + amp_offset + bias_structure
-    adu = xp.clip(xp.round(adu), 0, config.max_adu)
-    return adu.astype(np.uint32)
+    signal /= gain_map
+    signal += config.bias_offset_adu
+    signal += amp_offset
+    signal += bias_structure
+    xp.rint(signal, out=signal)
+    xp.clip(signal, 0, config.max_adu, out=signal)
+    return signal.astype(np.uint32)
 
 
 class SimulationResult(NamedTuple):
@@ -751,7 +768,8 @@ def simulate_frame(
         backend=resolved,
         fixed_patterns=fixed_patterns,
     )
-    mean_total = mean_photo + mean_dark + resolved.asarray(extra_electrons, dtype=float_dtype)
+    mean_total = mean_photo + mean_dark
+    mean_total += resolved.asarray(extra_electrons, dtype=float_dtype)
 
     if binning > 1:
         height, width = config.resolution

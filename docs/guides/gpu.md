@@ -57,15 +57,19 @@ synchronized immediately before and after each timed region.
 
 | Workflow | Detector | Native shape | CPU (frames/s) | GPU (frames/s) | Speedup |
 | --- | --- | ---: | ---: | ---: | ---: |
-| Pyramid WFS CMOS | CMOS | 80x80 | 4,874.7 | 7,459.7 | 1.53x |
-| Shack-Hartmann WFS CMOS | CMOS | 160x160 | 1,290.1 | 7,432.4 | 5.76x |
-| OCAM2K EMCCD | EMCCD | 240x240 | 346.3 | 3,349.1 | 9.67x |
-| SAPHIRA eAPD | eAPD | 256x320 | 268.6 | 3,187.1 | 11.86x |
-| Large science CMOS | CMOS | 1024x1024 | 28.5 | 1,053.8 | 37.01x |
+| Pyramid WFS CMOS | CMOS | 80x80 | 5,264.9 | 10,565.4 | 2.01x |
+| Shack-Hartmann WFS CMOS | CMOS | 160x160 | 1,372.0 | 10,538.1 | 7.68x |
+| OCAM2K EMCCD | EMCCD | 240x240 | 347.7 | 8,057.1 | 23.17x |
+| SAPHIRA eAPD | eAPD | 256x320 | 283.2 | 7,481.8 | 26.42x |
+| Large science CMOS | CMOS | 1024x1024 | 31.5 | 1,431.9 | 45.39x |
 
-Higher frames/s is better. GPU launch overhead limits the benefit on the 80x80
-case. Larger arrays and the stochastic EMCCD/eAPD gain stages expose more
-parallel work, producing progressively larger gains.
+Higher frames/s is better. Relative to the original GPU implementation on the
+same machine, the optimized path is 1.36x–1.42x faster for CMOS and about
+2.35x–2.41x faster for EMCCD/eAPD. The hot path now reuses a reseedable GPU RNG,
+samples directly in float32, applies Gamma gain without mask/gather/scatter or a
+host synchronization, and reuses the realized-electron buffer during in-place
+digitization. CPU float32 Gaussian sampling and buffer reuse improve the large
+CMOS case by about 11%.
 
 The benchmark artifact records the exact command, revision, dirty-checkout flag,
 environment, methodology, elapsed time, frame count, frames/s, and megapixels/s
