@@ -27,7 +27,7 @@ _STAMP_BUDGET = 4_000_000
 
 
 def _stamp_bounds(
-    x: float, y: float, radius: int, shape: tuple[int, int]
+    x: float, y: float, radius: int, shape: tuple[int, ...]
 ) -> tuple[int, int, int, int]:
     """Pixel index bounds of a stamp of half-size ``radius`` centred near (x, y)."""
     height, width = shape

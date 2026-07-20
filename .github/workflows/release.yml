@@ -1,13 +1,13 @@
 name: Release
 
-# Publishes to PyPI when a version tag (vX.Y.Z) is pushed, or a GitHub Release
+# Publishes to PyPI when a version tag (X.Y.Z) is pushed, or a GitHub Release
 # is published. Uses PyPI Trusted Publishing (OIDC) — configure a publisher for
 # this repo at https://pypi.org/manage/account/publishing/ (no API token needed).
 
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "*.*.*"
   release:
     types: [published]
   workflow_dispatch:

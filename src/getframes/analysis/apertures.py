@@ -15,7 +15,7 @@ from numpy.typing import NDArray
 from scipy.signal import correlate
 
 
-def _radial_grid(shape: tuple[int, int], cx: float, cy: float) -> NDArray[np.float64]:
+def _radial_grid(shape: tuple[int, ...], cx: float, cy: float) -> NDArray[np.float64]:
     """Squared distance of every pixel from ``(cx, cy)``."""
     yy, xx = np.mgrid[0 : shape[0], 0 : shape[1]]
     grid: NDArray[np.float64] = (xx - cx) ** 2 + (yy - cy) ** 2

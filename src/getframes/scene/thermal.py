@@ -27,7 +27,7 @@ if TYPE_CHECKING:
     from .optics import Telescope
 
 # NumPy 2.0 renamed ``trapz`` to ``trapezoid``; support both at runtime.
-_trapezoid = getattr(np, "trapezoid", None) or np.trapz  # type: ignore[attr-defined]  # noqa: NPY201
+_trapezoid = getattr(np, "trapezoid", None) or getattr(np, "trapz")  # noqa: B009
 
 # Physical constants (SI).
 _H_PLANCK = 6.62607015e-34  # J s
@@ -106,7 +106,7 @@ class Thermal:
         n_samples: int = 256,
     ) -> SED:
         """A *relative* SED of the graybody photon spectrum (for spectral effective QE)."""
-        wl_nm = np.linspace(wavelength_min_nm, wavelength_max_nm, n_samples)
+        wl_nm = np.linspace(wavelength_min_nm, wavelength_max_nm, n_samples, dtype=np.float64)
         radiance = _photon_radiance(wl_nm * 1e-9, self.temperature_k)
         return SED.from_arrays(wl_nm, radiance / radiance.max())
 
