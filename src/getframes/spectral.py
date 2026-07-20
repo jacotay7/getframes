@@ -40,7 +40,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 # NumPy 2.0 renamed ``trapz`` to ``trapezoid``; support both at runtime.
-_trapezoid = getattr(np, "trapezoid", None) or np.trapz  # type: ignore[attr-defined]  # noqa: NPY201
+_trapezoid = getattr(np, "trapezoid", None) or np.trapz  # noqa: NPY201
 
 # Planck/physical constants (SI), used only for blackbody SED shapes.
 _H_PLANCK = 6.62607015e-34  # J s
@@ -268,7 +268,7 @@ class SED(Spectrum):
         """
         if temperature_k <= 0:
             raise ValueError("temperature_k must be positive.")
-        wl_nm = np.linspace(wavelength_min_nm, wavelength_max_nm, n_samples)
+        wl_nm = np.linspace(wavelength_min_nm, wavelength_max_nm, n_samples, dtype=np.float64)
         wl_m = wl_nm * 1e-9
         x = _H_PLANCK * _C_LIGHT / (wl_m * _K_BOLTZMANN * temperature_k)
         # Photon radiance density: ~ lambda^-4 / (exp(x) - 1). Constants drop out.
@@ -285,7 +285,7 @@ class SED(Spectrum):
         n_samples: int = 64,
     ) -> SED:
         """A power-law photon spectrum ``(lambda / lambda_ref)**index`` (relative)."""
-        wl = np.linspace(wavelength_min_nm, wavelength_max_nm, n_samples)
+        wl = np.linspace(wavelength_min_nm, wavelength_max_nm, n_samples, dtype=np.float64)
         return cls(wl, (wl / reference_wavelength_nm) ** index)
 
 
@@ -416,7 +416,7 @@ class SpectralBandpass:
         """The throughput-weighted mean wavelength (nm)."""
         wl = self.response.wavelength_nm
         t = self.response.value
-        return float(_trapezoid(t * wl, wl) / _trapezoid(t, wl))
+        return float(_trapezoid(t * wl, wl)) / float(_trapezoid(t, wl))
 
 
 def effective_qe(qe: QE, bandpass: SpectralBandpass, sed: SED | None = None) -> float:

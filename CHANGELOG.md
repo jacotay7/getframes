@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-07-19
+
 ### Added
 
 - Five scientific-camera presets used by the Keck tip/tilt and low-bandwidth WFS
@@ -45,6 +47,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   cadence optimisation (a physical `a·f + b·f²` noise model fitted to the Monte
   Carlo data, saturation-aware, against a Tyler tilt-lag disturbance model), and
   a best/worst-performer frame gallery figure beside the trade curves.
+
+### Fixed
+
+- Type-checking compatibility with newer NumPy (2.2): tightened stub types for
+  `_stamp_bounds`/`_radial_grid` shape arguments, pinned `float64` on a few
+  `np.linspace` constructions, and dropped now-unused `type: ignore` comments
+  around the `trapz`/`trapezoid` shim. No behavioural change.
 
 ## [2.0.0] - 2026-06-29
 
@@ -288,6 +297,8 @@ together in 1.0.
 - Documentation, runnable examples, and CI (lint, type-check, test matrix, PyPI
   release via Trusted Publishing).
 
-[Unreleased]: https://github.com/jacotay7/getframes/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/jacotay7/getframes/compare/v2.1.0...HEAD
+[2.1.0]: https://github.com/jacotay7/getframes/compare/v2.0.0...v2.1.0
+[2.0.0]: https://github.com/jacotay7/getframes/compare/v1.0.0...v2.0.0
 [1.0.0]: https://github.com/jacotay7/getframes/compare/v0.1.0...v1.0.0
 [0.1.0]: https://github.com/jacotay7/getframes/releases/tag/v0.1.0
