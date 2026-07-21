@@ -48,6 +48,44 @@ def test_apply_em_gain_matches_gain_stage_at_sqrt2():
     np.testing.assert_array_equal(a, b)
 
 
+def test_gain_detector_separates_image_and_output_full_wells():
+    cfg = load_preset("generic_emccd").replace(
+        resolution=(8, 8),
+        full_well_e=5.0,
+        output_full_well_e=40.0,
+        em_gain=10.0,
+        excess_noise_factor=1.0,
+        read_noise_e=0.0,
+        gain_e_per_adu=1.0,
+        bias_offset_adu=0.0,
+        bit_depth=16,
+    )
+    rng = np.random.default_rng(5)
+    multiplied = noise.frame_electrons(cfg, np.full(cfg.resolution, 1e6), rng)
+    np.testing.assert_array_equal(multiplied, np.full(cfg.resolution, 50.0))
+
+    adu = noise.digitize(multiplied, cfg, rng)
+    np.testing.assert_array_equal(adu, np.full(cfg.resolution, 40, dtype=np.uint32))
+
+
+def test_gain_detector_without_output_well_retains_legacy_digitizer_ceiling():
+    cfg = load_preset("generic_emccd").replace(
+        resolution=(8, 8),
+        full_well_e=5.0,
+        output_full_well_e=None,
+        em_gain=10.0,
+        excess_noise_factor=1.0,
+        read_noise_e=0.0,
+        gain_e_per_adu=1.0,
+        bias_offset_adu=0.0,
+        bit_depth=16,
+    )
+    rng = np.random.default_rng(6)
+    multiplied = noise.frame_electrons(cfg, np.full(cfg.resolution, 1e6), rng)
+    adu = noise.digitize(multiplied, cfg, rng)
+    np.testing.assert_array_equal(adu, np.full(cfg.resolution, 5, dtype=np.uint32))
+
+
 def test_emccd_excess_noise_factor_defaults_to_sqrt2():
     cfg = load_preset("andor_ixon_ultra_888")
     assert cfg.sensor_type is SensorType.EMCCD

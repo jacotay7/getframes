@@ -66,6 +66,7 @@ def test_dark_current_doubles_at_doubling_temp():
         ("dark_current_doubling_temp_c", 0.0),
         ("em_gain", 0.5),
         ("full_well_e", 0.0),
+        ("output_full_well_e", 0.0),
         ("hot_pixel_fraction", 2.0),
     ],
 )
@@ -75,12 +76,57 @@ def test_validation_rejects_bad_values(field, value):
 
 
 def test_roundtrip_dict():
-    cfg = make_config(sensor_type="EMCCD", em_gain=100.0)
+    cfg = make_config(
+        sensor_type="EMCCD",
+        em_gain=100.0,
+        output_full_well_e=250_000.0,
+        amplifier_layout=(1, 2),
+        amplifier_boundaries_x_px=(31,),
+        amplifier_gain_factors=(1.0, 1.01),
+        amplifier_offsets_adu=(0.0, -3.0),
+    )
     data = cfg.to_dict()
     assert data["sensor_type"] == "EMCCD"
     assert data["resolution"] == [64, 64]
+    assert data["amplifier_boundaries_x_px"] == [31]
+    assert data["amplifier_gain_factors"] == [1.0, 1.01]
+    assert data["amplifier_offsets_adu"] == [0.0, -3.0]
     restored = CameraConfig.from_dict(data)
     assert restored == cfg
+
+
+@pytest.mark.parametrize(
+    "overrides,match",
+    [
+        (
+            {"amplifier_layout": (2, 3), "amplifier_boundaries_x_px": (20,)},
+            "amplifier_boundaries_x_px",
+        ),
+        (
+            {"amplifier_layout": (2, 1), "amplifier_boundaries_y_px": (64,)},
+            "amplifier_boundaries_y_px",
+        ),
+        (
+            {"amplifier_layout": (1, 2), "amplifier_gain_factors": (1.0,)},
+            "amplifier_gain_factors",
+        ),
+        (
+            {"amplifier_layout": (1, 2), "amplifier_offsets_adu": (0.0,)},
+            "amplifier_offsets_adu",
+        ),
+        (
+            {
+                "amplifier_layout": (1, 2),
+                "amplifier_gain_factors": (1.0, 1.1),
+                "amp_gain_nonuniformity": 0.01,
+            },
+            "mutually exclusive",
+        ),
+    ],
+)
+def test_amplifier_configuration_validation(overrides, match):
+    with pytest.raises(ValueError, match=match):
+        make_config(**overrides)
 
 
 def test_from_dict_stashes_unknown_keys():

@@ -114,6 +114,36 @@ def test_amplifier_maps_uniform_without_spread():
     assert np.all(offset == 0.0)
 
 
+def test_equal_amplifier_tiling_matches_array_split_remainder_order():
+    cfg = load_preset("generic_cmos").replace(
+        resolution=(5, 10),
+        amplifier_layout=(1, 3),
+        amplifier_offsets_adu=(1.0, 2.0, 3.0),
+    )
+    _, offset = noise._amplifier_maps(cfg)
+    np.testing.assert_array_equal(offset[0], [1.0] * 4 + [2.0] * 3 + [3.0] * 3)
+
+
+def test_amplifier_maps_use_exact_roi_boundaries_and_responses():
+    cfg = load_preset("generic_cmos").replace(
+        resolution=(10, 12),
+        amplifier_layout=(2, 3),
+        amplifier_boundaries_y_px=(4,),
+        amplifier_boundaries_x_px=(3, 8),
+        amplifier_gain_factors=(1.0, 1.1, 1.2, 0.9, 0.8, 0.7),
+        amplifier_offsets_adu=(0.0, 1.0, 2.0, -1.0, -2.0, -3.0),
+    )
+    gain, offset = noise._amplifier_maps(cfg)
+    assert gain.shape == cfg.resolution
+    assert offset.shape == cfg.resolution
+    assert gain[0, 0] == pytest.approx(cfg.gain_e_per_adu)
+    assert gain[0, 3] == pytest.approx(cfg.gain_e_per_adu * 1.1)
+    assert gain[4, 8] == pytest.approx(cfg.gain_e_per_adu * 0.7)
+    assert offset[0, 8] == 2.0
+    assert offset[4, 0] == -1.0
+    assert offset[4, 8] == -3.0
+
+
 # --- Cosmic-ray tracks ------------------------------------------------------
 def test_cosmic_ray_tracks_span_multiple_pixels():
     cfg = load_preset("generic_ccd").replace(

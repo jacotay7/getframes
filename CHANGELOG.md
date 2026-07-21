@@ -8,6 +8,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Exact multi-amplifier ROI geometry and measured row-major gain/offset response
+  fields. The OCAM2K preset now declares its eight-output 4x2 layout; cropped
+  configurations can preserve their true split pixels.
 - Optional CuPy detector execution via `Camera(..., device="gpu")`. Photon-rate,
   electron, `FrameTruth`, and digitised ADU arrays remain device-resident through
   scalar and spectral exposure paths, including all detector artifact models and
@@ -32,6 +35,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   5090 reference improves GPU CMOS throughput by 1.36x–1.42x and GPU EMCCD/eAPD
   throughput by 2.35x–2.41x over the initial implementation without changing the
   detector distributions.
+
+### Fixed
+
+- Separated image-area and post-multiplication saturation with the optional,
+  backwards-compatible `CameraConfig.output_full_well_e`. Gain-stage input charge
+  now clips at `full_well_e` before multiplication. The OCAM2K preset uses Andor's
+  published 270,000 e- image well and Keck's measured 10,000-count output ceiling,
+  instead of incorrectly clipping multiplied signal at 250 e- (25 ADU).
 
 ## [2.1.0] - 2026-07-19
 

@@ -75,7 +75,12 @@ class CameraConfig:
         charge-domain/hardware binning, one read noise per super-pixel). Consumed by
         :meth:`Camera.expose`'s ``binning_mode`` argument.
     full_well_e:
-        Full-well capacity in electrons. Signal saturates here before digitization.
+        Image-area (input) full-well capacity in electrons. Collected charge
+        saturates here before any EM/avalanche multiplication stage.
+    output_full_well_e:
+        Optional post-multiplication output-register capacity in electrons. This
+        limits amplified charge before conversion to ADU. ``None`` preserves the
+        legacy behavior and uses ``full_well_e`` as the digitizer ceiling.
     bit_depth:
         ADC resolution in bits. The output saturates at ``2**bit_depth - 1``.
     gain_e_per_adu:
@@ -129,6 +134,15 @@ class CameraConfig:
         its own small gain and offset error (see ``amp_gain_nonuniformity`` /
         ``amp_offset_spread_adu``), producing the characteristic seams. ``(1, 1)``
         is a single amplifier.
+    amplifier_boundaries_y_px, amplifier_boundaries_x_px:
+        Optional exact internal amplifier split coordinates on the configured ROI.
+        Empty tuples divide the ROI equally according to ``amplifier_layout``.
+    amplifier_gain_factors:
+        Optional exact row-major multiplicative conversion-gain factors, one per
+        amplifier. These override stochastic ``amp_gain_nonuniformity`` draws.
+    amplifier_offsets_adu:
+        Optional exact row-major additive bias offsets in ADU, one per amplifier.
+        These override stochastic ``amp_offset_spread_adu`` draws.
     amp_gain_nonuniformity:
         Fractional RMS spread of per-amplifier gain about ``gain_e_per_adu`` (a
         fixed pattern keyed on ``fixed_pattern_seed``). Ignored for a single
@@ -228,6 +242,7 @@ class CameraConfig:
     qe_curve: QE | None = None
     supported_binnings: tuple[int, ...] = (1,)
     binning_method: str = "digital"
+    output_full_well_e: float | None = None
     detector_glow_e_per_s: float = 0.0
     prnu: float = 0.0
     read_noise_nonuniformity: float = 0.0
@@ -238,6 +253,10 @@ class CameraConfig:
     ipc_coupling: float = 0.0
     reset_noise_e: float = 0.0
     amplifier_layout: tuple[int, int] = (1, 1)
+    amplifier_boundaries_y_px: tuple[int, ...] = ()
+    amplifier_boundaries_x_px: tuple[int, ...] = ()
+    amplifier_gain_factors: tuple[float, ...] | None = None
+    amplifier_offsets_adu: tuple[float, ...] | None = None
     amp_gain_nonuniformity: float = 0.0
     amp_offset_spread_adu: float = 0.0
     cosmic_ray_track_length_px: float = 0.0
@@ -266,6 +285,28 @@ class CameraConfig:
         object.__setattr__(self, "sensor_type", SensorType.coerce(self.sensor_type))
         object.__setattr__(self, "resolution", tuple(int(n) for n in self.resolution))
         object.__setattr__(self, "amplifier_layout", tuple(int(n) for n in self.amplifier_layout))
+        object.__setattr__(
+            self,
+            "amplifier_boundaries_y_px",
+            tuple(int(value) for value in self.amplifier_boundaries_y_px),
+        )
+        object.__setattr__(
+            self,
+            "amplifier_boundaries_x_px",
+            tuple(int(value) for value in self.amplifier_boundaries_x_px),
+        )
+        if self.amplifier_gain_factors is not None:
+            object.__setattr__(
+                self,
+                "amplifier_gain_factors",
+                tuple(float(value) for value in self.amplifier_gain_factors),
+            )
+        if self.amplifier_offsets_adu is not None:
+            object.__setattr__(
+                self,
+                "amplifier_offsets_adu",
+                tuple(float(value) for value in self.amplifier_offsets_adu),
+            )
         object.__setattr__(
             self, "supported_binnings", tuple(int(n) for n in self.supported_binnings)
         )
@@ -310,6 +351,52 @@ class CameraConfig:
             raise ValueError(
                 f"amplifier_layout must be two positive ints, got {self.amplifier_layout!r}."
             )
+        n_amp_rows, n_amp_cols = self.amplifier_layout
+        for name, boundaries, expected, size in (
+            (
+                "amplifier_boundaries_y_px",
+                self.amplifier_boundaries_y_px,
+                n_amp_rows - 1,
+                self.resolution[0],
+            ),
+            (
+                "amplifier_boundaries_x_px",
+                self.amplifier_boundaries_x_px,
+                n_amp_cols - 1,
+                self.resolution[1],
+            ),
+        ):
+            if boundaries and (
+                len(boundaries) != expected
+                or tuple(sorted(set(boundaries))) != boundaries
+                or any(value <= 0 or value >= size for value in boundaries)
+            ):
+                raise ValueError(
+                    f"{name} must contain {expected} strictly increasing internal splits."
+                )
+        amplifier_count = n_amp_rows * n_amp_cols
+        if self.amplifier_gain_factors is not None:
+            if len(self.amplifier_gain_factors) != amplifier_count or any(
+                not math.isfinite(value) or value <= 0 for value in self.amplifier_gain_factors
+            ):
+                raise ValueError(
+                    "amplifier_gain_factors must contain one positive finite value per amplifier."
+                )
+            if self.amp_gain_nonuniformity > 0:
+                raise ValueError(
+                    "amplifier_gain_factors and amp_gain_nonuniformity are mutually exclusive."
+                )
+        if self.amplifier_offsets_adu is not None:
+            if len(self.amplifier_offsets_adu) != amplifier_count or any(
+                not math.isfinite(value) for value in self.amplifier_offsets_adu
+            ):
+                raise ValueError(
+                    "amplifier_offsets_adu must contain one finite value per amplifier."
+                )
+            if self.amp_offset_spread_adu > 0:
+                raise ValueError(
+                    "amplifier_offsets_adu and amp_offset_spread_adu are mutually exclusive."
+                )
         if self.amp_gain_nonuniformity < 0:
             raise ValueError("amp_gain_nonuniformity must be non-negative.")
         if self.amp_offset_spread_adu < 0:
@@ -336,6 +423,8 @@ class CameraConfig:
             raise ValueError("excess_noise_factor must be >= 1.0 (1.0 is noiseless).")
         if self.full_well_e <= 0:
             raise ValueError("full_well_e must be positive.")
+        if self.output_full_well_e is not None and self.output_full_well_e <= 0:
+            raise ValueError("output_full_well_e must be positive or None.")
         if not 0.0 <= self.hot_pixel_fraction <= 1.0:
             raise ValueError("hot_pixel_fraction must be in [0, 1].")
         if not 0.0 <= self.persistence_fraction <= 1.0:
@@ -392,6 +481,12 @@ class CameraConfig:
         data["sensor_type"] = self.sensor_type.value
         data["resolution"] = list(self.resolution)
         data["amplifier_layout"] = list(self.amplifier_layout)
+        data["amplifier_boundaries_y_px"] = list(self.amplifier_boundaries_y_px)
+        data["amplifier_boundaries_x_px"] = list(self.amplifier_boundaries_x_px)
+        if self.amplifier_gain_factors is not None:
+            data["amplifier_gain_factors"] = list(self.amplifier_gain_factors)
+        if self.amplifier_offsets_adu is not None:
+            data["amplifier_offsets_adu"] = list(self.amplifier_offsets_adu)
         if self.nonlinearity_coeffs is not None:
             data["nonlinearity_coeffs"] = list(self.nonlinearity_coeffs)
         data["qe_curve"] = _serialize_qe_curve(self.qe_curve)

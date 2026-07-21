@@ -418,29 +418,61 @@ def apply_ipc(
 def _amplifier_maps(config: CameraConfig, backend: ArrayBackend | None = None) -> tuple[Any, Any]:
     """Per-pixel conversion-gain (e-/ADU) and extra bias-offset (ADU) maps.
 
-    Tiles the sensor into ``amplifier_layout`` blocks, each with its own small,
-    *fixed* gain and offset error drawn from the fixed-pattern streams. With a
-    single amplifier (or no spread configured) the maps are uniform.
+    Tiles the sensor into ``amplifier_layout`` blocks using exact configured ROI
+    boundaries when present. Exact per-amplifier factors/offsets take precedence;
+    otherwise fixed deviations are drawn from the configured spreads.
     """
     height, width = config.resolution
     n_r, n_c = config.amplifier_layout
     resolved = backend or get_backend()
     xp = resolved.xp
-    if n_r * n_c <= 1 or (config.amp_gain_nonuniformity <= 0 and config.amp_offset_spread_adu <= 0):
+    exact_gain = config.amplifier_gain_factors is not None
+    exact_offset = config.amplifier_offsets_adu is not None
+    has_pattern = (
+        exact_gain
+        or exact_offset
+        or config.amp_gain_nonuniformity > 0
+        or config.amp_offset_spread_adu > 0
+    )
+    if not has_pattern:
         return config.gain_e_per_adu, 0.0
     gain = xp.full((height, width), config.gain_e_per_adu, dtype=np.float64)
     offset = xp.zeros((height, width), dtype=np.float64)
-    g_rng = _fixed_pattern_rng(config, _FPN_STREAM_AMP_GAIN, resolved)
-    o_rng = _fixed_pattern_rng(config, _FPN_STREAM_AMP_OFFSET, resolved)
-    g_dev = g_rng.normal(0.0, config.amp_gain_nonuniformity, size=(n_r, n_c))
-    o_dev = o_rng.normal(0.0, config.amp_offset_spread_adu, size=(n_r, n_c))
-    row_blocks = xp.array_split(xp.arange(height), n_r)
-    col_blocks = xp.array_split(xp.arange(width), n_c)
-    for i, rows in enumerate(row_blocks):
-        for j, cols in enumerate(col_blocks):
-            block = xp.ix_(rows, cols)
-            gain[block] = config.gain_e_per_adu * (1.0 + g_dev[i, j])
-            offset[block] = o_dev[i, j]
+    if exact_gain:
+        assert config.amplifier_gain_factors is not None
+        gain_factor = xp.asarray(config.amplifier_gain_factors, dtype=np.float64).reshape(n_r, n_c)
+    else:
+        g_rng = _fixed_pattern_rng(config, _FPN_STREAM_AMP_GAIN, resolved)
+        gain_factor = 1.0 + g_rng.normal(0.0, config.amp_gain_nonuniformity, size=(n_r, n_c))
+    if exact_offset:
+        assert config.amplifier_offsets_adu is not None
+        offset_value = xp.asarray(config.amplifier_offsets_adu, dtype=np.float64).reshape(n_r, n_c)
+    else:
+        o_rng = _fixed_pattern_rng(config, _FPN_STREAM_AMP_OFFSET, resolved)
+        offset_value = o_rng.normal(0.0, config.amp_offset_spread_adu, size=(n_r, n_c))
+
+    def equal_edges(size: int, blocks: int) -> tuple[int, ...]:
+        """Match ``array_split``: assign remainder pixels to the first blocks."""
+        block_size, remainder = divmod(size, blocks)
+        edges = [0]
+        for index in range(blocks):
+            edges.append(edges[-1] + block_size + (index < remainder))
+        return tuple(edges)
+
+    row_edges = (0, *config.amplifier_boundaries_y_px, height)
+    col_edges = (0, *config.amplifier_boundaries_x_px, width)
+    if not config.amplifier_boundaries_y_px:
+        row_edges = equal_edges(height, n_r)
+    if not config.amplifier_boundaries_x_px:
+        col_edges = equal_edges(width, n_c)
+    for row in range(n_r):
+        for col in range(n_c):
+            block = (
+                slice(row_edges[row], row_edges[row + 1]),
+                slice(col_edges[col], col_edges[col + 1]),
+            )
+            gain[block] = config.gain_e_per_adu * gain_factor[row, col]
+            offset[block] = offset_value[row, col]
     return gain, offset
 
 
@@ -562,7 +594,10 @@ def digitize(
     # ``electrons`` is a private realised-frame buffer at this point. Reusing it
     # for readout avoids several detector-sized temporaries in the hot path.
     signal = electrons
-    xp.clip(signal, 0.0, config.full_well_e, out=signal)
+    readout_full_well_e = (
+        config.output_full_well_e if config.output_full_well_e is not None else config.full_well_e
+    )
+    xp.clip(signal, 0.0, readout_full_well_e, out=signal)
 
     # Dead pixels/columns: a fixed defect map that collects no charge (they still
     # carry read/reset noise and the bias pedestal, so they read as dark defects).
@@ -646,6 +681,11 @@ def frame_electrons(
 
     if config.blooming:
         electrons = apply_blooming(electrons, config.full_well_e, backend=resolved)
+    elif config.has_gain_stage:
+        # The image-area well fills before charge enters an EM/avalanche register.
+        # Keeping this boundary ahead of the gain stage prevents input full well
+        # from being mistaken for an amplified-output ceiling.
+        resolved.xp.clip(electrons, 0.0, config.full_well_e, out=electrons)
 
     if config.cti > 0:
         electrons = apply_cti(electrons, config.cti, backend=resolved)
@@ -785,8 +825,21 @@ def simulate_frame(
         # Charge is summed before the amplifier: read out each super-pixel once, so a
         # single read noise applies. The summing well holds ~binning**2 more charge.
         binned_shape = (config.resolution[0] // binning, config.resolution[1] // binning)
+        all_boundaries = (
+            *config.amplifier_boundaries_y_px,
+            *config.amplifier_boundaries_x_px,
+        )
+        if any(boundary % binning for boundary in all_boundaries):
+            raise ValueError("on-chip binning must divide every explicit amplifier boundary.")
         binned_config = config.replace(
-            resolution=binned_shape, full_well_e=config.full_well_e * binning * binning
+            resolution=binned_shape,
+            full_well_e=config.full_well_e * binning * binning,
+            amplifier_boundaries_y_px=tuple(
+                boundary // binning for boundary in config.amplifier_boundaries_y_px
+            ),
+            amplifier_boundaries_x_px=tuple(
+                boundary // binning for boundary in config.amplifier_boundaries_x_px
+            ),
         )
         electrons = frame_electrons(
             binned_config, block_sum(mean_total, binning), rng, exposure_s, backend=resolved

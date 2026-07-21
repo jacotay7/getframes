@@ -85,9 +85,16 @@ makes the effective (input-referred) read noise sub-electron — the eAPD's
 
 ### 7. Digitisation
 
-Finally the electrons are:
+For ordinary detectors, `full_well_e` is both the image-area charge capacity and
+the default digitizer ceiling. Gain-stage detectors need two distinct domains:
+`full_well_e` clips collected input charge *before* EM/avalanche multiplication,
+while optional `output_full_well_e` clips the amplified charge at the output
+register. When `output_full_well_e` is omitted, the legacy single-ceiling behavior
+is retained.
 
-1. clipped to the **full-well capacity**,
+Finally the output-stage electrons are:
+
+1. clipped to `output_full_well_e` when configured, otherwise `full_well_e`,
 2. converted to ADU by dividing by `gain_e_per_adu`,
 3. offset by the **bias pedestal** (`bias_offset_adu`),
 4. clipped to the ADC range `[0, 2**bit_depth - 1]`, and
@@ -120,6 +127,10 @@ default** and additive, so existing configs are unchanged. They fall in two grou
 - `amplifier_layout=(n_rows, n_cols)` with `amp_gain_nonuniformity` /
   `amp_offset_spread_adu` — multi-amplifier readout: each block reads out with its
   own small, fixed gain/offset error, producing quadrant seams.
+- `amplifier_boundaries_y_px` / `amplifier_boundaries_x_px` preserve exact
+  full-detector amplifier splits inside a cropped ROI. Optional row-major
+  `amplifier_gain_factors` and `amplifier_offsets_adu` accept measured responses
+  instead of drawing them from the spread parameters.
 - `bad_column_fraction` / `dead_pixel_fraction` — a fixed map of dead columns and
   pixels that collect no charge.
 - `bias_structure_amplitude_adu` — a fixed gradient-plus-column pattern riding on

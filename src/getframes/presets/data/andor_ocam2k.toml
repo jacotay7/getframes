@@ -8,19 +8,24 @@ sensor_type = "EMCCD"
 resolution = [240, 240]
 pixel_size_um = 24.0
 quantum_efficiency = 0.90
-# At multiplication gain about 600, 240 e- output noise corresponds to the
-# specified 0.4 e- mean input-referred noise at 2000 fps.
-full_well_e = 250.0
+# Andor specifies a 270,000 e- image-area full well at multiplication gain 1.
+# The separate 100,000 e- output ceiling is the Keck operationally observed
+# 10,000 dark-subtracted count limit at this preset's 10 e-/ADU conversion.
+full_well_e = 270000.0
+output_full_well_e = 100000.0
 bit_depth = 14
 gain_e_per_adu = 10.0
 bias_offset_adu = 100.0
+# At multiplication gain about 600, 240 e- output noise corresponds to the
+# specified 0.4 e- mean input-referred noise at 2000 fps.
 read_noise_e = 240.0
 dark_current_e_per_s = 0.0
 dark_current_ref_temp_c = -45.0
 dark_current_doubling_temp_c = 6.0
 em_gain = 600.0
 clock_induced_charge_e = 0.01
-notes = "2000 fps / multiplication-gain ~600 TTS representation. The published <0.01 e-/pixel/frame dark signal at -45 C is conservatively treated as per-frame CIC/background because no dark-current-only value is published. Do not extrapolate this profile to long LBWFS exposures."
+amplifier_layout = [4, 2]             # eight 60-row x 120-column output regions
+notes = "2000 fps / multiplication-gain ~600 TTS representation. Image-area full well is the published gain-1 specification; output-register saturation uses Keck's measured 10,000 dark-subtracted count ceiling at 10 e-/ADU. The published <0.01 e-/pixel/frame dark signal at -45 C is conservatively treated as per-frame CIC/background because no dark-current-only value is published. Do not extrapolate this profile to long LBWFS exposures."
 
 # CCD220 deep-depletion/ER1 QE curve. OCAM2K identifies CCD220 as its detector;
 # values are digitized from Teledyne e2v's current theoretical -40 C CCD220

@@ -31,6 +31,14 @@ def test_emccd_preset_has_em_gain():
     assert cfg.em_gain > 1.0
 
 
+def test_ocam2k_has_separate_input_and_output_saturation_domains():
+    cfg = load_preset("andor_ocam2k")
+    assert cfg.full_well_e == 270_000.0
+    assert cfg.output_full_well_e == 100_000.0
+    assert cfg.output_full_well_e / cfg.gain_e_per_adu == 10_000.0
+    assert cfg.amplifier_layout == (4, 2)
+
+
 def test_preset_info_shape():
     info = preset_info()
     assert all({"preset", "name", "sensor_type"} <= set(row) for row in info)
