@@ -1,6 +1,11 @@
 # Andor / First Light Imaging OCAM2K — CCD220 deep-depletion AO EMCCD.
 # Manufacturer product and specification page:
 # https://andor.oxinst.com/products/ocam-emccd-camera-series/ocam
+# Unit-specific values below are from Keck AO Note 1337, "OCAM2K operating
+# instructions and performance results" (S/N 02-2019-051), checked against
+# Agapito et al., "EMCCD for Pyramid wavefront sensor: laboratory
+# characterization," arXiv:2012.14634. Keck AO Note 1433 documents the
+# gain-dependent saturation seen in the installed Shack-Hartmann system.
 name = "Andor OCAM2K"
 manufacturer = "Andor / First Light Imaging"
 model = "OCAM2K (Teledyne e2v CCD220)"
@@ -9,23 +14,30 @@ resolution = [240, 240]
 pixel_size_um = 24.0
 quantum_efficiency = 0.90
 # Andor specifies a 270,000 e- image-area full well at multiplication gain 1.
-# The separate 100,000 e- output ceiling is the Keck operationally observed
-# 10,000 dark-subtracted count limit at this preset's 10 e-/ADU conversion.
+# The separate 280,000 e- output ceiling represents Keck's operationally
+# observed 10,000 dark-subtracted count limit at 28 output e-/ADU.
 full_well_e = 270000.0
-output_full_well_e = 100000.0
+output_full_well_e = 280000.0
 bit_depth = 14
-gain_e_per_adu = 10.0
-bias_offset_adu = 100.0
-# At multiplication gain about 600, 240 e- output noise corresponds to the
-# specified 0.4 e- mean input-referred noise at 2000 fps.
-read_noise_e = 240.0
-dark_current_e_per_s = 0.0
+# System conversion is about 28 output electrons/ADU: an input electron at
+# multiplication gain 600 therefore produces 600 / 28 = 21.43 ADU on average.
+gain_e_per_adu = 28.0
+# Representative pedestal in the Keck HAKA RTC data. Per-output modes span
+# approximately 404--413 ADU and are handled by system-specific overrides.
+bias_offset_adu = 408.0
+# Keck measured 0.360 e- input-referred RMS at multiplication gain 600. The
+# detector model adds output-amplifier noise after multiplication: 0.360*600.
+read_noise_e = 216.0
+# Keck dark-frame regression at -45 C, separated from the per-frame CIC below.
+dark_current_e_per_s = 1.579
 dark_current_ref_temp_c = -45.0
 dark_current_doubling_temp_c = 6.0
 em_gain = 600.0
-clock_induced_charge_e = 0.01
+# Keck measured dark+CIC = 0.00567558 e-/pixel/frame at 2067 fps. Subtracting
+# 1.579 / 2067 e-/pixel/frame of dark current leaves this CIC estimate.
+clock_induced_charge_e = 0.004911670953072086
 amplifier_layout = [4, 2]             # eight 60-row x 120-column output regions
-notes = "2000 fps / multiplication-gain ~600 TTS representation. Image-area full well is the published gain-1 specification; output-register saturation uses Keck's measured 10,000 dark-subtracted count ceiling at 10 e-/ADU. The published <0.01 e-/pixel/frame dark signal at -45 C is conservatively treated as per-frame CIC/background because no dark-current-only value is published. Do not extrapolate this profile to long LBWFS exposures."
+notes = "Keck OCAM2K S/N 02-2019-051 high-gain, unbinned operating representation at -45 C. The output conversion is approximately 28 e-/ADU, so EM gain 600 gives 21.43 ADU per input electron. Keck dark-frame measurements give 0.360 input-referred e- RMS read noise, 1.579 e-/pixel/s dark current, and 0.00567558 e-/pixel/frame combined dark+CIC at 2067 fps; the preset separates the latter two terms. The image-area well is Andor's published gain-1 value, while the output ceiling uses Keck's observed 10,000 dark-subtracted count limit. Eight-output response is power-cycle- and frame-rate-dependent, so the preset declares its geometry but leaves measured per-output factors to a system-specific override."
 
 # CCD220 deep-depletion/ER1 QE curve. OCAM2K identifies CCD220 as its detector;
 # values are digitized from Teledyne e2v's current theoretical -40 C CCD220

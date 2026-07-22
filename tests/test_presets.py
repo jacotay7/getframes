@@ -34,9 +34,20 @@ def test_emccd_preset_has_em_gain():
 def test_ocam2k_has_separate_input_and_output_saturation_domains():
     cfg = load_preset("andor_ocam2k")
     assert cfg.full_well_e == 270_000.0
-    assert cfg.output_full_well_e == 100_000.0
+    assert cfg.output_full_well_e == 280_000.0
     assert cfg.output_full_well_e / cfg.gain_e_per_adu == 10_000.0
     assert cfg.amplifier_layout == (4, 2)
+
+
+def test_ocam2k_keck_high_gain_characterization_is_domain_consistent():
+    cfg = load_preset("andor_ocam2k")
+    assert cfg.gain_e_per_adu == 28.0
+    assert cfg.em_gain / cfg.gain_e_per_adu == pytest.approx(21.4285714286)
+    assert cfg.read_noise_e / cfg.em_gain == pytest.approx(0.360)
+    assert cfg.dark_current_e_per_s == pytest.approx(1.579)
+    dark_plus_cic = cfg.dark_current_e_per_s / 2067.0 + cfg.clock_induced_charge_e
+    assert dark_plus_cic == pytest.approx(0.00567558)
+    assert cfg.bias_offset_adu == 408.0
 
 
 def test_preset_info_shape():

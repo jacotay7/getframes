@@ -25,6 +25,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Re-characterized the OCAM2K preset from the Keck unit report and supplied
+  detector studies: approximately 28 output e-/ADU (21.43 ADU per input electron
+  at EM gain 600), 0.360 e- input-referred read noise, 1.579 e-/pixel/s dark
+  current, and a separately derived 0.004912 e-/pixel/frame CIC term. The output
+  saturation charge and representative Keck bias now use the same conversion
+  convention.
 - Fixed PRNU/DSNU/hot-pixel, amplifier, bias-structure, and defect maps are built
   once on persistent `Camera` construction rather than regenerated for every
   frame. This preserves the fixed-pattern contract and materially improves both
