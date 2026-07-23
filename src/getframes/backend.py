@@ -108,7 +108,7 @@ class ArrayBackend:
     def to_numpy(self, value: Any) -> np.ndarray[Any, Any]:
         """Copy an array to host NumPy storage at an explicit boundary."""
         if self.is_cpu:
-            return cast(np.ndarray[Any, Any], np.asarray(value))
+            return np.asarray(value)
         return cast(np.ndarray[Any, Any], self.xp.asnumpy(value))
 
 
