@@ -16,7 +16,7 @@ import getframes as gf
 cam = gf.Camera.from_preset("andor_ikon_m934")
 frame = cam.dark_frame(exposure=60.0, temperature=-60.0, seed=0)
 
-print(frame.stats())   # {'mean': ..., 'std': ..., ...}
+print(frame.stats())  # {'mean': ..., 'std': ..., ...}
 ```
 
 ## Install

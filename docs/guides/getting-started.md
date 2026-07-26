@@ -28,16 +28,17 @@ frame = cam.dark_frame(exposure=60.0, temperature=-60.0, seed=0)
 A [`Frame`][getframes.frame.Frame] holds the pixel data and metadata:
 
 ```python
-frame.data        # numpy array of ADU, shape (height, width)
-frame.shape       # (1024, 1024)
-frame.stats()     # mean / median / std / min / max
-frame.metadata    # how the frame was generated
+frame.data  # numpy array of ADU, shape (height, width)
+frame.shape  # (1024, 1024)
+frame.stats()  # mean / median / std / min / max
+frame.metadata  # how the frame was generated
 ```
 
 `Frame` is array-like, so NumPy works directly:
 
 ```python
 import numpy as np
+
 np.asarray(frame).mean()
 ```
 
@@ -111,8 +112,12 @@ bias = cam.bias_frame(seed=0)
 # Or render astronomical sources through a PSF and telescope:
 scene = gf.Scene(
     shape=cam.resolution,
-    optics=gf.Telescope(aperture_diameter_m=2.5, throughput=0.3,
-                        plate_scale_arcsec_per_pixel=0.4, band=gf.Bandpass.johnson("V")),
+    optics=gf.Telescope(
+        aperture_diameter_m=2.5,
+        throughput=0.3,
+        plate_scale_arcsec_per_pixel=0.4,
+        band=gf.Bandpass.johnson("V"),
+    ),
     psf=gf.MoffatPSF(fwhm_arcsec=1.1, beta=3.0),
     sources=[gf.PointSource(x=512, y=512, magnitude=20.0)],
     sky=gf.Sky(surface_brightness_mag_arcsec2=21.0),

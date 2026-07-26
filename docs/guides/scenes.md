@@ -20,7 +20,7 @@ scene = gf.Scene(
     shape=(256, 256),
     optics=gf.Telescope(
         aperture_diameter_m=2.5,
-        throughput=0.30,                      # optics x filter x atmosphere
+        throughput=0.30,  # optics x filter x atmosphere
         plate_scale_arcsec_per_pixel=0.40,
         band=gf.Bandpass.johnson("V"),
     ),

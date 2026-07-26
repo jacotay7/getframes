@@ -19,7 +19,7 @@ import getframes as gf
 cam = gf.Camera.from_preset("zwo_asi2600mm", precision="float32")
 frame = cam.expose(photon_rate=200.0, exposure=30.0, seed=0)
 
-frame.dtype                       # uint32 — the digitised ADU stay exact integers
+frame.dtype  # uint32 — the digitised ADU stay exact integers
 frame.truth.mean_electrons.dtype  # float32 — the floating-point truth is light
 ```
 
@@ -29,7 +29,7 @@ call the scene or noise layers directly, the same control is a `dtype` /
 `float_dtype` argument:
 
 ```python
-rate_map = scene.photon_rate_map(dtype="float32")     # f32 photons/s/pixel map
+rate_map = scene.photon_rate_map(dtype="float32")  # f32 photons/s/pixel map
 ```
 
 ## Vectorised catalog rendering
@@ -45,8 +45,7 @@ import getframes as gf
 
 rng = np.random.default_rng(0)
 n = 100_000
-table = {"x": rng.uniform(0, 2048, n), "y": rng.uniform(0, 2048, n),
-         "mag": rng.uniform(16, 23, n)}
+table = {"x": rng.uniform(0, 2048, n), "y": rng.uniform(0, 2048, n), "mag": rng.uniform(16, 23, n)}
 
 scene = gf.Scene(
     shape=(2048, 2048),
@@ -54,7 +53,7 @@ scene = gf.Scene(
     psf=gf.GaussianPSF(fwhm_arcsec=0.7),
     sources=[gf.Catalog.from_table(table, magnitude="mag", x="x", y="y")],
 )
-rate = scene.photon_rate_map()    # 10^5 stars, no Python per-star loop
+rate = scene.photon_rate_map()  # 10^5 stars, no Python per-star loop
 ```
 
 Other PSFs fall back to a per-source loop automatically (via
@@ -74,10 +73,9 @@ import getframes as gf
 cam = gf.Camera.from_preset("zwo_asi2600mm", precision="float32")
 scenes = gf.dataset.random_star_fields(n=10_000, shape=cam.resolution, seed=0)
 
-ds = gf.dataset.pairs(camera=cam, scenes=scenes, exposure=60.0,
-                      dtype="float32", seed=1)
+ds = gf.dataset.pairs(camera=cam, scenes=scenes, exposure=60.0, dtype="float32", seed=1)
 
-paths = ds.to_npz("train/")   # one {raw, truth} .npz per frame, streamed
+paths = ds.to_npz("train/")  # one {raw, truth} .npz per frame, streamed
 ```
 
 Each frame draws a distinct derived seed, so the set is reproducible yet the frames

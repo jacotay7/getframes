@@ -250,9 +250,10 @@ cam = gf.Camera.from_preset("generic_cmos", default_temperature_c=-10.0)
 
 # Build calibration masters from synthetic series (fluxes kept in the linear regime).
 master_bias = cam.master_bias(n_frames=50, seed=0)
-master_dark = cam.master_dark(exposure=30.0, n_frames=25, seed=1)        # exposure-matched
-master_flat = cam.master_flat(photon_rate=2_000.0, exposure=1.0,
-                              n_frames=25, seed=2, bias=master_bias)       # pedestal-free
+master_dark = cam.master_dark(exposure=30.0, n_frames=25, seed=1)  # exposure-matched
+master_flat = cam.master_flat(
+    photon_rate=2_000.0, exposure=1.0, n_frames=25, seed=2, bias=master_bias
+)  # pedestal-free
 
 # A science frame that carries its own ground truth.
 sci = cam.expose(photon_rate=40.0, exposure=30.0, seed=3)
@@ -260,7 +261,7 @@ sci = cam.expose(photon_rate=40.0, exposure=30.0, seed=3)
 # Reduce it (subtract the matched dark, divide the normalised flat) and check truth.
 reduced = gf.calibrate(sci, dark=master_dark, flat=master_flat)
 residual = np.asarray(reduced) - sci.truth.mean_photoelectrons / cam.config.gain_e_per_adu
-print(f"calibration residual RMS: {residual.std():.3f} ADU")   # ~ read/shot floor
+print(f"calibration residual RMS: {residual.std():.3f} ADU")  # ~ read/shot floor
 ```
 
 ### B — Transit photometry as a time series (1.2)
@@ -268,21 +269,32 @@ print(f"calibration residual RMS: {residual.std():.3f} ADU")   # ~ read/shot flo
 ```python
 import getframes as gf
 
-scope = gf.Telescope(aperture_diameter_m=0.2, throughput=0.5,
-                     plate_scale_arcsec_per_pixel=5.0, band=gf.Bandpass.johnson("R"))
+scope = gf.Telescope(
+    aperture_diameter_m=0.2,
+    throughput=0.5,
+    plate_scale_arcsec_per_pixel=5.0,
+    band=gf.Bandpass.johnson("R"),
+)
 
 # Variability is owned by the source: a 1% box transit between t=2000s and 4000s.
 transit = gf.LightCurve.box(depth=0.01, t0=2000, t1=4000)
-scene = gf.Scene(shape=(256, 256), optics=scope, psf=gf.GaussianPSF(fwhm_arcsec=8.0),
-                 sources=[gf.PointSource(x=64, y=64, magnitude=12.0, name="target",
-                                         brightness=transit),
-                          gf.PointSource(x=180, y=180, magnitude=11.5, name="ref")],
-                 sky=gf.Sky(surface_brightness_mag_arcsec2=20.0))
+scene = gf.Scene(
+    shape=(256, 256),
+    optics=scope,
+    psf=gf.GaussianPSF(fwhm_arcsec=8.0),
+    sources=[
+        gf.PointSource(x=64, y=64, magnitude=12.0, name="target", brightness=transit),
+        gf.PointSource(x=180, y=180, magnitude=11.5, name="ref"),
+    ],
+    sky=gf.Sky(surface_brightness_mag_arcsec2=20.0),
+)
 
 obs = cam.observe_series(scene, exposure=20.0, n_frames=300, jitter_arcsec=2.0, seed=0)
 
-lc = [gf.analysis.aperture_sum(f, (64, 64), r=12) /
-      gf.analysis.aperture_sum(f, (180, 180), r=12) for f in obs.frames]
+lc = [
+    gf.analysis.aperture_sum(f, (64, 64), r=12) / gf.analysis.aperture_sum(f, (180, 180), r=12)
+    for f in obs.frames
+]
 # obs.truth.light_curve["target"] holds the injected signal to validate against.
 ```
 
@@ -294,8 +306,12 @@ from astropy.table import Table
 
 scene = gf.Scene(
     shape=(2048, 2048),
-    optics=gf.Telescope(aperture_diameter_m=4.0, throughput=0.4,
-                        plate_scale_arcsec_per_pixel=0.2, band=gf.Bandpass.ab("g")),
+    optics=gf.Telescope(
+        aperture_diameter_m=4.0,
+        throughput=0.4,
+        plate_scale_arcsec_per_pixel=0.2,
+        band=gf.Bandpass.ab("g"),
+    ),
     psf=gf.MoffatPSF(fwhm_arcsec=0.8, beta=3.0),
     wcs=gf.WCSInfo.tan(ra=150.1, dec=2.2, plate_scale_arcsec_per_pixel=0.2, shape=(2048, 2048)),
 )
@@ -310,10 +326,14 @@ frame = cam.observe(scene, exposure=300.0, seed=0)
 import getframes as gf
 
 # Raw + noise-free-truth pairs streamed to disk, float32, chunked.
-ds = gf.dataset.pairs(camera=gf.Camera.from_preset("zwo_asi2600mm"),
-                      scenes=gf.dataset.random_star_fields(n=10_000, shape=(512, 512)),
-                      exposure=60.0, dtype="float32", seed=0)
-ds.to_npz("train/")   # each item: {"raw": ADU, "truth": e-} for a denoiser
+ds = gf.dataset.pairs(
+    camera=gf.Camera.from_preset("zwo_asi2600mm"),
+    scenes=gf.dataset.random_star_fields(n=10_000, shape=(512, 512)),
+    exposure=60.0,
+    dtype="float32",
+    seed=0,
+)
+ds.to_npz("train/")  # each item: {"raw": ADU, "truth": e-} for a denoiser
 ```
 
 ---

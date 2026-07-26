@@ -29,8 +29,12 @@ transit = gf.LightCurve.box(depth=0.01, t0=2000, t1=4000)
 
 scene = gf.Scene(
     shape=(256, 256),
-    optics=gf.Telescope(aperture_diameter_m=0.2, throughput=0.5,
-                        plate_scale_arcsec_per_pixel=5.0, band=gf.Bandpass.johnson("R")),
+    optics=gf.Telescope(
+        aperture_diameter_m=0.2,
+        throughput=0.5,
+        plate_scale_arcsec_per_pixel=5.0,
+        band=gf.Bandpass.johnson("R"),
+    ),
     psf=gf.GaussianPSF(fwhm_arcsec=8.0),
     sources=[
         gf.PointSource(x=64, y=64, magnitude=12.0, name="target", brightness=transit),
@@ -40,8 +44,9 @@ scene = gf.Scene(
 )
 
 cam = gf.Camera.from_preset("zwo_asi2600mm").with_config(resolution=(256, 256))
-obs = cam.observe_series(scene, exposure=20.0, n_frames=300, cadence=20.0,
-                         jitter_arcsec=2.0, seed=0)
+obs = cam.observe_series(
+    scene, exposure=20.0, n_frames=300, cadence=20.0, jitter_arcsec=2.0, seed=0
+)
 ```
 
 `LightCurve` ships `box`, `sinusoidal`, `constant`, and `from_function` (wrap any
@@ -54,10 +59,12 @@ obs = cam.observe_series(scene, exposure=20.0, n_frames=300, cadence=20.0,
 The observation carries the injected, noise-free signal of each named source:
 
 ```python
-measured = [gf.analysis.aperture_sum(f, (64, 64), r=12) /
-            gf.analysis.aperture_sum(f, (180, 180), r=12) for f in obs]
+measured = [
+    gf.analysis.aperture_sum(f, (64, 64), r=12) / gf.analysis.aperture_sum(f, (180, 180), r=12)
+    for f in obs
+]
 
-truth = obs.truth.light_curve["target"]   # injected photons/frame, shape (n_frames,)
+truth = obs.truth.light_curve["target"]  # injected photons/frame, shape (n_frames,)
 times = obs.truth.times_s
 ```
 
@@ -71,8 +78,8 @@ frame. Offsets are given in arcseconds and converted with the scene's plate scal
 
 ```python
 pointing = gf.Pointing(
-    jitter_arcsec=2.0,                 # per-frame Gaussian (also tip-tilt / image motion)
-    drift_arcsec_per_s=(0.01, 0.0),    # slow linear creep
+    jitter_arcsec=2.0,  # per-frame Gaussian (also tip-tilt / image motion)
+    drift_arcsec_per_s=(0.01, 0.0),  # slow linear creep
     dither_arcsec=[(0, 0), (5, 0), (0, 5)],  # programmed pattern, cycled by frame
 )
 obs = cam.observe_series(scene, exposure=20.0, n_frames=300, pointing=pointing, seed=0)
@@ -91,7 +98,9 @@ frame); `observe_series` carries the trapped charge across the series:
 
 ```python
 cam = gf.Camera.from_preset("leonardo_saphira").with_config(
-    resolution=(256, 256), persistence_fraction=0.01, persistence_decay=0.5,
+    resolution=(256, 256),
+    persistence_fraction=0.01,
+    persistence_decay=0.5,
 )
 obs = cam.observe_series(scene, exposure=2.0, n_frames=20, seed=0)
 ```

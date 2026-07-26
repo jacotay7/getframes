@@ -50,15 +50,16 @@ cam = gf.Camera.from_preset("andor_ikon_m934")
 # ...and generate a reproducible dark frame.
 frame = cam.dark_frame(exposure=60.0, temperature=-60.0, seed=0)
 
-frame.data            # 2-D numpy array of ADU, shape (1024, 1024)
-frame.stats()         # {'mean': ..., 'median': ..., 'std': ..., 'min': ..., 'max': ...}
-frame.metadata        # camera/exposure/temperature provenance
+frame.data  # 2-D numpy array of ADU, shape (1024, 1024)
+frame.stats()  # {'mean': ..., 'median': ..., 'std': ..., 'min': ..., 'max': ...}
+frame.metadata  # camera/exposure/temperature provenance
 ```
 
 `Frame` is array-like, so it drops straight into NumPy:
 
 ```python
 import numpy as np
+
 master_dark = np.mean([np.asarray(f) for f in cam.dark_series(60.0, n_frames=20, seed=1)], axis=0)
 ```
 
@@ -69,7 +70,7 @@ cam = gf.Camera(
     gf.CameraConfig(
         name="My Lab CMOS",
         sensor_type="CMOS",
-        resolution=(2048, 2048),       # (height, width)
+        resolution=(2048, 2048),  # (height, width)
         pixel_size_um=6.5,
         quantum_efficiency=0.82,
         full_well_e=30_000,
@@ -77,7 +78,7 @@ cam = gf.Camera(
         gain_e_per_adu=0.8,
         bias_offset_adu=300,
         read_noise_e=1.8,
-        dark_current_e_per_s=0.5,      # at the reference temperature
+        dark_current_e_per_s=0.5,  # at the reference temperature
         dark_current_ref_temp_c=20.0,
         dark_current_doubling_temp_c=6.0,
     )
@@ -95,7 +96,7 @@ cam = gf.Camera.from_preset("andor_ocam2k", device="gpu", precision="float32")
 rate = cp.full(cam.resolution, 2.0e6, dtype=cp.float32)  # photons/s/pixel
 frame = cam.expose(rate, exposure=1.0e-3, seed=0)
 
-frame.data                  # CuPy uint32 ADU array; no host copy
+frame.data  # CuPy uint32 ADU array; no host copy
 frame.truth.mean_electrons  # CuPy truth array
 host_adu = gf.to_numpy(frame.data)  # explicit device-to-host boundary
 ```
@@ -132,14 +133,18 @@ detector — the full photon → electron → ADU path:
 ```python
 scene = gf.Scene(
     shape=(256, 256),
-    optics=gf.Telescope(aperture_diameter_m=2.5, throughput=0.3,
-                        plate_scale_arcsec_per_pixel=0.4, band=gf.Bandpass.johnson("V")),
+    optics=gf.Telescope(
+        aperture_diameter_m=2.5,
+        throughput=0.3,
+        plate_scale_arcsec_per_pixel=0.4,
+        band=gf.Bandpass.johnson("V"),
+    ),
     psf=gf.MoffatPSF(fwhm_arcsec=1.1, beta=3.0),
     sources=[gf.PointSource(x=128, y=128, magnitude=20.0)],
     sky=gf.Sky(surface_brightness_mag_arcsec2=21.0),
 )
 cam = gf.Camera.from_preset("zwo_asi2600mm").with_config(resolution=(256, 256))
-frame = cam.observe(scene, exposure=300.0, seed=0)   # a realistic science frame
+frame = cam.observe(scene, exposure=300.0, seed=0)  # a realistic science frame
 ```
 
 You can also drive the detector directly with a photon-rate map (a scalar for a
@@ -151,8 +156,8 @@ uniform flat, or a per-pixel array): `cam.expose(photon_rate, exposure)`.
 from getframes import available_presets
 from getframes.presets import preset_info
 
-available_presets()   # ['andor_ikon_m934', 'andor_ixon_ultra_888', 'generic_ccd', ...]
-preset_info()         # rich descriptors for each preset
+available_presets()  # ['andor_ikon_m934', 'andor_ixon_ultra_888', 'generic_ccd', ...]
+preset_info()  # rich descriptors for each preset
 ```
 
 | Preset | Sensor | Notes |

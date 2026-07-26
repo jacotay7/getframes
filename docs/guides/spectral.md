@@ -53,9 +53,7 @@ from getframes.spectral import QE, SED
 # A detector whose QE climbs toward the red.
 qe = QE.from_arrays([400, 550, 700, 900], [0.30, 0.60, 0.85, 0.92])
 
-cam = gf.Camera.from_preset("generic_cmos").with_config(
-    resolution=(256, 256), qe_curve=qe
-)
+cam = gf.Camera.from_preset("generic_cmos").with_config(resolution=(256, 256), qe_curve=qe)
 
 scope = gf.Telescope(2.5, 0.40, throughput=0.30, band=gf.Bandpass.johnson("R"))
 scene = gf.Scene(
@@ -63,8 +61,8 @@ scene = gf.Scene(
     optics=scope,
     psf=gf.MoffatPSF(fwhm_arcsec=1.1),
     sources=[
-        gf.PointSource(x=128, y=128, magnitude=18.0, sed=SED.blackbody(3500)),   # cool/red
-        gf.PointSource(x=70, y=180, magnitude=18.0, sed=SED.blackbody(15000)),   # hot/blue
+        gf.PointSource(x=128, y=128, magnitude=18.0, sed=SED.blackbody(3500)),  # cool/red
+        gf.PointSource(x=70, y=180, magnitude=18.0, sed=SED.blackbody(15000)),  # hot/blue
     ],
 )
 
@@ -89,12 +87,14 @@ FITS WCS header cards into the frame's metadata (and thus into `Frame.to_fits`):
 
 ```python
 scene.wcs = gf.WCSInfo(
-    crval_ra_deg=150.1, crval_dec_deg=2.2,
-    crpix_x=128, crpix_y=128,
+    crval_ra_deg=150.1,
+    crval_dec_deg=2.2,
+    crpix_x=128,
+    crpix_y=128,
     plate_scale_arcsec_per_pixel=0.40,
 )
 frame = cam.observe(scene, exposure=120.0, seed=0)
-frame.to_fits("field.fits")          # header carries CTYPE/CRVAL/CRPIX/CD...
+frame.to_fits("field.fits")  # header carries CTYPE/CRVAL/CRPIX/CD...
 ```
 
 The header cards are emitted with no third-party dependency. Pixel↔sky conversions

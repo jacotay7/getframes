@@ -30,15 +30,22 @@ import numpy as np
 import getframes as gf
 
 config = gf.CameraConfig(
-    name="demo", sensor_type="CMOS", resolution=(96, 96), pixel_size_um=5.0,
-    quantum_efficiency=1.0, full_well_e=60_000.0, bit_depth=16,
-    gain_e_per_adu=1.0, bias_offset_adu=100.0, read_noise_e=5.0,
+    name="demo",
+    sensor_type="CMOS",
+    resolution=(96, 96),
+    pixel_size_um=5.0,
+    quantum_efficiency=1.0,
+    full_well_e=60_000.0,
+    bit_depth=16,
+    gain_e_per_adu=1.0,
+    bias_offset_adu=100.0,
+    read_noise_e=5.0,
     dark_current_e_per_s=0.0,
 )
 cam = gf.Camera(config, default_temperature_c=-10.0)
 
 ptc = gf.analysis.photon_transfer_curve(cam, np.linspace(200.0, 75_000.0, 16), exposure=1.0)
-print(ptc.gain_e_per_adu, ptc.read_noise_e, ptc.full_well_adu)   # ~1.0, ~5.0, ~60000
+print(ptc.gain_e_per_adu, ptc.read_noise_e, ptc.full_well_adu)  # ~1.0, ~5.0, ~60000
 ```
 
 ## Reproduce the EMCCD excess noise factor
@@ -53,10 +60,11 @@ import numpy as np
 from getframes import noise
 
 rng = np.random.default_rng(0)
-out = noise.apply_gain_stage(np.full(400_000, 60.0), gain=250.0,
-                             excess_noise_factor=np.sqrt(2.0), rng=rng)
+out = noise.apply_gain_stage(
+    np.full(400_000, 60.0), gain=250.0, excess_noise_factor=np.sqrt(2.0), rng=rng
+)
 recovered_F = np.sqrt(1.0 + out.var() / (60.0 * 250.0**2))
-print(recovered_F)   # ~1.414
+print(recovered_F)  # ~1.414
 ```
 
 ## Reproducibility

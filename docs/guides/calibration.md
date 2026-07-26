@@ -18,9 +18,10 @@ import getframes as gf
 cam = gf.Camera.from_preset("generic_cmos", default_temperature_c=-10.0)
 
 master_bias = cam.master_bias(n_frames=50, seed=0)
-master_dark = cam.master_dark(exposure=60.0, n_frames=25, seed=1)   # exposure-matched
-master_flat = cam.master_flat(photon_rate=20_000.0, exposure=1.0,
-                              n_frames=25, seed=2, bias=master_bias)  # pedestal-free
+master_dark = cam.master_dark(exposure=60.0, n_frames=25, seed=1)  # exposure-matched
+master_flat = cam.master_flat(
+    photon_rate=20_000.0, exposure=1.0, n_frames=25, seed=2, bias=master_bias
+)  # pedestal-free
 ```
 
 Under the hood these call [`combine`][getframes.calibrate.combine], which you can
@@ -62,7 +63,7 @@ import numpy as np
 
 truth_adu = sci.truth.mean_photoelectrons / cam.config.gain_e_per_adu
 residual = np.asarray(reduced) - truth_adu
-print(f"residual RMS: {residual.std():.2f} ADU")   # → the shot + read noise floor
+print(f"residual RMS: {residual.std():.2f} ADU")  # → the shot + read noise floor
 ```
 
 A correct pipeline drives the residual down to the irreducible shot + read noise
@@ -75,7 +76,7 @@ The masters above are built from series. The same series methods mirror
 `dark_series` for light and scene frames:
 
 ```python
-flats   = cam.expose_series(20_000.0, 1.0, n_frames=25, seed=2)
+flats = cam.expose_series(20_000.0, 1.0, n_frames=25, seed=2)
 science = cam.observe_series(scene, exposure=300.0, n_frames=10, seed=0)
 ```
 
