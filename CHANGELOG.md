@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-07-26
+
 ### Added
 
 - Exact multi-amplifier ROI geometry and measured row-major gain/offset response
@@ -344,7 +346,8 @@ together in 1.0.
 - Documentation, runnable examples, and CI (lint, type-check, test matrix, PyPI
   release via Trusted Publishing).
 
-[Unreleased]: https://github.com/jacotay7/getframes/compare/2.1.0...HEAD
+[Unreleased]: https://github.com/jacotay7/getframes/compare/2.1.1...HEAD
+[2.1.1]: https://github.com/jacotay7/getframes/compare/2.1.0...2.1.1
 [2.1.0]: https://github.com/jacotay7/getframes/compare/2.0.0...2.1.0
 [2.0.0]: https://github.com/jacotay7/getframes/compare/1.0.0...2.0.0
 [1.0.0]: https://github.com/jacotay7/getframes/compare/0.1.0...1.0.0
