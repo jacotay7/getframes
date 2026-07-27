@@ -6,6 +6,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Full-detector region-of-interest simulation through
+  `CameraConfig.roi=(left, top, width, height)`. Cameras accept and return
+  ROI-shaped arrays while evaluating detector physics and fixed patterns on the
+  native sensor before cropping. `Camera.sensor_resolution`,
+  `CameraConfig.output_resolution`, and active amplifier-boundary properties make
+  the full-versus-ROI geometry explicit. Exact full-detector split pixels remain
+  available when an ROI is active.
+
 ## [2.1.1] - 2026-07-26
 
 ### Added

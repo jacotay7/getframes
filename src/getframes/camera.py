@@ -125,7 +125,18 @@ class Camera:
 
     @property
     def resolution(self) -> tuple[int, int]:
+        """Unbinned output shape, accounting for the configured detector ROI."""
+        return self.config.output_resolution
+
+    @property
+    def sensor_resolution(self) -> tuple[int, int]:
+        """Full physical detector shape before applying an ROI."""
         return self.config.resolution
+
+    @property
+    def roi(self) -> tuple[int, int, int, int] | None:
+        """Configured ``(left, top, width, height)`` detector ROI, if any."""
+        return self.config.roi
 
     @property
     def sensor_type(self) -> str:
@@ -172,6 +183,46 @@ class Camera:
         ss = np.random.SeedSequence(seed)
         return [int(s.generate_state(1)[0]) for s in ss.spawn(n_frames)]
 
+    def _full_detector_input(self, value: PhotonRate, name: str) -> Any:
+        """Embed a scalar or ROI-shaped input in the full physical detector grid."""
+        if self.roi is None:
+            return value
+        array = self._backend.asarray(value, dtype=self._float_dtype)
+        full = self._backend.xp.zeros(self.sensor_resolution, dtype=self._float_dtype)
+        if array.ndim == 0:
+            full[self.config.roi_slices] = array
+            return full
+        if tuple(array.shape) != self.resolution:
+            raise ValueError(
+                f"{name} shape {tuple(array.shape)} does not match camera ROI "
+                f"resolution {self.resolution}."
+            )
+        full[self.config.roi_slices] = array
+        return full
+
+    def _binned_roi_slices(self, binning: int) -> tuple[slice, slice]:
+        """Return ROI slices on a full-detector grid after native-pixel binning."""
+        if binning < 1:
+            raise ValueError("binning must be a positive integer.")
+        if self.roi is None:
+            return (
+                slice(0, self.sensor_resolution[0] // binning),
+                slice(0, self.sensor_resolution[1] // binning),
+            )
+        left, top, width, height = self.roi
+        if any(value % binning for value in (left, top, width, height)):
+            raise ValueError("binning must divide the ROI left, top, width, and height exactly.")
+        return (
+            slice(top // binning, (top + height) // binning),
+            slice(left // binning, (left + width) // binning),
+        )
+
+    def _crop_to_roi(self, value: Any, binning: int = 1) -> Any:
+        """Crop a full-detector array to the configured ROI."""
+        if self.roi is None:
+            return value
+        return value[self._binned_roi_slices(binning)]
+
     def dark_frame(
         self,
         exposure: float,
@@ -208,6 +259,7 @@ class Camera:
             backend=self._backend,
             fixed_patterns=self._fixed_patterns,
         )
+        data = self._crop_to_roi(data)
         return Frame(data=data, metadata=self._metadata("dark", exposure, temp, seed))
 
     def dark_series(
@@ -286,20 +338,27 @@ class Camera:
         """
         temp = self.default_temperature_c if temperature is None else temperature
         rng = self._resolve_rng(seed)
+        self._binned_roi_slices(binning)
         result = noise.simulate_frame(
             self.config,
-            photon_rate,
+            self._full_detector_input(photon_rate, "photon_rate"),
             exposure,
             temperature_c=temp,
-            background_photon_rate=background,
+            background_photon_rate=self._full_detector_input(background, "background"),
             quantum_efficiency=quantum_efficiency,
-            extra_electrons=extra_electrons,
+            extra_electrons=self._full_detector_input(extra_electrons, "extra_electrons"),
             binning=binning,
             binning_mode=binning_mode,
             rng=rng,
             float_dtype=self._float_dtype,
             backend=self._backend,
             fixed_patterns=self._fixed_patterns,
+        )
+        result = noise.SimulationResult(
+            self._crop_to_roi(result.adu, binning),
+            self._crop_to_roi(result.mean_photoelectrons, binning),
+            self._crop_to_roi(result.mean_dark_electrons, binning),
+            photon_rate,
         )
         truth = (
             FrameTruth(
@@ -683,13 +742,14 @@ class Camera:
         """
         signal = noise.photo_signal_map(
             self.config,
-            rate,
+            self._full_detector_input(rate, "photon_rate"),
             exposure,
-            background,
+            self._full_detector_input(background, "background"),
             qe,
             backend=self._backend,
             fixed_patterns=self._fixed_patterns,
         )
+        signal = self._crop_to_roi(signal)
         captured = self.config.persistence_fraction * signal
         latent_arr = self._backend.asarray(latent, dtype=np.float64)
         released_arr = self._backend.asarray(released, dtype=np.float64)
@@ -783,7 +843,7 @@ class Camera:
     def _metadata(
         self, frame_type: str, exposure: float, temperature: float, seed: int | None
     ) -> dict[str, Any]:
-        return {
+        metadata: dict[str, Any] = {
             "camera": self.config.name,
             "sensor": self.config.sensor_type.value,
             "frame_type": frame_type,
@@ -796,9 +856,13 @@ class Camera:
             "device": self.device,
             "seed": seed,
         }
+        if self.roi is not None:
+            metadata["detector_roi"] = self.roi
+            metadata["sensor_resolution"] = self.sensor_resolution
+        return metadata
 
     def __repr__(self) -> str:
-        h, w = self.config.resolution
+        h, w = self.resolution
         return (
             f"Camera(name={self.config.name!r}, sensor={self.config.sensor_type.value!r}, "
             f"resolution={h}x{w}, device={self.device!r})"

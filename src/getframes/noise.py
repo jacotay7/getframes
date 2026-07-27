@@ -418,7 +418,7 @@ def apply_ipc(
 def _amplifier_maps(config: CameraConfig, backend: ArrayBackend | None = None) -> tuple[Any, Any]:
     """Per-pixel conversion-gain (e-/ADU) and extra bias-offset (ADU) maps.
 
-    Tiles the sensor into ``amplifier_layout`` blocks using exact configured ROI
+    Tiles the full sensor into ``amplifier_layout`` blocks using exact configured
     boundaries when present. Exact per-amplifier factors/offsets take precedence;
     otherwise fixed deviations are drawn from the configured spreads.
     """
@@ -833,6 +833,7 @@ def simulate_frame(
             raise ValueError("on-chip binning must divide every explicit amplifier boundary.")
         binned_config = config.replace(
             resolution=binned_shape,
+            roi=None,
             full_well_e=config.full_well_e * binning * binning,
             amplifier_boundaries_y_px=tuple(
                 boundary // binning for boundary in config.amplifier_boundaries_y_px

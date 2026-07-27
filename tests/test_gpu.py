@@ -44,6 +44,25 @@ def test_gpu_exposure_keeps_frame_and_truth_on_device_and_repeats_seed() -> None
     assert isinstance(first.binned(2).data, cupy.ndarray)
 
 
+def test_gpu_roi_keeps_full_detector_geometry_and_device_arrays() -> None:
+    cupy = _cupy()
+    camera = gf.Camera.from_preset("generic_cmos", device="gpu", precision="float32").with_config(
+        resolution=(32, 32),
+        roi=(4, 6, 20, 18),
+        amplifier_layout=(2, 2),
+    )
+    rate = cupy.full(camera.resolution, 1_000.0, dtype=cupy.float32)
+
+    frame = camera.expose(rate, 0.01, seed=17)
+
+    assert camera.sensor_resolution == (32, 32)
+    assert camera.resolution == (18, 20)
+    assert frame.shape == (18, 20)
+    assert isinstance(frame.data, cupy.ndarray)
+    assert frame.truth is not None
+    assert isinstance(frame.truth.mean_electrons, cupy.ndarray)
+
+
 def test_gpu_and_cpu_detector_statistics_match() -> None:
     cupy = _cupy()
     config = gf.load_preset("generic_cmos").replace(

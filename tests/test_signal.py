@@ -26,6 +26,53 @@ def test_expose_returns_frame_with_truth(cam):
     assert frame.data.max() <= cam.config.max_adu
 
 
+def test_roi_matches_crop_of_full_detector_simulation():
+    config = cam_config = Camera.from_preset("generic_ccd").config.replace(
+        resolution=(12, 18),
+        roi=None,
+        amplifier_layout=(2, 3),
+        amplifier_gain_factors=(1.0, 1.1, 1.2, 0.9, 0.8, 0.7),
+        amplifier_offsets_adu=(0.0, 2.0, 4.0, 6.0, 8.0, 10.0),
+        read_noise_e=3.0,
+        dark_current_e_per_s=0.0,
+        clock_induced_charge_e=0.0,
+    )
+    full_camera = Camera(config)
+    roi_camera = Camera(cam_config.replace(roi=(2, 2, 12, 8)))
+    rate = np.arange(8 * 12, dtype=np.float64).reshape(8, 12)
+    full_rate = np.zeros(config.resolution, dtype=np.float64)
+    full_rate[2:10, 2:14] = rate
+
+    full = full_camera.expose(full_rate, 0.5, seed=123)
+    cropped = roi_camera.expose(rate, 0.5, seed=123)
+
+    assert roi_camera.sensor_resolution == (12, 18)
+    assert roi_camera.resolution == (8, 12)
+    assert cropped.shape == (8, 12)
+    np.testing.assert_array_equal(cropped.data, full.data[2:10, 2:14])
+    assert cropped.truth is not None
+    assert full.truth is not None
+    np.testing.assert_array_equal(
+        cropped.truth.mean_electrons,
+        full.truth.mean_electrons[2:10, 2:14],
+    )
+    np.testing.assert_array_equal(cropped.truth.photon_rate, rate)
+    assert cropped.metadata["detector_roi"] == (2, 2, 12, 8)
+    assert cropped.metadata["sensor_resolution"] == (12, 18)
+
+
+def test_roi_rejects_wrong_input_shape_and_misaligned_binning():
+    roi_camera = Camera.from_preset("generic_ccd").with_config(
+        resolution=(12, 18),
+        roi=(1, 2, 12, 8),
+    )
+
+    with pytest.raises(ValueError, match="camera ROI resolution"):
+        roi_camera.expose(np.zeros((12, 18)), 1.0)
+    with pytest.raises(ValueError, match="binning must divide the ROI"):
+        roi_camera.expose(np.zeros((8, 12)), 1.0, binning=2)
+
+
 def test_more_light_means_more_signal(cam):
     dim = cam.expose(10.0, 1.0, -20.0, seed=1).stats()["mean"]
     bright = cam.expose(1000.0, 1.0, -20.0, seed=1).stats()["mean"]

@@ -128,7 +128,7 @@ default** and additive, so existing configs are unchanged. They fall in two grou
   `amp_offset_spread_adu` — multi-amplifier readout: each block reads out with its
   own small, fixed gain/offset error, producing quadrant seams.
 - `amplifier_boundaries_y_px` / `amplifier_boundaries_x_px` preserve exact
-  full-detector amplifier splits inside a cropped ROI. Optional row-major
+  full-detector amplifier splits. Optional row-major
   `amplifier_gain_factors` and `amplifier_offsets_adu` accept measured responses
   instead of drawing them from the spread parameters.
 - `bad_column_fraction` / `dead_pixel_fraction` — a fixed map of dead columns and
@@ -152,6 +152,38 @@ cfg = load_preset("generic_ccd").replace(
 )
 frame = Camera(cfg).expose(photon_rate=200.0, exposure=10.0, seed=0)
 ```
+
+### Detector regions of interest
+
+Set `CameraConfig.roi=(left, top, width, height)` to read a rectangular region in
+unbinned full-detector pixel coordinates. `CameraConfig.resolution` remains the
+physical sensor size, while `Camera.resolution` is the ROI output shape in
+`(height, width)` order. Photon-rate arrays passed to `Camera.expose` use that
+output shape.
+
+Detector physics is evaluated on the full sensor before cropping. Consequently,
+amplifier splits, CTI, IPC, blooming, defects, fixed-pattern maps, and seeded
+noise remain registered to full-detector coordinates. For example, the OCAM2K
+ROI used by Keck HAKA is:
+
+```python
+cfg = load_preset("andor_ocam2k").replace(roi=(4, 4, 228, 228))
+cam = Camera(cfg)
+
+cam.sensor_resolution  # (240, 240)
+cam.resolution         # (228, 228)
+cfg.active_amplifier_boundaries_y_px  # (56, 116, 176)
+cfg.active_amplifier_boundaries_x_px  # (116,)
+```
+
+For binned ROI exposures, the binning factor must exactly divide the ROI's left,
+top, width, and height.
+
+Because only the ROI is supplied, the detector outside it is treated as
+unilluminated. The neighbour-coupling effects — blooming, CTI, and IPC — therefore
+see zero signal beyond the ROI edge, so charge that a real illuminated surround
+would bleed inward is not modelled. Simulate the full sensor and crop the result
+yourself when the surround is bright enough for that transfer to matter.
 
 The structural effects (`amplifier_layout`, defects, `bias_structure_amplitude_adu`)
 are keyed on `fixed_pattern_seed`, so they repeat across every frame a camera

@@ -39,6 +39,36 @@ def test_resolution_normalised_to_tuple_of_int():
     assert all(isinstance(n, int) for n in cfg.resolution)
 
 
+def test_roi_normalisation_geometry_and_active_amplifier_boundaries():
+    cfg = make_config(
+        resolution=(240, 240),
+        roi=[4, 4, 228, 228],
+        amplifier_layout=(4, 2),
+    )
+
+    assert cfg.roi == (4, 4, 228, 228)
+    assert cfg.output_resolution == (228, 228)
+    assert cfg.roi_slices == (slice(4, 232), slice(4, 232))
+    assert cfg.active_amplifier_boundaries_y_px == (56, 116, 176)
+    assert cfg.active_amplifier_boundaries_x_px == (116,)
+
+
+@pytest.mark.parametrize(
+    "roi",
+    [
+        (0, 0, 0, 10),
+        (-1, 0, 10, 10),
+        (0, -1, 10, 10),
+        (60, 0, 10, 10),
+        (0, 60, 10, 10),
+        (0, 0, 10),
+    ],
+)
+def test_roi_validation_rejects_invalid_geometry(roi):
+    with pytest.raises(ValueError, match="roi"):
+        make_config(roi=roi)
+
+
 def test_max_adu():
     assert make_config(bit_depth=12).max_adu == 4095
     assert make_config(bit_depth=16).max_adu == 65535
@@ -84,10 +114,12 @@ def test_roundtrip_dict():
         amplifier_boundaries_x_px=(31,),
         amplifier_gain_factors=(1.0, 1.01),
         amplifier_offsets_adu=(0.0, -3.0),
+        roi=(2, 3, 40, 50),
     )
     data = cfg.to_dict()
     assert data["sensor_type"] == "EMCCD"
     assert data["resolution"] == [64, 64]
+    assert data["roi"] == [2, 3, 40, 50]
     assert data["amplifier_boundaries_x_px"] == [31]
     assert data["amplifier_gain_factors"] == [1.0, 1.01]
     assert data["amplifier_offsets_adu"] == [0.0, -3.0]

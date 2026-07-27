@@ -54,6 +54,11 @@ class CameraConfig:
     resolution:
         Sensor size as ``(height, width)`` in pixels, matching NumPy's row-major
         array convention.
+    roi:
+        Optional detector region of interest as ``(left, top, width, height)`` in
+        unbinned full-detector pixels. :class:`~getframes.camera.Camera` accepts
+        and returns arrays shaped ``(height, width)`` while detector effects are
+        still simulated on the full ``resolution`` grid before cropping.
     pixel_size_um:
         Physical pixel pitch in microns. Informational; not used for dark frames.
     quantum_efficiency:
@@ -135,8 +140,11 @@ class CameraConfig:
         ``amp_offset_spread_adu``), producing the characteristic seams. ``(1, 1)``
         is a single amplifier.
     amplifier_boundaries_y_px, amplifier_boundaries_x_px:
-        Optional exact internal amplifier split coordinates on the configured ROI.
-        Empty tuples divide the ROI equally according to ``amplifier_layout``.
+        Optional exact internal amplifier split coordinates on the full detector.
+        Empty tuples divide ``resolution`` equally according to
+        ``amplifier_layout``. :attr:`active_amplifier_boundaries_y_px` and
+        :attr:`active_amplifier_boundaries_x_px` translate them into ROI
+        coordinates.
     amplifier_gain_factors:
         Optional exact row-major multiplicative conversion-gain factors, one per
         amplifier. These override stochastic ``amp_gain_nonuniformity`` draws.
@@ -279,11 +287,14 @@ class CameraConfig:
     model: str | None = None
     notes: str | None = None
     extra: dict[str, Any] = field(default_factory=dict)
+    roi: tuple[int, int, int, int] | None = None
 
     def __post_init__(self) -> None:
         # Normalise/validate without mutating frozen fields directly.
         object.__setattr__(self, "sensor_type", SensorType.coerce(self.sensor_type))
         object.__setattr__(self, "resolution", tuple(int(n) for n in self.resolution))
+        if self.roi is not None:
+            object.__setattr__(self, "roi", tuple(int(value) for value in self.roi))
         object.__setattr__(self, "amplifier_layout", tuple(int(n) for n in self.amplifier_layout))
         object.__setattr__(
             self,
@@ -319,6 +330,17 @@ class CameraConfig:
     def _validate(self) -> None:
         if len(self.resolution) != 2 or any(n <= 0 for n in self.resolution):
             raise ValueError(f"resolution must be two positive ints, got {self.resolution!r}.")
+        if self.roi is not None:
+            if len(self.roi) != 4:
+                raise ValueError("roi must be (left, top, width, height).")
+            left, top, width, height = self.roi
+            sensor_height, sensor_width = self.resolution
+            if left < 0 or top < 0 or width <= 0 or height <= 0:
+                raise ValueError("roi must have non-negative left/top and positive width/height.")
+            if left + width > sensor_width or top + height > sensor_height:
+                raise ValueError(
+                    f"roi {self.roi!r} exceeds full detector resolution {self.resolution!r}."
+                )
         if not 0.0 <= self.quantum_efficiency <= 1.0:
             raise ValueError("quantum_efficiency must be in [0, 1].")
         if self.bit_depth <= 0:
@@ -440,6 +462,59 @@ class CameraConfig:
         return int(2**self.bit_depth - 1)
 
     @property
+    def output_resolution(self) -> tuple[int, int]:
+        """Unbinned camera output shape, accounting for an optional ROI."""
+        if self.roi is None:
+            return self.resolution
+        _, _, width, height = self.roi
+        return (height, width)
+
+    @property
+    def roi_slices(self) -> tuple[slice, slice]:
+        """Full-detector array slices selecting the configured ROI."""
+        if self.roi is None:
+            return (slice(0, self.resolution[0]), slice(0, self.resolution[1]))
+        left, top, width, height = self.roi
+        return (slice(top, top + height), slice(left, left + width))
+
+    def _full_amplifier_boundaries(self, *, axis: int) -> tuple[int, ...]:
+        """Return full-detector amplifier splits, deriving equal ones if omitted."""
+        configured = self.amplifier_boundaries_y_px if axis == 0 else self.amplifier_boundaries_x_px
+        if configured:
+            return configured
+        size = self.resolution[axis]
+        blocks = self.amplifier_layout[axis]
+        block_size, remainder = divmod(size, blocks)
+        edges: list[int] = []
+        position = 0
+        for index in range(blocks - 1):
+            position += block_size + (index < remainder)
+            edges.append(position)
+        return tuple(edges)
+
+    @property
+    def active_amplifier_boundaries_y_px(self) -> tuple[int, ...]:
+        """Amplifier row splits translated into coordinates of the active ROI."""
+        top = 0 if self.roi is None else self.roi[1]
+        height = self.output_resolution[0]
+        return tuple(
+            boundary - top
+            for boundary in self._full_amplifier_boundaries(axis=0)
+            if top < boundary < top + height
+        )
+
+    @property
+    def active_amplifier_boundaries_x_px(self) -> tuple[int, ...]:
+        """Amplifier column splits translated into coordinates of the active ROI."""
+        left = 0 if self.roi is None else self.roi[0]
+        width = self.output_resolution[1]
+        return tuple(
+            boundary - left
+            for boundary in self._full_amplifier_boundaries(axis=1)
+            if left < boundary < left + width
+        )
+
+    @property
     def has_gain_stage(self) -> bool:
         """Whether a stochastic multiplication stage (EM/avalanche) is active."""
         return self.em_gain > 1.0
@@ -480,6 +555,8 @@ class CameraConfig:
         data = asdict(self)
         data["sensor_type"] = self.sensor_type.value
         data["resolution"] = list(self.resolution)
+        if self.roi is not None:
+            data["roi"] = list(self.roi)
         data["amplifier_layout"] = list(self.amplifier_layout)
         data["amplifier_boundaries_y_px"] = list(self.amplifier_boundaries_y_px)
         data["amplifier_boundaries_x_px"] = list(self.amplifier_boundaries_x_px)

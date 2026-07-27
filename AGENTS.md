@@ -82,7 +82,12 @@ realistic, sourced values and add a `notes` line. Prefer lowercase
 
 ## Conventions
 
-- `resolution` is `(height, width)` to match NumPy row-major arrays.
+- `CameraConfig.resolution` is the full sensor `(height, width)`. An optional
+  `roi` is `(left, top, width, height)` in unbinned full-detector pixels;
+  `Camera.resolution` is then the active ROI `(height, width)`.
+- ROI execution evaluates detector physics and seeded fixed patterns on the full
+  sensor before cropping. Do not implement an ROI by merely shrinking
+  `CameraConfig.resolution` or by shifting amplifier boundaries manually.
 - Electron quantities in `e-`; digital quantities in ADU.
 - Line length 100; double quotes; ruff for lint+format; isort via ruff.
 - Public functions/classes get docstrings (NumPy style).

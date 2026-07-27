@@ -146,7 +146,12 @@ def _cmd_dataset(args: argparse.Namespace) -> int:
     if len(shape) != 2:
         raise ValueError("dataset.shape must be [height, width].")
     # The dataset shape drives the detector size, so the synthetic scenes fit.
-    camera = camera.with_config(resolution=[shape[0], shape[1]])
+    if camera.roi is None:
+        camera = camera.with_config(resolution=[shape[0], shape[1]])
+    elif camera.resolution != shape:
+        raise ValueError(
+            f"dataset.shape {shape} does not match configured camera ROI {camera.resolution}."
+        )
     n_stars: Any = spec.get("n_stars", (20, 200))
     if isinstance(n_stars, list):
         n_stars = tuple(int(v) for v in n_stars)
