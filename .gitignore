@@ -224,3 +224,4 @@ __marimo__/
 .streamlit/secrets.toml
 keck_ttf
 *.png
+.vscode
