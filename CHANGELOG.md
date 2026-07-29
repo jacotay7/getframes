@@ -32,6 +32,22 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `CameraConfig.output_resolution`, and active amplifier-boundary properties make
   the full-versus-ROI geometry explicit. Exact full-detector split pixels remain
   available when an ROI is active.
+- **`getframes.analysis.characterize`: detector characterisation from frame
+  stacks.** Where `photon_transfer_curve` drives a *simulated* camera, this works
+  on stacks that already exist -- raw data off a real detector, or simulated
+  frames. `stack_statistics` reduces any iterable of frames (arrays, `Frame`s, a
+  `dark_series` generator, your own file reader) to per-pixel temporal mean and
+  variance in one streaming pass, so stacks larger than memory are fine.
+  `characterize_dark` then measures conversion gain, read noise (with its
+  per-pixel map, log-normal width and RTS tail), dark current, bias and DSNU from
+  darks alone -- no flat field needed, because dark charge is Poisson and so
+  serves as the PTC charge source. `characterize_flat` adds full well, PRNU and
+  linearity. `DarkCharacterization.to_config()` returns a `CameraConfig`, closing
+  the loop: measure a real camera, then simulate it. `StackStats.split=True`
+  additionally gives `temporal_repeatability`, the split-half test that separates
+  genuine per-pixel noise structure from chi-squared sampling scatter.
+  New guide (`docs/guides/characterization.md`) and example
+  (`examples/15_detector_characterization.py`).
 - `read_noise_rts_fraction` / `read_noise_rts_factor`: an optional second,
   noisier read-noise population modelling the random-telegraph-signal (RTS) pixels
   of a real sCMOS array. Measured on three real sensors, ~0.5% of pixels sit above

@@ -37,6 +37,7 @@ nav:
       - Scale & datasets: guides/datasets.md
       - GPU detector execution: guides/gpu.md
       - Camera presets: guides/presets.md
+      - Detector characterisation: guides/characterization.md
       - Validation: guides/validation.md
   - API reference: reference.md
   - API stability: stability.md
