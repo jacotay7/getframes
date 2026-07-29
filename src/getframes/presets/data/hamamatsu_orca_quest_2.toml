@@ -13,6 +13,7 @@ bit_depth = 16
 gain_e_per_adu = 0.107
 bias_offset_adu = 200.0
 read_noise_e = 0.43
+read_noise_nonuniformity = 0.2   # generic sCMOS per-pixel spread; not characterised for this camera
 dark_current_e_per_s = 0.016
 dark_current_ref_temp_c = -20.0
 dark_current_doubling_temp_c = 6.0
@@ -27,6 +28,11 @@ notes = "Standard-scan mode: 0.43 e- RMS at 120 fps full frame. Maximum-cooling 
 # order of magnitude above the ~0.03 that had been assumed here; 0.23 is their median.
 # Treat it as a realistic default rather than a specification --- re-characterise if
 # DSNU matters quantitatively for your work.
+
+# No read_noise_rts_fraction is set here, unlike the other sCMOS presets. Photon-number
+# resolution is this camera's defining capability and depends on a tightly screened
+# read-noise distribution, so importing an RTS tail measured on conventional 11 um
+# back-illuminated sCMOS would misrepresent it. Characterise before adding one.
 
 [extra]
 source_modes_url = "https://camera.hamamatsu.com/content/dam/hamamatsu-photonics/sites/static/sys/en/manual/C15550-22UP_IM_En.pdf"

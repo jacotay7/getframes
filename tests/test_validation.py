@@ -146,6 +146,64 @@ def test_ptc_recovers_gain_read_noise_full_well():
 
 
 # ---------------------------------------------------------------------------
+# A dark-only photon transfer curve recovers the configured gain
+# ---------------------------------------------------------------------------
+def test_dark_ptc_recovers_gain_without_any_illumination():
+    """The method documented in docs/guides/validation.md, run against known truth.
+
+    Dark charge is Poisson, so it serves as the charge source for a photon transfer
+    curve: per pixel, the slope of temporal variance against temporal mean is 1/gain,
+    with the dark rate cancelling and bias/read noise absorbed into the intercepts.
+    This is how the KURO/Prime 95B/Marana presets were characterised from real darks,
+    so pin it against a camera whose gain we know.
+    """
+    gain, dark = 0.85, 4.0
+    config = gf.CameraConfig(
+        name="dark-ptc-validation",
+        sensor_type="SCMOS",
+        resolution=(64, 64),
+        pixel_size_um=11.0,
+        quantum_efficiency=1.0,
+        full_well_e=60_000.0,
+        bit_depth=16,
+        gain_e_per_adu=gain,
+        bias_offset_adu=100.0,
+        read_noise_e=1.6,
+        read_noise_nonuniformity=0.25,
+        dark_current_e_per_s=dark,
+        dark_current_ref_temp_c=-20.0,
+        dark_current_nonuniformity=0.2,
+    )
+    cam = gf.Camera(config, default_temperature_c=-20.0)
+    exposures = [0.5, 1.0, 2.0, 4.0, 8.0, 16.0]
+
+    means, variances = [], []
+    for t in exposures:
+        stack = np.stack([np.asarray(f, dtype=np.float64) for f in cam.dark_series(t, 400, seed=7)])
+        means.append(stack.mean(axis=0))
+        variances.append(stack.var(axis=0, ddof=1))
+    means, variances = np.stack(means), np.stack(variances)
+
+    def slope(x, y):  # per-pixel least squares along the exposure axis
+        xm, ym = x.mean(axis=0), y.mean(axis=0)
+        return ((x - xm) * (y - ym)).sum(axis=0) / ((x - xm) ** 2).sum(axis=0)
+
+    recovered_gain = float(np.nanmedian(1.0 / slope(means, variances)))
+    assert recovered_gain == pytest.approx(gain, rel=0.05)
+
+    # And the dark rate follows once the gain is known.
+    t_axis = np.array(exposures)[:, None, None]
+    recovered_dark = float(np.nanmedian(slope(t_axis, means))) * recovered_gain
+    assert recovered_dark == pytest.approx(dark, rel=0.10)
+
+    # The electron statistics implied by that gain are Poisson (Fano factor 1) --
+    # the assumption the whole method rests on.
+    d_mean = float(np.median(means[-1] - means[0])) * recovered_gain
+    d_var = float(np.median(variances[-1] - variances[0])) * recovered_gain**2
+    assert d_var / d_mean == pytest.approx(1.0, abs=0.1)
+
+
+# ---------------------------------------------------------------------------
 # A reduced frame recovers the ground truth to the noise floor
 # ---------------------------------------------------------------------------
 def test_reduced_frame_recovers_truth():

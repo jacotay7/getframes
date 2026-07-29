@@ -25,6 +25,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Full-detector region-of-interest simulation through
+  `CameraConfig.roi=(left, top, width, height)`. Cameras accept and return
+  ROI-shaped arrays while evaluating detector physics and fixed patterns on the
+  native sensor before cropping. `Camera.sensor_resolution`,
+  `CameraConfig.output_resolution`, and active amplifier-boundary properties make
+  the full-versus-ROI geometry explicit. Exact full-detector split pixels remain
+  available when an ROI is active.
 - `read_noise_rts_fraction` / `read_noise_rts_factor`: an optional second,
   noisier read-noise population modelling the random-telegraph-signal (RTS) pixels
   of a real sCMOS array. Measured on three real sensors, ~0.5% of pixels sit above
@@ -52,15 +59,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   omitted the field entirely. `0.23` is the median of the three cameras measured
   against real dark stacks (0.11, 0.23, 0.33); each preset documents that it is a
   realistic default carried over from characterised hardware rather than a figure
-  from that camera's datasheet.
-
-- Full-detector region-of-interest simulation through
-  `CameraConfig.roi=(left, top, width, height)`. Cameras accept and return
-  ROI-shaped arrays while evaluating detector physics and fixed patterns on the
-  native sensor before cropping. `Camera.sensor_resolution`,
-  `CameraConfig.output_resolution`, and active amplifier-boundary properties make
-  the full-versus-ROI geometry explicit. Exact full-detector split pixels remain
-  available when an ROI is active.
+  from that camera's datasheet. The same four conventional sCMOS presets also gain
+  the measured RTS population (`read_noise_rts_fraction = 0.016`, factor 2.65), and
+  `andor_cb1_0_5mp` / `hamamatsu_orca_quest_2` gain a `read_noise_nonuniformity` of
+  0.2 where they previously had none at all. `hamamatsu_orca_quest_2` deliberately
+  keeps no RTS population --- photon-number resolution depends on a tightly screened
+  read-noise distribution, and importing a tail measured on conventional 11 um sCMOS
+  would misrepresent it.
+- `andor_marana_4_2b_11` gains its measured hot-pixel population
+  (`hot_pixel_fraction = 1e-4` above 10x the median dark rate).
+- `docs/guides/validation.md` documents how to validate a preset against a real dark
+  stack: measuring conversion gain from darks alone (no flats needed), and the
+  split-half test for repeatable per-pixel read noise.
 
 ## [2.1.1] - 2026-07-26
 
