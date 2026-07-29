@@ -45,8 +45,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   largest corrections: conversion gain (1.25-1.3 -> 0.77-0.87 e-/ADU, the low-signal
   leg of these dual-gain modes) and `dark_current_nonuniformity` (0.03 -> 0.11-0.33,
   which had been roughly an order of magnitude too low). Each preset documents the
-  operating mode and temperature the values apply to. Other sCMOS presets still
-  carry datasheet-derived DSNU and are likely low for the same reason.
+  operating mode and temperature the values apply to.
+- `dark_current_nonuniformity` raised to `0.23` on the remaining sCMOS presets
+  (`generic_scmos`, `hamamatsu_orca_fusion`, `hamamatsu_orca_quest_2`,
+  `tucsen_aries_6504_pro`, `andor_cb1_0_5mp`), which previously carried 0.02-0.03 or
+  omitted the field entirely. `0.23` is the median of the three cameras measured
+  against real dark stacks (0.11, 0.23, 0.33); each preset documents that it is a
+  realistic default carried over from characterised hardware rather than a figure
+  from that camera's datasheet.
 
 - Full-detector region-of-interest simulation through
   `CameraConfig.roi=(left, top, width, height)`. Cameras accept and return

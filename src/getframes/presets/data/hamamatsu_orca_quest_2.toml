@@ -16,9 +16,17 @@ read_noise_e = 0.43
 dark_current_e_per_s = 0.016
 dark_current_ref_temp_c = -20.0
 dark_current_doubling_temp_c = 6.0
+dark_current_nonuniformity = 0.23
 supported_binnings = [1, 2, 4]         # digital, applied after per-pixel photon-number resolution
 binning_method = "digital"
 notes = "Standard-scan mode: 0.43 e- RMS at 120 fps full frame. Maximum-cooling dark current is 0.006 e-/pixel/s at -35 C. The manual specifies that 2x2 and 4x4 are digital binning after per-pixel photon-number resolution, so their read noise is propagated from native pixels rather than treated as a single read. Ultra-quiet mode (0.30 e- at 25.4 fps) is an alternate read mode. QE is a typical curve digitized from the catalog figure."
+
+# Dark-signal non-uniformity carried over from characterised hardware, not from this
+# camera's datasheet. Three back-illuminated sCMOS cameras measured against real dark
+# stacks (KURO 1200B 0.23, Prime 95B 0.33, Marana 4.2B-11 0.11) all sat roughly an
+# order of magnitude above the ~0.03 that had been assumed here; 0.23 is their median.
+# Treat it as a realistic default rather than a specification --- re-characterise if
+# DSNU matters quantitatively for your work.
 
 [extra]
 source_modes_url = "https://camera.hamamatsu.com/content/dam/hamamatsu-photonics/sites/static/sys/en/manual/C15550-22UP_IM_En.pdf"

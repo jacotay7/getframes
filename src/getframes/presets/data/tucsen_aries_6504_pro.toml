@@ -18,10 +18,17 @@ dark_current_e_per_s = 0.01
 dark_current_ref_temp_c = -20.0
 dark_current_doubling_temp_c = 6.0
 prnu = 0.003                           # published 0.3%
-dark_current_nonuniformity = 0.03
+dark_current_nonuniformity = 0.23
 supported_binnings = [1, 2, 4]         # Mosaic sum binning on original pixel data (digital post-read)
 binning_method = "digital"
 notes = "Sensitive-mode read noise with HDR-mode full well; QE x fill-factor curve digitized from Gpixel's published GSENSE6504BSI plot. Speed mode (0.80 e-) is an alternate read mode, offered at 1x1 only here. Mosaic documents binning as sum on original pixel data with unchanged data volume/frame rate; modeled as digital post-read summation. Confirm Aries-specific SDK behavior and ROI timing before final design."
+
+# Dark-signal non-uniformity carried over from characterised hardware, not from this
+# camera's datasheet. Three back-illuminated sCMOS cameras measured against real dark
+# stacks (KURO 1200B 0.23, Prime 95B 0.33, Marana 4.2B-11 0.11) all sat roughly an
+# order of magnitude above the ~0.03 that had been assumed here; 0.23 is their median.
+# Treat it as a realistic default rather than a specification --- re-characterise if
+# DSNU matters quantitatively for your work.
 
 [extra]
 body_dimensions_mm = [80.0, 80.0, 108.0]

@@ -4,7 +4,7 @@
 import numpy as np
 import pytest
 
-from getframes import Camera, CameraConfig, SensorType, load_preset, noise
+from getframes import Camera, CameraConfig, SensorType, available_presets, load_preset, noise
 
 
 def base_config(**overrides):
@@ -260,6 +260,26 @@ def test_ttf_characterised_presets_carry_measured_structure():
         assert 0.7 < cfg.gain_e_per_adu < 0.9, name
     marana = load_preset("andor_marana_4_2b_11")
     assert marana.detector_glow_edge_scale_px > 0
+
+
+def test_every_scmos_preset_has_a_realistic_dsnu():
+    """Guard against the ~0.03 DSNU that every sCMOS preset used to carry.
+
+    Measured against real dark stacks, three back-illuminated sCMOS cameras came
+    out at 0.11-0.33 --- roughly an order of magnitude above the datasheet-derived
+    value the presets had. Uncharacterised sCMOS presets now carry the median of
+    those three as a realistic default.
+    """
+    checked = 0
+    for name in available_presets():
+        cfg = load_preset(name)
+        if cfg.sensor_type is not SensorType.SCMOS:
+            continue
+        checked += 1
+        assert cfg.dark_current_nonuniformity >= 0.1, (
+            f"{name}: DSNU {cfg.dark_current_nonuniformity} is implausibly low for sCMOS"
+        )
+    assert checked >= 5
 
 
 def test_realism_defaults_are_off():
