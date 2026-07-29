@@ -171,7 +171,7 @@ cfg = load_preset("andor_ocam2k").replace(roi=(4, 4, 228, 228))
 cam = Camera(cfg)
 
 cam.sensor_resolution  # (240, 240)
-cam.resolution         # (228, 228)
+cam.resolution  # (228, 228)
 cfg.active_amplifier_boundaries_y_px  # (56, 116, 176)
 cfg.active_amplifier_boundaries_x_px  # (116,)
 ```
