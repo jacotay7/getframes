@@ -10,7 +10,8 @@ Signal chain (:func:`simulate_frame`)
 1. Mean photo signal: ``(photon_rate + background) * t_exp * QE`` electrons,
    modulated per pixel by photo-response non-uniformity (PRNU).
 2. Mean dark signal: ``D(T) * t_exp`` electrons (temperature-scaled), modulated by
-   dark-signal non-uniformity (DSNU) and hot pixels.
+   dark-signal non-uniformity (DSNU) and hot pixels, plus detector glow (uniform,
+   or edge-concentrated via ``detector_glow_edge_scale_px``).
 3. Shot noise: the total electrons are Poisson-distributed about that mean.
 4. Clock-induced charge (EMCCD) adds a small Poisson term.
 5. Cosmic rays (single pixels or extended tracks).
@@ -19,6 +20,8 @@ Signal chain (:func:`simulate_frame`)
 7. Detector nonlinearity (single-parameter or polynomial).
 8. EM register / avalanche multiplication with its stochastic excess noise.
 9. kTC/reset noise and read noise: Gaussian in electrons, at the output amplifier.
+   The per-pixel read-noise RMS is a *fixed* sensor property (sCMOS), including an
+   optional random-telegraph-signal (RTS) tail population.
 10. Conversion to ADU via (optionally per-amplifier) gain, plus the bias pedestal
     and any structured-bias pattern; dead pixels/columns read as defects.
 11. Saturation at full well / ADC range and quantisation to integers.
@@ -56,6 +59,7 @@ _FPN_STREAM_AMP_GAIN = 3
 _FPN_STREAM_AMP_OFFSET = 4
 _FPN_STREAM_BIAS = 5
 _FPN_STREAM_DEFECT = 6
+_FPN_STREAM_READ_NOISE = 7
 
 
 class FixedPatternMaps(NamedTuple):
@@ -67,6 +71,7 @@ class FixedPatternMaps(NamedTuple):
     amplifier_offset: Any
     bias_structure: Any
     defect_mask: Any | None
+    read_noise_sigma: Any
 
 
 def _fixed_pattern_rng(config: CameraConfig, stream: int, backend: ArrayBackend) -> Any:
@@ -118,7 +123,48 @@ def fixed_pattern_maps(
         offset,
         _bias_structure_map(config, resolved),
         _defect_mask(config, resolved),
+        _read_noise_sigma_map(config, resolved, float_dtype=float_dtype),
     )
+
+
+def _read_noise_sigma_map(
+    config: CameraConfig,
+    backend: ArrayBackend | None = None,
+    *,
+    float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
+) -> Any:
+    """Per-pixel read-noise RMS in electrons, or a scalar when it is uniform.
+
+    Real sCMOS read noise is a property of each pixel's own source-follower and
+    ADC chain, so this map is drawn from the *fixed-pattern* stream (keyed on
+    ``fixed_pattern_seed``) and is identical in every frame the camera produces.
+    That is what makes the per-pixel *temporal* noise repeatable, and it is
+    directly measurable: split a dark stack in half, take each half's per-pixel
+    variance, and the two maps correlate.
+
+    The distribution is a log-normal core of fractional width
+    ``read_noise_nonuniformity``, optionally with a second, noisier population
+    covering ``read_noise_rts_fraction`` of pixels whose RMS is multiplied by
+    ``read_noise_rts_factor``. That second population models random-telegraph-signal
+    (RTS) pixels, which give real sCMOS arrays a read-noise histogram with a
+    markedly heavier tail than a single log-normal.
+    """
+    if config.read_noise_e <= 0:
+        return 0.0
+    resolved = backend or get_backend()
+    shape = config.resolution
+    if config.read_noise_nonuniformity <= 0 and config.read_noise_rts_fraction <= 0:
+        return float(config.read_noise_e)
+    rng = _fixed_pattern_rng(config, _FPN_STREAM_READ_NOISE, resolved)
+    spread = config.read_noise_nonuniformity
+    if spread > 0:
+        sigma = config.read_noise_e * rng.lognormal(mean=-0.5 * spread**2, sigma=spread, size=shape)
+    else:
+        sigma = resolved.xp.full(shape, float(config.read_noise_e))
+    if config.read_noise_rts_fraction > 0:
+        rts = rng.random(shape) < config.read_noise_rts_fraction
+        sigma[rts] *= config.read_noise_rts_factor
+    return sigma.astype(float_dtype)
 
 
 def dark_signal_map(
@@ -164,11 +210,14 @@ def dark_signal_map(
         hot_mask = rng.random(signal.shape) < config.hot_pixel_fraction
         signal[hot_mask] *= config.hot_pixel_factor
 
-    # Detector glow: a uniform self-emission term that scales with exposure (and so
-    # is removed by an exposure-matched master dark). Added after DSNU/hot pixels,
+    # Detector glow: a self-emission term that scales with exposure (and so is
+    # removed by an exposure-matched master dark). Added after DSNU/hot pixels,
     # which describe the dark *current*, not the glow. In place to preserve dtype.
     if config.detector_glow_e_per_s > 0 and exposure_s > 0:
-        signal += config.detector_glow_e_per_s * exposure_s
+        if config.detector_glow_edge_scale_px > 0:
+            signal += _glow_profile(config, resolved, float_dtype) * exposure_s
+        else:
+            signal += config.detector_glow_e_per_s * exposure_s
 
     return signal
 
@@ -502,6 +551,41 @@ def _bias_structure_map(config: CameraConfig, backend: ArrayBackend | None = Non
     return xp.broadcast_to(scaled, (height, width)).astype(np.float64)
 
 
+def _glow_profile(
+    config: CameraConfig,
+    backend: ArrayBackend | None = None,
+    float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
+) -> Any:
+    """Edge-concentrated detector-glow rate in e-/pixel/s.
+
+    Amplifier and array glow is emitted by the readout electronics around the
+    array periphery, so it falls off into the detector rather than sitting at a
+    uniform level. The model is an exponential in the distance to the nearest
+    edge::
+
+        g(x, y) = A * exp(-d_edge(x, y) / detector_glow_edge_scale_px)
+
+    with ``A`` set so the *mean* of ``g`` over the array equals
+    ``detector_glow_e_per_s``. It is deterministic (no randomness), fixed for a
+    given sensor, and scales with exposure, so an exposure-matched master dark
+    removes it.
+    """
+    resolved = backend or get_backend()
+    xp = resolved.xp
+    height, width = config.resolution
+    scale = config.detector_glow_edge_scale_px
+    rows = xp.arange(height, dtype=float_dtype).reshape(height, 1)
+    cols = xp.arange(width, dtype=float_dtype).reshape(1, width)
+    d_row = xp.minimum(rows, height - 1 - rows)
+    d_col = xp.minimum(cols, width - 1 - cols)
+    profile = xp.exp(-xp.minimum(d_row, d_col) / scale)
+    mean = resolved.scalar(profile.mean())
+    if mean <= 0:
+        return xp.zeros((height, width), dtype=float_dtype)
+    profile *= config.detector_glow_e_per_s / mean
+    return profile
+
+
 def _defect_mask(config: CameraConfig, backend: ArrayBackend | None = None) -> Any | None:
     """A fixed boolean map of dead pixels/columns (``True`` = no response), or ``None``.
 
@@ -619,16 +703,16 @@ def digitize(
     if config.reset_noise_e > 0:
         signal += normal_noise(config.reset_noise_e)
 
-    # Read noise in electrons, added at the amplifier.
+    # Read noise in electrons, added at the amplifier. The per-pixel RMS is a
+    # fixed property of the sensor (see :func:`_read_noise_sigma_map`), so only the
+    # Gaussian draw itself is per-frame.
     if config.read_noise_e > 0:
-        if config.read_noise_nonuniformity > 0:
-            spread = config.read_noise_nonuniformity
-            sigma_map = config.read_noise_e * rng.lognormal(
-                mean=-0.5 * spread**2, sigma=spread, size=signal.shape
-            )
-            signal += normal_noise(sigma_map)
-        else:
-            signal += normal_noise(config.read_noise_e)
+        sigma_map = (
+            fixed_patterns.read_noise_sigma
+            if fixed_patterns is not None
+            else _read_noise_sigma_map(config, resolved, float_dtype=signal.dtype)
+        )
+        signal += normal_noise(sigma_map)
 
     if fixed_patterns is None:
         gain_map, amp_offset = _amplifier_maps(config, resolved)

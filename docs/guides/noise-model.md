@@ -83,6 +83,59 @@ EMCCD or eAPD this is applied after the gain stage, which is why a high mean gai
 makes the effective (input-referred) read noise sub-electron — the eAPD's
 `read_noise_e` is the pre-avalanche amplifier noise, divided down by `em_gain`.
 
+#### Per-pixel read noise (sCMOS)
+
+An sCMOS pixel has its own source-follower and column ADC, so its read noise is a
+**fixed property of that pixel** rather than a single array-wide number.
+`read_noise_nonuniformity` sets the fractional width of a log-normal distribution
+of per-pixel RMS. Like PRNU and DSNU, the resulting map is drawn once from
+`fixed_pattern_seed`, so it is identical in every frame — only the Gaussian draw
+itself is per-frame.
+
+That distinction is measurable, and it is the reason it matters: take a stack of
+darks, compute each pixel's variance *through time*, split the stack in half, and
+the two variance maps agree pixel-for-pixel. On three real back-illuminated sCMOS
+cameras that split-half correlation is 0.89–0.94.
+
+`read_noise_e` is the *scale* of this distribution, which has unit mean — so the
+mean per-pixel RMS is `read_noise_e` and the median is
+`read_noise_e * exp(-read_noise_nonuniformity**2 / 2)`, a few percent lower.
+
+Real arrays also carry a **random-telegraph-signal (RTS)** population: a small
+fraction of pixels whose trapped-charge switching makes them much noisier than the
+log-normal core predicts. Measured on real sensors, ~0.5% of pixels sit above 3×
+the median read noise, where a bare log-normal would put ~0.01%. Set
+`read_noise_rts_fraction` (typically 0.005–0.03) and `read_noise_rts_factor` to
+include them:
+
+```python
+from getframes import Camera, load_preset
+
+cam = Camera(load_preset("princeton_instruments_kuro_1200b"))
+cfg = cam.config
+print(cfg.read_noise_e, cfg.read_noise_nonuniformity)
+print(cfg.read_noise_rts_fraction, cfg.read_noise_rts_factor)
+```
+
+These are the pixels that limit faint-source detection, so they matter for any
+threshold or detection-completeness study.
+
+#### Detector glow
+
+`detector_glow_e_per_s` adds self-emission that scales with exposure. By default it
+is uniform. Real amplifier glow is emitted by the readout electronics on the array
+periphery, so setting `detector_glow_edge_scale_px` concentrates it near the
+detector edges with an exponential falloff:
+
+```
+glow(x, y) = A * exp(-d_edge(x, y) / detector_glow_edge_scale_px)
+```
+
+with `A` chosen so the array **mean** is still `detector_glow_e_per_s` — meaning the
+edges run hotter and the centre cooler than that figure. The pattern is fixed and
+exposure-scaling, so an exposure-matched master dark still removes it. The
+`andor_marana_4_2b_11` preset carries a measured 37-pixel falloff scale.
+
 ### 7. Digitisation
 
 For ordinary detectors, `full_well_e` is both the image-area charge capacity and
