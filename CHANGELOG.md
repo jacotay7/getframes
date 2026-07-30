@@ -6,6 +6,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **sCMOS per-pixel read noise is now a fixed property of the sensor.** The
+  per-pixel read-noise RMS map implied by `read_noise_nonuniformity` was drawn from
+  the *per-frame* generator, so it was re-randomised in every frame. Single-frame
+  spatial statistics were unaffected, but every pixel ended up with the same
+  expected noise *through time*, which is not how an sCMOS behaves: each pixel has
+  its own source-follower and column ADC. The map is now built once from
+  `fixed_pattern_seed` and cached in `FixedPatternMaps`, alongside PRNU and DSNU.
+  Verified against dark stacks from three real back-illuminated sCMOS cameras
+  (KURO 1200B, Prime 95B, Marana 4.2B-11): splitting a stack in half and
+  correlating the two per-pixel temporal-variance maps gives r = 0.89–0.94 on the
+  real detectors and r = 0.004 with the old model, now r ≈ 0.96.
+  **This changes generated pixel values** for any configuration with
+  `read_noise_nonuniformity > 0`; `read_noise_e` and the spatial statistics of a
+  single frame are unchanged.
+
 ### Added
 
 - Full-detector region-of-interest simulation through
@@ -15,6 +32,61 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `CameraConfig.output_resolution`, and active amplifier-boundary properties make
   the full-versus-ROI geometry explicit. Exact full-detector split pixels remain
   available when an ROI is active.
+- **`getframes.analysis.characterize`: detector characterisation from frame
+  stacks.** Where `photon_transfer_curve` drives a *simulated* camera, this works
+  on stacks that already exist -- raw data off a real detector, or simulated
+  frames. `stack_statistics` reduces any iterable of frames (arrays, `Frame`s, a
+  `dark_series` generator, your own file reader) to per-pixel temporal mean and
+  variance in one streaming pass, so stacks larger than memory are fine.
+  `characterize_dark` then measures conversion gain, read noise (with its
+  per-pixel map, log-normal width and RTS tail), dark current, bias and DSNU from
+  darks alone -- no flat field needed, because dark charge is Poisson and so
+  serves as the PTC charge source. `characterize_flat` adds full well, PRNU and
+  linearity. `DarkCharacterization.to_config()` returns a `CameraConfig`, closing
+  the loop: measure a real camera, then simulate it. `StackStats.split=True`
+  additionally gives `temporal_repeatability`, the split-half test that separates
+  genuine per-pixel noise structure from chi-squared sampling scatter.
+  New guide (`docs/guides/characterization.md`) and example
+  (`examples/15_detector_characterization.py`).
+- `read_noise_rts_fraction` / `read_noise_rts_factor`: an optional second,
+  noisier read-noise population modelling the random-telegraph-signal (RTS) pixels
+  of a real sCMOS array. Measured on three real sensors, ~0.5% of pixels sit above
+  3x the median read noise where a single log-normal predicts ~0.01%; these are the
+  pixels that limit faint-source detection. Defaults to off.
+- `detector_glow_edge_scale_px`: makes `detector_glow_e_per_s` edge-concentrated
+  with an exponential falloff, instead of uniform, modelling amplifier glow emitted
+  at the array periphery. Renormalised so the array mean is unchanged; still fixed
+  and exposure-scaling, so an exposure-matched master dark removes it. Defaults to
+  `0` (uniform, the previous behaviour).
+
+### Changed
+
+- The `princeton_instruments_kuro_1200b`, `photometrics_prime_95b`, and
+  `andor_marana_4_2b_11` presets now carry **measured** conversion gain, read noise,
+  dark current, bias offset, and non-uniformity terms, fitted from a per-pixel dark
+  photon-transfer analysis of real frames rather than taken from datasheets. The
+  largest corrections: conversion gain (1.25-1.3 -> 0.77-0.87 e-/ADU, the low-signal
+  leg of these dual-gain modes) and `dark_current_nonuniformity` (0.03 -> 0.11-0.33,
+  which had been roughly an order of magnitude too low). Each preset documents the
+  operating mode and temperature the values apply to.
+- `dark_current_nonuniformity` raised to `0.23` on the remaining sCMOS presets
+  (`generic_scmos`, `hamamatsu_orca_fusion`, `hamamatsu_orca_quest_2`,
+  `tucsen_aries_6504_pro`, `andor_cb1_0_5mp`), which previously carried 0.02-0.03 or
+  omitted the field entirely. `0.23` is the median of the three cameras measured
+  against real dark stacks (0.11, 0.23, 0.33); each preset documents that it is a
+  realistic default carried over from characterised hardware rather than a figure
+  from that camera's datasheet. The same four conventional sCMOS presets also gain
+  the measured RTS population (`read_noise_rts_fraction = 0.016`, factor 2.65), and
+  `andor_cb1_0_5mp` / `hamamatsu_orca_quest_2` gain a `read_noise_nonuniformity` of
+  0.2 where they previously had none at all. `hamamatsu_orca_quest_2` deliberately
+  keeps no RTS population --- photon-number resolution depends on a tightly screened
+  read-noise distribution, and importing a tail measured on conventional 11 um sCMOS
+  would misrepresent it.
+- `andor_marana_4_2b_11` gains its measured hot-pixel population
+  (`hot_pixel_fraction = 1e-4` above 10x the median dark rate).
+- `docs/guides/validation.md` documents how to validate a preset against a real dark
+  stack: measuring conversion gain from darks alone (no flats needed), and the
+  split-half test for repeatable per-pixel read noise.
 
 ## [2.1.1] - 2026-07-26
 

@@ -86,6 +86,8 @@
 
 ::: getframes.analysis.ptc
 
+::: getframes.analysis.characterize
+
 ## Datasets & scale
 
 ::: getframes.dataset

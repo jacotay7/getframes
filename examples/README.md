@@ -32,3 +32,4 @@ pip install -e ".[examples]"
 | [`12_ml_dataset.py`](12_ml_dataset.py) | Stream raw+truth training pairs to disk with `getframes.dataset` (float32). |
 | [`13_crowded_field.py`](13_crowded_field.py) | Render a 20k-star catalog; vectorised vs. per-source, with flux conservation. |
 | [`14_keck_lgs_ttf_trade_study.ipynb`](14_keck_lgs_ttf_trade_study.ipynb) | Guided, cell-by-cell trade study of detector candidates for the Keck LGS tip/tilt sensor and low-bandwidth WFS: spot model → radiometry → one simulated frame → calibration → centroiding → the full TTS/LBWFS trades. |
+| [`15_detector_characterization.py`](15_detector_characterization.py) | Measure gain, read noise, dark current, DSNU, full well and PRNU from frame stacks (real or simulated), then rebuild the detector as a `CameraConfig`. |

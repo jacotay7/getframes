@@ -19,6 +19,8 @@ and run as part of the test gate.
 | Synthetic PTC | recovers configured gain / read noise / full well | within 5–15% |
 | Reduced frame | recovers `Frame.truth` to the noise floor | mean residual < 2 ADU |
 | All new (1.6) paths | deterministic for a fixed seed | bit-exact |
+| Dark-only PTC | recovers configured gain / dark rate with no illumination | within 5–10% |
+| sCMOS per-pixel read noise | repeatable through time (real detectors: split-half $r$ = 0.89–0.94) | $r > 0.8$ |
 
 ## Recover the gain from a photon transfer curve
 
@@ -66,6 +68,72 @@ out = noise.apply_gain_stage(
 recovered_F = np.sqrt(1.0 + out.var() / (60.0 * 250.0**2))
 print(recovered_F)  # ~1.414
 ```
+
+## Validating against your own detector
+
+The checks above are internal or analytic. The strongest test is a real dark stack.
+Three presets (`princeton_instruments_kuro_1200b`, `photometrics_prime_95b`,
+`andor_marana_4_2b_11`) carry values characterised this way against real hardware —
+that characterisation is not re-run in CI (it needs the raw frames), but the
+*estimator* below is pinned against known truth by
+`test_dark_ptc_recovers_gain_without_any_illumination`. Here is the method, which
+needs nothing but darks.
+
+### Measure the conversion gain from darks alone
+
+You do not need flats. Dark current is itself a Poisson process, so thermally
+generated charge works as the charge source for a photon transfer curve. For a dark
+frame,
+
+$$\text{mean}_\text{ADU}(t) = \text{bias} + \frac{Dt}{g}, \qquad
+  \text{var}_\text{ADU}(t) = \text{RN}_\text{ADU}^2 + \frac{Dt}{g^2}$$
+
+so $\mathrm{d}\,\text{var}/\mathrm{d}\,\text{mean} = 1/g$ — the dark rate $D$ cancels.
+Working per pixel makes it immune to DSNU, and taking a *slope* across exposures
+removes the bias pedestal and read noise (they are the two intercepts):
+
+```python
+import numpy as np
+
+# stacks[t] is an (n_frames, h, w) array of darks at exposure t, in ADU
+means = np.stack([s.mean(axis=0) for s in stacks.values()])  # (n_exp, h, w)
+variances = np.stack([s.var(axis=0, ddof=1) for s in stacks.values()])
+
+
+def slope(x, y):  # least squares along axis 0, per pixel
+    xm, ym = x.mean(axis=0), y.mean(axis=0)
+    return ((x - xm) * (y - ym)).sum(axis=0) / ((x - xm) ** 2).sum(axis=0)
+
+
+gain = float(np.nanmedian(1.0 / slope(means, variances)))  # e-/ADU
+```
+
+The load-bearing assumption is that the dark charge is Poisson (Fano factor 1). Check
+it by confirming the recovered gain makes the electron statistics self-consistent:
+$\text{var}_e / \text{mean}_e$ should come out at 1. A wrong gain shows up as a Fano
+factor visibly away from unity.
+
+### Check that per-pixel read noise repeats
+
+sCMOS read noise is a property of each pixel's own amplifier and column ADC, so a
+pixel's noise *through time* is repeatable. Split a dark stack into two halves,
+compute each half's per-pixel temporal variance, and correlate:
+
+```python
+a = stack[0::2].var(axis=0, ddof=1)
+b = stack[1::2].var(axis=0, ddof=1)
+print(np.corrcoef(a.ravel(), b.ravel())[0, 1])
+```
+
+Real back-illuminated sCMOS gives $r$ = 0.89–0.94; a simulator that re-draws its
+per-pixel sigma each frame gives $r \approx 0$. Run the same code against
+`Camera.dark_series` and the two should agree. (This check is what caught a real bug
+in `getframes`; it is now `test_per_pixel_read_noise_is_a_fixed_sensor_property`.)
+
+The same split-half machinery separates *fixed* detector structure from sampling
+noise generally: the spatial variance of a variance map is
+$V_\text{fixed} + 2\langle v\rangle^2/(n-1)$, so anything left after subtracting the
+$\chi^2$ term is real structure.
 
 ## Reproducibility
 

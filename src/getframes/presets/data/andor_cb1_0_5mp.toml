@@ -13,11 +13,26 @@ bit_depth = 12
 gain_e_per_adu = 1.0
 bias_offset_adu = 100.0
 read_noise_e = 2.35
+read_noise_nonuniformity = 0.2   # generic sCMOS per-pixel spread; not characterised for this camera
 dark_current_e_per_s = 1.39
 dark_current_ref_temp_c = 10.0
 dark_current_doubling_temp_c = 6.0
+dark_current_nonuniformity = 0.23
+read_noise_rts_fraction = 0.016   # RTS tail carried over from characterised hardware (see banner)
+read_noise_rts_factor = 2.65
 supported_binnings = [1]                # no 2x2 binning offered for the CB1 0.5 MP
 notes = "CB1 0.5 MP high-gain / 24 dB mode: 2.35 e- typical read noise at 50 us. The specification sheet gives 1594 fps at 8 bit and 941 fps at 12 bit; the profile uses the 12-bit trade mode. QE is the full published CB1 spectral-response plot for the visible Sony Pregius family, with a 73% IMX426 check at 529 nm from Allied Vision."
+
+# Dark-signal non-uniformity carried over from characterised hardware, not from this
+# camera's datasheet. Three back-illuminated sCMOS cameras measured against real dark
+# stacks (KURO 1200B 0.23, Prime 95B 0.33, Marana 4.2B-11 0.11) all sat roughly an
+# order of magnitude above the ~0.03 that had been assumed here; 0.23 is their median.
+# Treat it as a realistic default rather than a specification --- re-characterise if
+# DSNU matters quantitatively for your work.
+# The RTS terms are likewise carried over: all three measured sensors put 0.4-0.5% of
+# pixels above 3x the median read noise, where a bare log-normal predicts ~0.01%.
+# These are the pixels that limit faint-source detection, so leaving them out makes a
+# simulated sensor optimistic at threshold.
 
 [extra]
 body_dimensions_mm = [154.3, 76.2, 64.1]

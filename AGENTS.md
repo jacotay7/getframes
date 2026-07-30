@@ -42,7 +42,7 @@ removals. A JOSS paper + citation remain a post-2.0 follow-up.
 | `observation.py` | `Observation` / `ObservationTruth` / `Pointing`: the time-series driver, jitter/drift/dither, per-frame truth (phase 1.2). |
 | `spectral.py` | Opt-in spectral mode: `QE`, `SED` (relative or absolute via `from_flux_density`), `Spectrum`, `SpectralBandpass`, effective-QE folding, transmission-product helpers (`product`, `from_file`/`from_product`), optional `astropy.units` coercion. |
 | `scene/` | The scene/optics layer: `Scene`, `Source` hierarchy (`PointSource`, `ExtendedSource`, `UniformIllumination`, `Catalog`; point/extended sources accept a `flux_sed` absolute SED), PSFs (`GaussianPSF`/`MoffatPSF`/`AiryPSF`/`ArrayPSF`/`EllipticalGaussianPSF`), `Telescope` (+ `Vignetting`/`RadialDistortion`), `Bandpass` (Vega `johnson` / AB `ab` ugriz·Gaia·2MASS + `Extinction`) in `photometry.py`, `Thermal` graybody background in `thermal.py`, `WCSInfo`, `LightCurve`. Renders a photon-rate map; no randomness. |
-| `analysis/` | Measurement helpers: `apertures.py` (`aperture_sum`, `centroid`), `ptc.py` (`photon_transfer_curve`). |
+| `analysis/` | Measurement helpers: `apertures.py` (`aperture_sum`, `centroid`), `ptc.py` (`photon_transfer_curve`, camera-driven), `characterize.py` (`stack_statistics`, `characterize_dark`, `characterize_flat` — stack-driven, so it runs on *real* detector data as well as simulated frames; `DarkCharacterization.to_config()` returns a `CameraConfig`). |
 | `dataset.py` | Scalable raw+truth dataset generation (phase 1.6): `pairs()` → a streaming `PairDataset` (`to_npz`/`to_arrays`), `random_star_fields()` re-iterable scene source. float32-friendly; no global state. |
 | `cli.py` | The `getframes` console entry point (phase 1.6): `presets` / `generate` / `dataset` subcommands driven by a TOML config. |
 | `presets/` | Preset library. TOML data files in `presets/data/`, loaded via `importlib.resources`. `load_preset`, `available_presets`, `preset_info`. |
@@ -64,12 +64,24 @@ Data flows one way: `presets` → `CameraConfig` → `Scene` → `Camera` → `b
    backend's camera-owned generator. Every generation method accepts a `seed`.
    Never call global NumPy/CuPy random state. CPU and GPU streams repeat within
    a backend but are statistically, not pixel-for-pixel, matched across devices.
-3. **Physics is auditable.** Noise models live as small, documented, pure functions
+3. **Fixed patterns come from `fixed_pattern_seed`, never the per-frame RNG.**
+   Anything that is a property of the *silicon* — PRNU, DSNU, hot pixels, defects,
+   amplifier gain/offset, structured bias, and the sCMOS per-pixel read-noise RMS —
+   belongs in `fixed_pattern_maps()` / `FixedPatternMaps`, keyed on
+   `fixed_pattern_seed`, so it is identical in every frame and therefore removable
+   by a master frame. Only the *draw* is per-frame (e.g. read noise re-draws the
+   Gaussian each frame, but its per-pixel sigma does not change). Getting this wrong
+   is invisible in single-frame spatial statistics and only shows up in per-pixel
+   statistics *through time* — the failure mode that shipped in
+   `read_noise_nonuniformity` until it was caught by cross-validation against real
+   dark stacks. When adding a detector-structure feature, ask whether it should
+   repeat across frames, and add a test on the temporal statistic if so.
+4. **Physics is auditable.** Noise models live as small, documented, pure functions
    in `noise.py`. Document the units (electrons vs. ADU) and the model in the
    docstring. State assumptions; cite the model form.
-4. **Units are explicit.** Field/variable names carry units (`_e`, `_adu`, `_um`,
+5. **Units are explicit.** Field/variable names carry units (`_e`, `_adu`, `_um`,
    `_c`, `_s`, `_e_per_s`, `_e_per_adu`). Keep this convention.
-5. **Typed and validated.** Full type hints (`mypy --strict` passes). Validate
+6. **Typed and validated.** Full type hints (`mypy --strict` passes). Validate
    inputs in `CameraConfig.__post_init__` and raise informative `ValueError`s.
 
 ## Adding a camera preset

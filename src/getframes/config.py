@@ -94,12 +94,40 @@ class CameraConfig:
     bias_offset_adu:
         Electronic offset (pedestal) added to every pixel, in ADU.
     read_noise_e:
-        RMS read noise in electrons. For sCMOS this is the *median*; see
-        ``read_noise_nonuniformity``.
+        RMS read noise in electrons. When ``read_noise_nonuniformity`` is zero this
+        is every pixel's read noise. Otherwise it is the *scale* of the per-pixel
+        distribution, which is log-normal with unit mean --- so the mean per-pixel
+        RMS is ``read_noise_e`` and the median is
+        ``read_noise_e * exp(-read_noise_nonuniformity**2 / 2)``, a few percent
+        lower. See ``read_noise_nonuniformity`` and ``read_noise_rts_fraction``.
     read_noise_nonuniformity:
         Fractional pixel-to-pixel spread of the read-noise RMS (e.g. ``0.3`` for a
         30% log-normal spread). Models the per-pixel read-noise distribution of
         sCMOS sensors. ``0`` gives a single uniform read noise.
+
+        The resulting per-pixel RMS is a *fixed* property of the sensor (drawn from
+        ``fixed_pattern_seed``, like PRNU and DSNU), not re-drawn each frame, so a
+        pixel's temporal noise is repeatable across a stack --- which is what is
+        measured in practice.
+    read_noise_rts_fraction:
+        Fraction of pixels belonging to a second, noisier read-noise population,
+        in ``[0, 1]``. These are the random-telegraph-signal (RTS) pixels of a real
+        sCMOS array, whose trapped-charge switching gives the read-noise histogram a
+        tail much heavier than the single log-normal of
+        ``read_noise_nonuniformity``. ``0`` disables the second population.
+        Measured values for back-illuminated sCMOS are around ``0.005-0.03``.
+    read_noise_rts_factor:
+        Multiplier applied to the read-noise RMS of the RTS population selected by
+        ``read_noise_rts_fraction``. Ignored when that fraction is ``0``.
+    detector_glow_edge_scale_px:
+        Exponential falloff scale, in pixels, of the ``detector_glow_e_per_s`` term
+        away from the detector edges. Amplifier/array glow originates at the readout
+        electronics on the array periphery, so real glow is edge-concentrated rather
+        than uniform. ``0`` (the default) keeps the glow uniform. When positive, the
+        map is renormalised so the *mean* glow over the array is still
+        ``detector_glow_e_per_s``, which means the edges run hotter and the centre
+        cooler than that figure. The pattern is fixed and exposure-scaling, so an
+        exposure-matched master dark still removes it.
     nonlinearity:
         Fractional signal compression at full well, in ``[0, 0.5)``. The collected
         charge is bent as ``q -> q * (1 - nonlinearity * q / full_well_e)``, so a
@@ -254,6 +282,9 @@ class CameraConfig:
     detector_glow_e_per_s: float = 0.0
     prnu: float = 0.0
     read_noise_nonuniformity: float = 0.0
+    read_noise_rts_fraction: float = 0.0
+    read_noise_rts_factor: float = 2.5
+    detector_glow_edge_scale_px: float = 0.0
     nonlinearity: float = 0.0
     nonlinearity_coeffs: tuple[float, ...] | None = None
     cti: float = 0.0
@@ -359,6 +390,12 @@ class CameraConfig:
             raise ValueError("prnu must be non-negative.")
         if self.read_noise_nonuniformity < 0:
             raise ValueError("read_noise_nonuniformity must be non-negative.")
+        if not 0.0 <= self.read_noise_rts_fraction <= 1.0:
+            raise ValueError("read_noise_rts_fraction must be in [0, 1].")
+        if self.read_noise_rts_factor < 0:
+            raise ValueError("read_noise_rts_factor must be non-negative.")
+        if self.detector_glow_edge_scale_px < 0:
+            raise ValueError("detector_glow_edge_scale_px must be non-negative.")
         if not 0.0 <= self.nonlinearity < 0.5:
             raise ValueError("nonlinearity must be in [0, 0.5).")
         if self.nonlinearity_coeffs is not None and len(self.nonlinearity_coeffs) == 0:
