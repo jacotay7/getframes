@@ -31,6 +31,7 @@ A dark frame is simply the special case ``photon_rate = 0``.
 
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 import numpy as np
@@ -48,6 +49,8 @@ if TYPE_CHECKING:
 # default; ``float32`` halves the memory of the per-pixel arrays (the "fast path"
 # used for large detectors and bulk dataset generation) at a small precision cost.
 DEFAULT_FLOAT_DTYPE = np.float64
+_GAUSSIAN_FWHM_PER_SIGMA = 2.3548200450309493
+_CHARGE_DIFFUSION_TRUNCATE_SIGMA = 4.0
 
 
 # Independent sub-streams of the fixed-pattern generator, so PRNU, DSNU, and the
@@ -72,6 +75,67 @@ class FixedPatternMaps(NamedTuple):
     bias_structure: Any
     defect_mask: Any | None
     read_noise_sigma: Any
+
+
+def charge_diffusion_kernel(fwhm_px: float, *, oversampling: int) -> NDArray[np.float64]:
+    """Return a flux-normalized lateral charge-diffusion kernel.
+
+    The detector diffusion profile is represented by a circular Gaussian whose
+    full width at half maximum is ``fwhm_px`` native pixels. Each returned tap is
+    the Gaussian probability integrated over one focal-plane sample cell, rather
+    than a point sample, and the finite four-sigma support is renormalized to unit
+    sum. The kernel is intended for an oversampled focal-plane irradiance before
+    native detector pixels collect charge.
+
+    Parameters
+    ----------
+    fwhm_px:
+        Lateral diffusion FWHM in native detector pixels. Zero returns an identity
+        ``1 x 1`` kernel.
+    oversampling:
+        Focal-plane samples per native detector pixel. A nonzero width must span
+        at least one sample at FWHM so the configured detector property cannot
+        silently collapse to a numerical no-op.
+
+    Returns
+    -------
+    numpy.ndarray
+        Odd, square, symmetric ``float64`` convolution kernel with unit sum.
+    """
+    if not isinstance(oversampling, (int, np.integer)) or isinstance(oversampling, bool):
+        raise ValueError("oversampling must be a positive integer.")
+    samples_per_pixel = int(oversampling)
+    if samples_per_pixel < 1:
+        raise ValueError("oversampling must be a positive integer.")
+    width = float(fwhm_px)
+    if not math.isfinite(width) or width < 0:
+        raise ValueError("fwhm_px must be finite and non-negative.")
+    if width == 0.0:
+        return np.ones((1, 1), dtype=np.float64)
+    if width * samples_per_pixel < 1.0:
+        required = math.ceil(1.0 / width)
+        raise ValueError(
+            f"charge diffusion FWHM {width:g} px requires at least {required} "
+            "samples per native pixel"
+        )
+
+    from scipy.special import erf
+
+    sigma_px = width / _GAUSSIAN_FWHM_PER_SIGMA
+    radius = max(
+        1,
+        math.ceil(_CHARGE_DIFFUSION_TRUNCATE_SIGMA * sigma_px * samples_per_pixel + 0.5),
+    )
+    centers_px = np.arange(-radius, radius + 1, dtype=np.float64) / samples_per_pixel
+    half_cell_px = 0.5 / samples_per_pixel
+    scale = math.sqrt(2.0) * sigma_px
+    weights: NDArray[np.float64] = np.asarray(
+        0.5 * (erf((centers_px + half_cell_px) / scale) - erf((centers_px - half_cell_px) / scale)),
+        dtype=np.float64,
+    )
+    kernel: NDArray[np.float64] = np.multiply.outer(weights, weights)
+    kernel /= kernel.sum()
+    return kernel
 
 
 def _fixed_pattern_rng(config: CameraConfig, stream: int, backend: ArrayBackend) -> Any:
@@ -819,6 +883,7 @@ def simulate_frame(
     float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
     backend: ArrayBackend | None = None,
     fixed_patterns: FixedPatternMaps | None = None,
+    _dark_signal: Any | None = None,
 ) -> SimulationResult:
     """Simulate one frame end-to-end, returning ADU and the noise-free truth.
 
@@ -884,13 +949,17 @@ def simulate_frame(
         backend=resolved,
         fixed_patterns=fixed_patterns,
     )
-    mean_dark = dark_signal_map(
-        config,
-        exposure_s,
-        temperature_c,
-        float_dtype,
-        backend=resolved,
-        fixed_patterns=fixed_patterns,
+    mean_dark = (
+        dark_signal_map(
+            config,
+            exposure_s,
+            temperature_c,
+            float_dtype,
+            backend=resolved,
+            fixed_patterns=fixed_patterns,
+        )
+        if _dark_signal is None
+        else _dark_signal
     )
     mean_total = mean_photo + mean_dark
     mean_total += resolved.asarray(extra_electrons, dtype=float_dtype)
@@ -954,6 +1023,7 @@ def generate_dark_frame(
     *,
     backend: ArrayBackend | None = None,
     fixed_patterns: FixedPatternMaps | None = None,
+    _dark_signal: Any | None = None,
 ) -> Any:
     """End-to-end dark frame in ADU (the ``photon_rate = 0`` case of ``simulate_frame``)."""
     return simulate_frame(
@@ -965,6 +1035,7 @@ def generate_dark_frame(
         seed=seed,
         backend=backend,
         fixed_patterns=fixed_patterns,
+        _dark_signal=_dark_signal,
     ).adu
 
 
@@ -993,6 +1064,7 @@ __all__ = [
     "apply_ipc",
     "apply_nonlinearity",
     "block_sum",
+    "charge_diffusion_kernel",
     "dark_frame_electrons",
     "dark_signal_map",
     "digitize",

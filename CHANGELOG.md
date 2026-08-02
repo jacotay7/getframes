@@ -8,6 +8,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **Persistent cameras now cache the dark-signal expectation.** Repeated exposures
+  at the same exposure time, temperature, precision, and detector configuration
+  reuse the full-detector DSNU/hot-pixel/glow map; changing either physical key
+  rebuilds it. Seeded stochastic frames and detector truth remain unchanged.
+
 - **sCMOS per-pixel read noise is now a fixed property of the sensor.** The
   per-pixel read-noise RMS map implied by `read_noise_nonuniformity` was drawn from
   the *per-frame* generator, so it was re-randomised in every frame. Single-frame
@@ -25,6 +30,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `CameraConfig.charge_diffusion_fwhm_px` and the public
+  `charge_diffusion_kernel()` helper make lateral detector charge spreading
+  available to focal-plane simulators at their own oversampling. The OCAM2K
+  preset declares its measured 0.37-pixel FWHM, and under-resolved kernels fail
+  explicitly instead of becoming a numerical no-op.
 - Full-detector region-of-interest simulation through
   `CameraConfig.roi=(left, top, width, height)`. Cameras accept and return
   ROI-shaped arrays while evaluating detector physics and fixed patterns on the

@@ -102,6 +102,8 @@ class Camera:
         self._fixed_patterns = noise.fixed_pattern_maps(
             config, backend=self._backend, float_dtype=self._float_dtype
         )
+        self._dark_signal_cache_key: tuple[float, float] | None = None
+        self._dark_signal_cache: Any | None = None
 
     # ------------------------------------------------------------------
     # Constructors
@@ -200,6 +202,21 @@ class Camera:
         full[self.config.roi_slices] = array
         return full
 
+    def _dark_signal(self, exposure: float, temperature: float) -> Any:
+        """Return a cached full-detector dark expectation for this camera state."""
+        key = (float(exposure), float(temperature))
+        if self._dark_signal_cache_key != key or self._dark_signal_cache is None:
+            self._dark_signal_cache = noise.dark_signal_map(
+                self.config,
+                exposure,
+                temperature,
+                backend=self._backend,
+                float_dtype=self._float_dtype,
+                fixed_patterns=self._fixed_patterns,
+            )
+            self._dark_signal_cache_key = key
+        return self._dark_signal_cache
+
     def _binned_roi_slices(self, binning: int) -> tuple[slice, slice]:
         """Return ROI slices on a full-detector grid after native-pixel binning."""
         if binning < 1:
@@ -258,6 +275,7 @@ class Camera:
             rng=rng,
             backend=self._backend,
             fixed_patterns=self._fixed_patterns,
+            _dark_signal=self._dark_signal(exposure, temp),
         )
         data = self._crop_to_roi(data)
         return Frame(data=data, metadata=self._metadata("dark", exposure, temp, seed))
@@ -353,6 +371,7 @@ class Camera:
             float_dtype=self._float_dtype,
             backend=self._backend,
             fixed_patterns=self._fixed_patterns,
+            _dark_signal=self._dark_signal(exposure, temp),
         )
         result = noise.SimulationResult(
             self._crop_to_roi(result.adu, binning),

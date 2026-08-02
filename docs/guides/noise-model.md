@@ -159,6 +159,15 @@ Beyond the core chain, `CameraConfig` carries a set of higher-fidelity detector
 artifacts — the things a calibration pipeline is built to survive. All are **off by
 default** and additive, so existing configs are unchanged. They fall in two groups.
 
+`charge_diffusion_fwhm_px` is the lateral Gaussian charge-spread FWHM in native
+detector pixels. It belongs to the sensor but acts before native pixels collect
+charge, so an optics simulator should call `getframes.charge_diffusion_kernel`
+for its focal-plane oversampling and convolve the oversampled irradiance before
+pixel-area integration. `Camera.expose` already receives an integrated
+photons/s/pixel map and does not apply this operator again. The helper rejects a
+nonzero width sampled at less than one focal-plane sample per FWHM instead of
+silently turning a measured sub-pixel width into a no-op.
+
 **Charge transport** (electron domain, after collection):
 
 - `blooming=True` — charge above `full_well_e` bleeds along the column (CCD

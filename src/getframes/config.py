@@ -156,6 +156,12 @@ class CameraConfig:
         couples capacitively into *each* of its four nearest neighbours at readout,
         in ``[0, 0.25)``. Applied as a charge-conserving 3x3 convolution (CMOS/IR
         hybrid arrays). ``0`` disables it.
+    charge_diffusion_fwhm_px:
+        Lateral charge-diffusion full width at half maximum in native detector
+        pixels. ``0`` disables it. This is a focal-plane collection property used
+        by optics simulators through :func:`getframes.charge_diffusion_kernel`
+        before native-pixel integration; :class:`Camera` receives an already
+        integrated photon-rate map and therefore does not apply it a second time.
     reset_noise_e:
         kTC / reset noise RMS in electrons: an independent per-pixel, per-frame
         Gaussian charge uncertainty from resetting the sense node, added alongside
@@ -290,6 +296,7 @@ class CameraConfig:
     cti: float = 0.0
     blooming: bool = False
     ipc_coupling: float = 0.0
+    charge_diffusion_fwhm_px: float = 0.0
     reset_noise_e: float = 0.0
     amplifier_layout: tuple[int, int] = (1, 1)
     amplifier_boundaries_y_px: tuple[int, ...] = ()
@@ -404,6 +411,8 @@ class CameraConfig:
             raise ValueError("cti must be in [0, 1).")
         if not 0.0 <= self.ipc_coupling < 0.25:
             raise ValueError("ipc_coupling must be in [0, 0.25).")
+        if not math.isfinite(self.charge_diffusion_fwhm_px) or self.charge_diffusion_fwhm_px < 0:
+            raise ValueError("charge_diffusion_fwhm_px must be finite and non-negative.")
         if self.reset_noise_e < 0:
             raise ValueError("reset_noise_e must be non-negative.")
         if len(self.amplifier_layout) != 2 or any(n <= 0 for n in self.amplifier_layout):

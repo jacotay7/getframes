@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from getframes import load_preset, noise
+from getframes import charge_diffusion_kernel, load_preset, noise
 
 
 @pytest.fixture
@@ -21,6 +21,28 @@ def test_generate_dark_frame_respects_adc_range(ccd):
 def test_negative_exposure_rejected(ccd):
     with pytest.raises(ValueError):
         noise.generate_dark_frame(ccd, exposure_s=-1.0, temperature_c=0.0)
+
+
+def test_charge_diffusion_kernel_is_symmetric_and_flux_normalized():
+    kernel = charge_diffusion_kernel(0.37, oversampling=4)
+    assert kernel.shape[0] == kernel.shape[1]
+    assert kernel.shape[0] % 2 == 1
+    np.testing.assert_allclose(kernel, kernel[::-1, ::-1], rtol=0.0, atol=1e-15)
+    assert kernel.sum() == pytest.approx(1.0, abs=1e-15)
+    center = kernel.shape[0] // 2
+    assert kernel[center, center] == kernel.max()
+
+
+def test_charge_diffusion_kernel_rejects_an_unresolved_width():
+    with pytest.raises(ValueError, match="samples per native pixel"):
+        charge_diffusion_kernel(0.37, oversampling=2)
+
+
+def test_zero_charge_diffusion_is_an_identity_kernel():
+    np.testing.assert_array_equal(
+        charge_diffusion_kernel(0.0, oversampling=1),
+        np.ones((1, 1), dtype=np.float64),
+    )
 
 
 def test_shot_noise_scales_like_sqrt_signal():

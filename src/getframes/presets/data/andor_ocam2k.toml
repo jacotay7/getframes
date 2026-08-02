@@ -12,6 +12,9 @@ model = "OCAM2K (Teledyne e2v CCD220)"
 sensor_type = "EMCCD"
 resolution = [240, 240]
 pixel_size_um = 24.0
+# Keck's measured lateral charge spread has a 0.37-native-pixel FWHM. Optics
+# simulators apply this detector-owned property before native-pixel collection.
+charge_diffusion_fwhm_px = 0.37
 quantum_efficiency = 0.90
 # Andor specifies a 270,000 e- image-area full well at multiplication gain 1.
 # The separate 280,000 e- output ceiling represents Keck's operationally

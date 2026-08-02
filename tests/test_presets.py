@@ -37,6 +37,7 @@ def test_ocam2k_has_separate_input_and_output_saturation_domains():
     assert cfg.output_full_well_e == 280_000.0
     assert cfg.output_full_well_e / cfg.gain_e_per_adu == 10_000.0
     assert cfg.amplifier_layout == (4, 2)
+    assert cfg.charge_diffusion_fwhm_px == pytest.approx(0.37)
 
 
 def test_ocam2k_keck_high_gain_characterization_is_domain_consistent():

@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from getframes import Camera, Frame
+from getframes import Camera, Frame, noise
 
 
 def test_from_preset_builds_camera():
@@ -26,6 +26,27 @@ def test_dark_frame_is_reproducible_with_seed():
     a = cam.dark_frame(5.0, -10.0, seed=123)
     b = cam.dark_frame(5.0, -10.0, seed=123)
     np.testing.assert_array_equal(a.data, b.data)
+
+
+def test_persistent_camera_reuses_dark_expectation(monkeypatch):
+    calls = 0
+    original = noise.dark_signal_map
+
+    def counted(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(noise, "dark_signal_map", counted)
+    cam = Camera.from_preset("generic_ccd")
+    cam.dark_frame(5.0, -10.0, seed=1)
+    cam.dark_frame(5.0, -10.0, seed=2)
+    cam.expose(10.0, 5.0, -10.0, seed=3, include_truth=False)
+    assert calls == 1
+    cam.dark_frame(5.0, -9.0, seed=4)
+    assert calls == 2
+    cam.dark_frame(6.0, -9.0, seed=5)
+    assert calls == 3
 
 
 def test_dark_frame_differs_without_fixed_seed():

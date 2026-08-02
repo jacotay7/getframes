@@ -19,6 +19,7 @@ from .calibrate import calibrate, combine
 from .camera import Camera
 from .config import CameraConfig, SensorType
 from .frame import Frame, FrameTruth
+from .noise import charge_diffusion_kernel
 from .observation import Observation, ObservationTruth, Pointing
 from .presets import available_presets, load_preset
 from .scene import (
@@ -87,6 +88,7 @@ __all__ = [
     "analysis",
     "available_presets",
     "calibrate",
+    "charge_diffusion_kernel",
     "combine",
     "dataset",
     "get_array_module",

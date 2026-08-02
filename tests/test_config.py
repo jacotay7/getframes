@@ -92,6 +92,7 @@ def test_dark_current_doubles_at_doubling_temp():
         ("bit_depth", 0),
         ("gain_e_per_adu", 0.0),
         ("read_noise_e", -1.0),
+        ("charge_diffusion_fwhm_px", -0.1),
         ("dark_current_e_per_s", -0.1),
         ("dark_current_doubling_temp_c", 0.0),
         ("em_gain", 0.5),
@@ -115,6 +116,7 @@ def test_roundtrip_dict():
         amplifier_gain_factors=(1.0, 1.01),
         amplifier_offsets_adu=(0.0, -3.0),
         roi=(2, 3, 40, 50),
+        charge_diffusion_fwhm_px=0.37,
     )
     data = cfg.to_dict()
     assert data["sensor_type"] == "EMCCD"
@@ -123,6 +125,7 @@ def test_roundtrip_dict():
     assert data["amplifier_boundaries_x_px"] == [31]
     assert data["amplifier_gain_factors"] == [1.0, 1.01]
     assert data["amplifier_offsets_adu"] == [0.0, -3.0]
+    assert data["charge_diffusion_fwhm_px"] == 0.37
     restored = CameraConfig.from_dict(data)
     assert restored == cfg
 
