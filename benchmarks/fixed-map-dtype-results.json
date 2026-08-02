@@ -1,0 +1,85 @@
+{
+  "benchmark": "structured detector digitization with fixed float32 signal",
+  "hardware": "Linux-6.8.0-136-generic-x86_64-with-glibc2.39",
+  "results": [
+    {
+      "alternating_repetitions": 9,
+      "calls_per_block": 25,
+      "device": "cpu",
+      "device_name": "x86_64",
+      "latency_reduction_percent": 24.70159035160059,
+      "legacy_float64_map_ns": [
+        31006500.92,
+        29421989.48,
+        29607931.84,
+        29712199.48,
+        29699840.52,
+        29689903.24,
+        30288180.64,
+        30100147.64,
+        30304390.72
+      ],
+      "legacy_map_bytes": 100663296,
+      "legacy_median_ns": 29712199.48,
+      "native_float32_map_ns": [
+        23600749.72,
+        22846531.68,
+        22241039.32,
+        25759728.8,
+        22162104.52,
+        22165399.48,
+        24537393.16,
+        22372813.68,
+        22316555.36
+      ],
+      "native_map_bytes": 50331648,
+      "native_median_ns": 22372813.68,
+      "shape": [
+        2048,
+        2048
+      ],
+      "signal_precision": "float32",
+      "speedup": 1.3280492970162705
+    },
+    {
+      "alternating_repetitions": 9,
+      "calls_per_block": 100,
+      "device": "gpu",
+      "device_name": "Quadro P620",
+      "latency_reduction_percent": 27.640935544934997,
+      "legacy_float64_map_ns": [
+        9192385.32,
+        9207706.16,
+        9234111.06,
+        9283647.11,
+        9216453.79,
+        9184878.47,
+        9172083.33,
+        9195862.73,
+        9191056.79
+      ],
+      "legacy_map_bytes": 100663296,
+      "legacy_median_ns": 9195862.73,
+      "native_float32_map_ns": [
+        6710162.68,
+        6682307.26,
+        6677903.69,
+        6654040.24,
+        6662705.07,
+        6648942.98,
+        6626487.12,
+        6652107.92,
+        6644231.94
+      ],
+      "native_map_bytes": 50331648,
+      "native_median_ns": 6654040.24,
+      "shape": [
+        2048,
+        2048
+      ],
+      "signal_precision": "float32",
+      "speedup": 1.3819968618043705
+    }
+  ],
+  "schema_version": 1
+}

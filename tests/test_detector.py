@@ -144,6 +144,25 @@ def test_amplifier_maps_use_exact_roi_boundaries_and_responses():
     assert offset[4, 8] == -3.0
 
 
+def test_amplifier_maps_follow_working_precision_without_changing_float64_reference():
+    cfg = load_preset("generic_cmos").replace(
+        resolution=(10, 12),
+        amplifier_layout=(2, 2),
+        amplifier_gain_factors=(1.0, 1.01, 0.99, 1.02),
+        amplifier_offsets_adu=(-2.0, 1.0, 3.0, -1.0),
+    )
+    default_gain, default_offset = noise._amplifier_maps(cfg)
+    gain64, offset64 = noise._amplifier_maps(cfg, float_dtype=np.float64)
+    gain32, offset32 = noise._amplifier_maps(cfg, float_dtype=np.float32)
+
+    np.testing.assert_array_equal(default_gain, gain64)
+    np.testing.assert_array_equal(default_offset, offset64)
+    assert gain32.dtype == np.float32
+    assert offset32.dtype == np.float32
+    np.testing.assert_allclose(gain32, gain64, rtol=1e-7, atol=0.0)
+    np.testing.assert_allclose(offset32, offset64, rtol=0.0, atol=0.0)
+
+
 # --- Cosmic-ray tracks ------------------------------------------------------
 def test_cosmic_ray_tracks_span_multiple_pixels():
     cfg = load_preset("generic_ccd").replace(
@@ -189,6 +208,32 @@ def test_structured_bias_is_spatial_and_fixed():
     assert pattern.std() > 0  # genuinely structured, not flat
     # Deterministic across calls.
     np.testing.assert_array_equal(pattern, noise._bias_structure_map(cfg))
+
+
+def test_fixed_pattern_maps_follow_working_precision():
+    cfg = load_preset("generic_cmos").replace(
+        resolution=(32, 36),
+        amplifier_layout=(2, 2),
+        amp_gain_nonuniformity=0.01,
+        amp_offset_spread_adu=2.0,
+        bias_structure_amplitude_adu=15.0,
+    )
+    maps64 = noise.fixed_pattern_maps(cfg, float_dtype=np.float64)
+    maps32 = noise.fixed_pattern_maps(cfg, float_dtype=np.float32)
+
+    for name in ("amplifier_gain", "amplifier_offset", "bias_structure"):
+        value64 = getattr(maps64, name)
+        value32 = getattr(maps32, name)
+        assert value64.dtype == np.float64
+        assert value32.dtype == np.float32
+        np.testing.assert_allclose(value32, value64, rtol=2e-7, atol=2e-6)
+    assert sum(
+        getattr(maps32, name).nbytes
+        for name in ("amplifier_gain", "amplifier_offset", "bias_structure")
+    ) == 0.5 * sum(
+        getattr(maps64, name).nbytes
+        for name in ("amplifier_gain", "amplifier_offset", "bias_structure")
+    )
 
 
 # --- Integration / determinism ----------------------------------------------

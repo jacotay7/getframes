@@ -30,8 +30,8 @@ defect maps, photo and dark expectations, Poisson/read/reset noise, stochastic
 EM/eAPD gain, cosmic rays, blooming, CTI, IPC, nonlinearity, amplifier maps,
 binning, truth, and ADU digitisation. Wavelength-resolved
 `Camera.expose_spectral` likewise preserves its incident cube and integrated
-truth on device. Static fixed-pattern maps are constructed and cached once with
-the camera, so reuse the same `Camera` in a frame loop.
+truth on device. Static fixed-pattern maps are constructed in the camera's working
+precision and cached once, so reuse the same `Camera` in a frame loop.
 
 `frame.data` is the zero-copy device interface. `np.asarray(frame)`,
 `Frame.stats()`, and `Frame.to_fits()` are explicit host-facing operations and
@@ -77,6 +77,14 @@ for every cell. The checked-in snapshot was intentionally recorded from the GPU
 development checkout, so it is evidence rather than a release guarantee. See the
 [rendered snapshot](https://github.com/jacotay7/getframes/blob/main/benchmarks/device-results.md)
 and [raw JSON](https://github.com/jacotay7/getframes/blob/main/benchmarks/device-results.json).
+
+An additional owner-isolation benchmark covers structured-detector digitization.
+On this repository's Quadro P620, native float32 amplifier and bias maps reduced
+the 2048x2048 digitization median from 9.196 ms to 6.654 ms (1.382x); the local
+CPU median fell from 29.712 ms to 22.373 ms (1.328x). Persistent coefficient
+storage fell from 96 MiB to 48 MiB. These numbers exclude stochastic detector
+stages and are not full-exposure speedup claims; the alternating raw record is
+[`fixed-map-dtype-results.json`](https://github.com/jacotay7/getframes/blob/main/benchmarks/fixed-map-dtype-results.json).
 
 Reproduce and render it from the repository root:
 

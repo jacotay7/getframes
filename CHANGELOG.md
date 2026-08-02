@@ -76,6 +76,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Float32 cameras now cache amplifier gain/offset and structured-bias maps in
+  float32 instead of retaining detector-sized float64 coefficients. The float64
+  reference path is unchanged. A matched 2048x2048 structured-digitization
+  benchmark improved by 1.328x on the local CPU and 1.382x on a Quadro P620 while
+  persistent coefficient storage fell from 96 MiB to 48 MiB.
+
 - The `princeton_instruments_kuro_1200b`, `photometrics_prime_95b`, and
   `andor_marana_4_2b_11` presets now carry **measured** conversion gain, read noise,
   dark current, bias offset, and non-uniformity terms, fitted from a per-pixel dark

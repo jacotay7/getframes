@@ -203,7 +203,7 @@ The artifacts a calibration pipeline must survive:
 - [x] Optional `astropy.units` interop.
 
 ### 1.6 — Scale & datasets ✅
-- [x] A **float32** fast path.
+- [x] A **float32** fast path, including precision-native persistent detector maps.
 - [x] **Chunked/tiled** rendering and **vectorised** multi-source PSF evaluation (a
   10⁵-star catalog should not loop in Python).
 - [x] An optional **`dataset`** generator yielding raw+truth pairs at scale for ML

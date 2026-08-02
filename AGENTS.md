@@ -48,7 +48,9 @@ removals. A JOSS paper + citation remain a post-2.0 follow-up.
 | `presets/` | Preset library. TOML data files in `presets/data/`, loaded via `importlib.resources`. `load_preset`, `available_presets`, `preset_info`. |
 
 Data flows one way: `presets` → `CameraConfig` → `Scene` → `Camera` → `backend`/`noise` →
-`Frame` (→ `calibrate`/`analysis`). Keep `config`, `noise`, `scene`, and
+`Frame` (→ `calibrate`/`analysis`). Persistent floating detector maps follow the
+camera's selected working precision; the float32 path must not retain hidden
+detector-sized float64 coefficients. Keep `config`, `noise`, `scene`, and
 `spectral` free of side effects and global state; never reach back up the chain
 (e.g. `scene` must not import `camera`).
 

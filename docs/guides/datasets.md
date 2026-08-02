@@ -24,9 +24,12 @@ frame.truth.mean_electrons.dtype  # float32 — the floating-point truth is ligh
 ```
 
 Only the floating-point arrays change; the digitised ADU are integer counts either
-way. The result matches the `float64` path to single-precision tolerance. If you
-call the scene or noise layers directly, the same control is a `dtype` /
-`float_dtype` argument:
+way. Persistent PRNU/DSNU, amplifier gain/offset, structured-bias, and per-pixel
+read-noise maps use the selected precision too, so a `float32` camera does not keep
+hidden double-precision detector-sized coefficients. The result matches the
+`float64` path statistically and to single-precision tolerance for deterministic
+maps. If you call the scene or noise layers directly, the same control is a `dtype`
+/ `float_dtype` argument:
 
 ```python
 rate_map = scene.photon_rate_map(dtype="float32")  # f32 photons/s/pixel map

@@ -48,6 +48,37 @@ def test_float32_matches_float64_statistically():
     assert a.mean() == pytest.approx(b.mean(), rel=0.01)
 
 
+def test_float32_full_detector_structure_matches_float64_statistics():
+    updates = {
+        "resolution": (128, 132),
+        "dark_current_e_per_s": 0.2,
+        "read_noise_e": 1.5,
+        "amplifier_layout": (2, 2),
+        "amplifier_gain_factors": (1.0, 1.015, 0.99, 1.005),
+        "amplifier_offsets_adu": (-2.0, 1.0, 3.0, -1.0),
+        "bias_structure_amplitude_adu": 12.0,
+    }
+    camera32 = gf.Camera.from_preset("generic_scmos", precision="float32").with_config(**updates)
+    camera64 = gf.Camera.from_preset("generic_scmos", precision="float64").with_config(**updates)
+    rate32 = np.full(camera32.resolution, 250.0, dtype=np.float32)
+    rate64 = rate32.astype(np.float64)
+    stack32 = np.stack(
+        [np.asarray(camera32.expose(rate32, 0.05, seed=seed)) for seed in range(32)]
+    ).astype(np.float64)
+    stack64 = np.stack(
+        [np.asarray(camera64.expose(rate64, 0.05, seed=seed)) for seed in range(32)]
+    ).astype(np.float64)
+
+    assert abs(float(stack32.mean()) - float(stack64.mean())) < 0.1
+    assert abs(float(stack32.var()) - float(stack64.var())) < 0.5
+    mean32 = stack32.mean(axis=0)
+    mean64 = stack64.mean(axis=0)
+    correlation = np.corrcoef(mean32.ravel(), mean64.ravel())[0, 1]
+    # The documented float32 RNG stream is not pixel-identical to float64, but
+    # the persistent amplifier/bias spatial structure must remain the same.
+    assert correlation > 0.98
+
+
 def test_scene_photon_rate_map_dtype(optics):
     scene = gf.Scene(
         shape=(32, 32),

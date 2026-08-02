@@ -269,13 +269,13 @@ def fixed_pattern_maps(
         rng = _fixed_pattern_rng(config, _FPN_STREAM_PRNU, resolved)
         prnu *= rng.lognormal(mean=-0.5 * sigma**2, sigma=sigma, size=shape)
 
-    gain, offset = _amplifier_maps(config, resolved)
+    gain, offset = _amplifier_maps(config, resolved, float_dtype=float_dtype)
     return FixedPatternMaps(
         dark,
         prnu,
         gain,
         offset,
-        _bias_structure_map(config, resolved),
+        _bias_structure_map(config, resolved, float_dtype=float_dtype),
         _defect_mask(config, resolved),
         _read_noise_sigma_map(config, resolved, float_dtype=float_dtype),
     )
@@ -630,7 +630,12 @@ def apply_ipc(
     return result
 
 
-def _amplifier_maps(config: CameraConfig, backend: ArrayBackend | None = None) -> tuple[Any, Any]:
+def _amplifier_maps(
+    config: CameraConfig,
+    backend: ArrayBackend | None = None,
+    *,
+    float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
+) -> tuple[Any, Any]:
     """Per-pixel conversion-gain (e-/ADU) and extra bias-offset (ADU) maps.
 
     Tiles the full sensor into ``amplifier_layout`` blocks using exact configured
@@ -651,20 +656,26 @@ def _amplifier_maps(config: CameraConfig, backend: ArrayBackend | None = None) -
     )
     if not has_pattern:
         return config.gain_e_per_adu, 0.0
-    gain = xp.full((height, width), config.gain_e_per_adu, dtype=np.float64)
-    offset = xp.zeros((height, width), dtype=np.float64)
+    gain = xp.full((height, width), config.gain_e_per_adu, dtype=float_dtype)
+    offset = xp.zeros((height, width), dtype=float_dtype)
     if exact_gain:
         assert config.amplifier_gain_factors is not None
-        gain_factor = xp.asarray(config.amplifier_gain_factors, dtype=np.float64).reshape(n_r, n_c)
+        gain_factor = xp.asarray(config.amplifier_gain_factors, dtype=float_dtype).reshape(n_r, n_c)
     else:
         g_rng = _fixed_pattern_rng(config, _FPN_STREAM_AMP_GAIN, resolved)
-        gain_factor = 1.0 + g_rng.normal(0.0, config.amp_gain_nonuniformity, size=(n_r, n_c))
+        gain_factor = xp.asarray(
+            1.0 + g_rng.normal(0.0, config.amp_gain_nonuniformity, size=(n_r, n_c)),
+            dtype=float_dtype,
+        )
     if exact_offset:
         assert config.amplifier_offsets_adu is not None
-        offset_value = xp.asarray(config.amplifier_offsets_adu, dtype=np.float64).reshape(n_r, n_c)
+        offset_value = xp.asarray(config.amplifier_offsets_adu, dtype=float_dtype).reshape(n_r, n_c)
     else:
         o_rng = _fixed_pattern_rng(config, _FPN_STREAM_AMP_OFFSET, resolved)
-        offset_value = o_rng.normal(0.0, config.amp_offset_spread_adu, size=(n_r, n_c))
+        offset_value = xp.asarray(
+            o_rng.normal(0.0, config.amp_offset_spread_adu, size=(n_r, n_c)),
+            dtype=float_dtype,
+        )
 
     def equal_edges(size: int, blocks: int) -> tuple[int, ...]:
         """Match ``array_split``: assign remainder pixels to the first blocks."""
@@ -691,7 +702,12 @@ def _amplifier_maps(config: CameraConfig, backend: ArrayBackend | None = None) -
     return gain, offset
 
 
-def _bias_structure_map(config: CameraConfig, backend: ArrayBackend | None = None) -> Any:
+def _bias_structure_map(
+    config: CameraConfig,
+    backend: ArrayBackend | None = None,
+    *,
+    float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
+) -> Any:
     """A fixed, structured bias pattern in ADU (a gradient plus per-column offsets).
 
     Zero everywhere when ``bias_structure_amplitude_adu`` is zero. Otherwise a
@@ -704,17 +720,18 @@ def _bias_structure_map(config: CameraConfig, backend: ArrayBackend | None = Non
     if config.bias_structure_amplitude_adu <= 0:
         return 0.0
     rng = _fixed_pattern_rng(config, _FPN_STREAM_BIAS, resolved)
-    yy = xp.linspace(-1.0, 1.0, height).reshape(height, 1)
-    xx = xp.linspace(-1.0, 1.0, width).reshape(1, width)
-    a, b = rng.uniform(-1.0, 1.0, size=2)
+    yy = xp.linspace(-1.0, 1.0, height, dtype=float_dtype).reshape(height, 1)
+    xx = xp.linspace(-1.0, 1.0, width, dtype=float_dtype).reshape(1, width)
+    coefficients = xp.asarray(rng.uniform(-1.0, 1.0, size=2), dtype=float_dtype)
+    a, b = coefficients
     plane = a * xx + b * yy
-    col_offsets = rng.normal(0.0, 1.0, size=width).reshape(1, width)
+    col_offsets = xp.asarray(rng.normal(0.0, 1.0, size=width), dtype=float_dtype).reshape(1, width)
     pattern = 0.6 * plane + 0.4 * col_offsets
     peak = resolved.scalar(xp.max(xp.abs(pattern)))
     if peak == 0.0:
-        return xp.zeros((height, width), dtype=np.float64)
+        return xp.zeros((height, width), dtype=float_dtype)
     scaled: NDArray[np.float64] = pattern / peak * config.bias_structure_amplitude_adu
-    return xp.broadcast_to(scaled, (height, width)).astype(np.float64)
+    return xp.broadcast_to(scaled, (height, width)).astype(float_dtype)
 
 
 def _glow_profile(
@@ -884,8 +901,8 @@ def digitize(
         signal += normal_noise(sigma_map)
 
     if fixed_patterns is None:
-        gain_map, amp_offset = _amplifier_maps(config, resolved)
-        bias_structure = _bias_structure_map(config, resolved)
+        gain_map, amp_offset = _amplifier_maps(config, resolved, float_dtype=signal.dtype)
+        bias_structure = _bias_structure_map(config, resolved, float_dtype=signal.dtype)
     else:
         gain_map = fixed_patterns.amplifier_gain
         amp_offset = fixed_patterns.amplifier_offset
