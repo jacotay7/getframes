@@ -30,6 +30,11 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `DetectorWorkspace` plus optional `workspace=` / caller-owned `out=` execution
+  on scalar and spectral camera exposures. Full-detector ROI inputs, private
+  photo/total scratch, and digitised destinations can now be reused without
+  allowing returned truth or default frames to alias mutable scratch. The
+  workspace is device/shape/precision-bound and rejects concurrent use.
 - `CameraConfig.charge_diffusion_fwhm_px` and the public
   `charge_diffusion_kernel()` helper make lateral detector charge spreading
   available to focal-plane simulators at their own oversampling. The OCAM2K

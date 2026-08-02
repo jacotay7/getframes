@@ -28,6 +28,10 @@
 
 ::: getframes.backend.to_numpy
 
+## Reusable detector execution
+
+::: getframes.noise.DetectorWorkspace
+
 ## Calibration
 
 ::: getframes.calibrate

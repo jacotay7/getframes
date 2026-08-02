@@ -241,6 +241,37 @@ cfg.active_amplifier_boundaries_x_px  # (116,)
 For binned ROI exposures, the binning factor must exactly divide the ROI's left,
 top, width, and height.
 
+For a sequential high-rate loop, reusable private scratch and a caller-owned ADU
+destination are opt-in:
+
+```python
+import numpy as np
+from getframes import Camera, DetectorWorkspace, load_preset
+
+camera = Camera(load_preset("andor_ocam2k").replace(roi=(4, 4, 228, 228)))
+workspace = DetectorWorkspace()
+out = np.empty(camera.resolution, dtype=np.uint32)
+
+frame = camera.expose(
+    np.full(camera.resolution, 250.0),
+    5.0e-4,
+    seed=0,
+    include_truth=False,
+    workspace=workspace,
+    out=out,
+)
+assert frame.data is out
+```
+
+The workspace is lazy, binds to its first detector shape/precision/device, and
+rejects concurrent use. Returned truth and ordinary frame arrays never alias its
+scratch. An explicit `out` is different: it is caller-owned and the returned
+frame points to that exact array, so the caller must not reuse it until all
+consumers are finished. On the local i7-10700, the warmed physical OCAM2K ROI
+case improved by 20.5% (17.0% lower latency) and cut traced peak allocation by
+49.5%. A Quadro P620 showed no isolated detector speedup, so GPU use remains an
+integration-boundary choice rather than a blanket recommendation.
+
 Because only the ROI is supplied, the detector outside it is treated as
 unilluminated. The neighbour-coupling effects — blooming, CTI, and IPC — therefore
 see zero signal beyond the ROI edge, so charge that a real illuminated surround

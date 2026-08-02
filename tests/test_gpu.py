@@ -63,6 +63,42 @@ def test_gpu_roi_keeps_full_detector_geometry_and_device_arrays() -> None:
     assert isinstance(frame.truth.mean_electrons, cupy.ndarray)
 
 
+def test_gpu_workspace_output_matches_default_and_is_reused() -> None:
+    cupy = _cupy()
+    camera = gf.Camera.from_preset("generic_cmos", device="gpu", precision="float32").with_config(
+        resolution=(32, 36),
+        roi=(4, 6, 24, 20),
+        amplifier_layout=(2, 2),
+    )
+    rate = cupy.full(camera.resolution, 1_000.0, dtype=cupy.float32)
+    workspace = gf.DetectorWorkspace()
+    out = cupy.empty(camera.resolution, dtype=cupy.uint32)
+
+    reference = camera.expose(rate, 0.01, seed=17, include_truth=False)
+    frame = camera.expose(
+        rate,
+        0.01,
+        seed=17,
+        include_truth=False,
+        workspace=workspace,
+        out=out,
+    )
+    assert cupy.array_equal(reference.data, frame.data)
+    first_ids = {key: id(value) for key, value in workspace._buffers.items()}
+    camera.expose(
+        rate,
+        0.01,
+        seed=18,
+        include_truth=False,
+        workspace=workspace,
+        out=out,
+    )
+
+    assert frame.data is out
+    assert not bool(cupy.array_equal(reference.data, frame.data))  # caller reused ``out``
+    assert {key: id(value) for key, value in workspace._buffers.items()} == first_ids
+
+
 def test_gpu_and_cpu_detector_statistics_match() -> None:
     cupy = _cupy()
     config = gf.load_preset("generic_cmos").replace(

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
 
-    from .noise import PhotonRate
+    from .noise import DetectorWorkspace, PhotonRate
     from .scene import Scene
     from .scene.sources import Source
 
@@ -185,12 +185,26 @@ class Camera:
         ss = np.random.SeedSequence(seed)
         return [int(s.generate_state(1)[0]) for s in ss.spawn(n_frames)]
 
-    def _full_detector_input(self, value: PhotonRate, name: str) -> Any:
+    def _full_detector_input(
+        self,
+        value: PhotonRate,
+        name: str,
+        *,
+        workspace: noise.DetectorWorkspace | None = None,
+    ) -> Any:
         """Embed a scalar or ROI-shaped input in the full physical detector grid."""
         if self.roi is None:
             return value
         array = self._backend.asarray(value, dtype=self._float_dtype)
-        full = self._backend.xp.zeros(self.sensor_resolution, dtype=self._float_dtype)
+        if array.ndim == 0 and isinstance(value, (int, float, np.number)) and float(value) == 0.0:
+            return value
+        if workspace is None:
+            full = self._backend.xp.zeros(self.sensor_resolution, dtype=self._float_dtype)
+        else:
+            full = workspace._buffer(
+                f"roi_{name}", self._backend, self.sensor_resolution, self._float_dtype
+            )
+            full.fill(0)
         if array.ndim == 0:
             full[self.config.roi_slices] = array
             return full
@@ -311,6 +325,8 @@ class Camera:
         binning_mode: str = "digital",
         seed: int | None = None,
         include_truth: bool = True,
+        workspace: DetectorWorkspace | None = None,
+        out: Any | None = None,
     ) -> Frame:
         """Expose the sensor to an incident photon rate and return a frame.
 
@@ -353,18 +369,96 @@ class Camera:
         include_truth:
             If ``True`` (default), attach the noise-free ground truth to the
             returned :class:`~getframes.frame.Frame` for pipeline validation.
+        workspace:
+            Optional reusable :class:`~getframes.noise.DetectorWorkspace` for
+            private detector and full-grid ROI scratch. It is sequential-use only;
+            returned arrays do not alias it.
+        out:
+            Optional C-contiguous, writable backend-native ``uint32`` array with
+            the returned frame shape. The frame uses this exact caller-owned
+            storage; do not overwrite it while a consumer still needs the frame.
         """
+        if workspace is not None:
+            with workspace._using(self._backend, self.sensor_resolution, self._float_dtype):
+                return self._expose_into(
+                    photon_rate,
+                    exposure,
+                    temperature,
+                    background=background,
+                    quantum_efficiency=quantum_efficiency,
+                    extra_electrons=extra_electrons,
+                    binning=binning,
+                    binning_mode=binning_mode,
+                    seed=seed,
+                    include_truth=include_truth,
+                    workspace=workspace,
+                    out=out,
+                )
+        return self._expose_into(
+            photon_rate,
+            exposure,
+            temperature,
+            background=background,
+            quantum_efficiency=quantum_efficiency,
+            extra_electrons=extra_electrons,
+            binning=binning,
+            binning_mode=binning_mode,
+            seed=seed,
+            include_truth=include_truth,
+            workspace=None,
+            out=out,
+        )
+
+    def _expose_into(
+        self,
+        photon_rate: PhotonRate,
+        exposure: float,
+        temperature: float | None,
+        *,
+        background: PhotonRate,
+        quantum_efficiency: float | None,
+        extra_electrons: PhotonRate,
+        binning: int,
+        binning_mode: str,
+        seed: int | None,
+        include_truth: bool,
+        workspace: noise.DetectorWorkspace | None,
+        out: Any | None,
+    ) -> Frame:
+        """Execute one exposure with an already-claimed optional workspace."""
         temp = self.default_temperature_c if temperature is None else temperature
         rng = self._resolve_rng(seed)
         self._binned_roi_slices(binning)
+        output_shape = (self.resolution[0] // binning, self.resolution[1] // binning)
+        if out is not None:
+            noise._validate_output_buffer(out, self._backend, output_shape)
+
+        detector_out = out if self.roi is None else None
+        output_slices: tuple[slice, slice] | None = None
+        direct_roi_output = self.roi is not None and workspace is not None and binning == 1
+        if direct_roi_output:
+            detector_out = (
+                out if out is not None else self._backend.xp.empty(output_shape, dtype=np.uint32)
+            )
+            output_slices = self._binned_roi_slices(binning)
+        elif self.roi is not None and workspace is not None:
+            detector_shape = (
+                self.sensor_resolution[0] // binning,
+                self.sensor_resolution[1] // binning,
+            )
+            detector_out = workspace._buffer("full_adu", self._backend, detector_shape, np.uint32)
         result = noise.simulate_frame(
             self.config,
-            self._full_detector_input(photon_rate, "photon_rate"),
+            self._full_detector_input(photon_rate, "photon_rate", workspace=workspace),
             exposure,
             temperature_c=temp,
-            background_photon_rate=self._full_detector_input(background, "background"),
+            background_photon_rate=self._full_detector_input(
+                background, "background", workspace=workspace
+            ),
             quantum_efficiency=quantum_efficiency,
-            extra_electrons=self._full_detector_input(extra_electrons, "extra_electrons"),
+            extra_electrons=self._full_detector_input(
+                extra_electrons, "extra_electrons", workspace=workspace
+            ),
             binning=binning,
             binning_mode=binning_mode,
             rng=rng,
@@ -372,9 +466,23 @@ class Camera:
             backend=self._backend,
             fixed_patterns=self._fixed_patterns,
             _dark_signal=self._dark_signal(exposure, temp),
+            workspace=workspace,
+            out=detector_out,
+            _workspace_claimed=workspace is not None,
+            _preserve_truth=include_truth,
+            _output_slices=output_slices,
+            _out_validated=out is not None or direct_roi_output,
         )
+        cropped_adu = result.adu if direct_roi_output else self._crop_to_roi(result.adu, binning)
+        if self.roi is not None and out is not None:
+            out[...] = cropped_adu
+            cropped_adu = out
+        elif self.roi is not None and workspace is not None:
+            # The full-frame destination is workspace-owned; copy only the ROI so
+            # a returned Frame remains stable across the next workspace use.
+            cropped_adu = self._backend.xp.array(cropped_adu, copy=True)
         result = noise.SimulationResult(
-            self._crop_to_roi(result.adu, binning),
+            cropped_adu,
             self._crop_to_roi(result.mean_photoelectrons, binning),
             self._crop_to_roi(result.mean_dark_electrons, binning),
             photon_rate,
@@ -408,6 +516,8 @@ class Camera:
         binning: int = 1,
         binning_mode: str = "digital",
         include_truth: bool = True,
+        workspace: DetectorWorkspace | None = None,
+        out: Any | None = None,
     ) -> Frame:
         """Expose a wavelength-resolved photon-rate cube.
 
@@ -420,7 +530,8 @@ class Camera:
 
         This method is separate from :meth:`expose` so scalar callers remain
         unchanged and callers cannot accidentally apply QE twice. A configured
-        ``qe_curve`` is required.
+        ``qe_curve`` is required. ``workspace`` and ``out`` have the same
+        reusable-scratch and caller-owned-lifetime contracts as :meth:`expose`.
         """
         if self.config.qe_curve is None:
             raise ValueError("expose_spectral requires CameraConfig.qe_curve")
@@ -455,6 +566,8 @@ class Camera:
             binning_mode=binning_mode,
             seed=seed,
             include_truth=include_truth,
+            workspace=workspace,
+            out=out,
         )
         frame.metadata["spectral"] = True
         frame.metadata["spectral_wavelengths_nm"] = [float(value) for value in wavelengths_host]

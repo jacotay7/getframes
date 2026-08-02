@@ -32,6 +32,8 @@ A dark frame is simply the special case ``photon_rate = 0``.
 from __future__ import annotations
 
 import math
+import threading
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 import numpy as np
@@ -75,6 +77,94 @@ class FixedPatternMaps(NamedTuple):
     bias_structure: Any
     defect_mask: Any | None
     read_noise_sigma: Any
+
+
+class DetectorWorkspace:
+    """Reusable private scratch storage for repeated detector simulations.
+
+    A workspace is lazy: its arrays are allocated only when a compatible call to
+    :func:`simulate_frame` or :meth:`getframes.Camera.expose` needs them.  It may
+    be reused sequentially, but not concurrently.  Returned frame and truth
+    arrays never alias workspace storage; only an explicit caller-owned ``out``
+    array is returned without a copy.
+
+    One workspace binds to the detector shape, working dtype, backend, and CUDA
+    device of its first use.  Construct a separate workspace for a different
+    camera geometry or execution device.
+    """
+
+    def __init__(self) -> None:
+        self._signature: tuple[str, int | None, tuple[int, int], str] | None = None
+        self._buffers: dict[tuple[str, tuple[int, ...], str], Any] = {}
+        self._lock = threading.Lock()
+
+    @staticmethod
+    def _device_index(backend: ArrayBackend) -> int | None:
+        if backend.is_cpu:
+            return None
+        return int(backend.xp.cuda.runtime.getDevice())
+
+    @contextmanager
+    def _using(
+        self,
+        backend: ArrayBackend,
+        shape: tuple[int, int],
+        float_dtype: DTypeLike,
+    ) -> Any:
+        signature = (
+            backend.device,
+            self._device_index(backend),
+            shape,
+            np.dtype(float_dtype).str,
+        )
+        if not self._lock.acquire(blocking=False):
+            raise RuntimeError("DetectorWorkspace cannot be used concurrently.")
+        try:
+            if self._signature is None:
+                self._signature = signature
+            elif self._signature != signature:
+                raise ValueError(
+                    "DetectorWorkspace is already bound to a different detector "
+                    "shape, precision, backend, or CUDA device."
+                )
+            yield self
+        finally:
+            self._lock.release()
+
+    def _buffer(
+        self,
+        name: str,
+        backend: ArrayBackend,
+        shape: tuple[int, ...],
+        dtype: DTypeLike,
+    ) -> Any:
+        dtype_obj = np.dtype(dtype)
+        key = (name, shape, dtype_obj.str)
+        buffer = self._buffers.get(key)
+        if buffer is None:
+            buffer = backend.xp.empty(shape, dtype=dtype_obj)
+            self._buffers[key] = buffer
+        return buffer
+
+
+def _validate_output_buffer(
+    out: Any,
+    backend: ArrayBackend,
+    shape: tuple[int, int],
+) -> None:
+    """Validate a caller-owned digitised-frame destination."""
+    if not isinstance(out, backend.xp.ndarray):
+        raise TypeError(f"out must be a {backend.xp.__name__}.ndarray on the detector backend.")
+    if tuple(out.shape) != shape:
+        raise ValueError(f"out shape {tuple(out.shape)} does not match output shape {shape}.")
+    if out.dtype != np.dtype(np.uint32):
+        raise TypeError(f"out dtype must be uint32, got {out.dtype}.")
+    if not bool(out.flags.c_contiguous):
+        raise ValueError("out must be C-contiguous.")
+    # NumPy exposes ``writeable``; CuPy device arrays are writable by construction
+    # and its Flags object intentionally omits that host-only flag.
+    if not bool(getattr(out.flags, "writeable", True)):
+        raise ValueError("out must be writeable.")
 
 
 def charge_diffusion_kernel(fwhm_px: float, *, oversampling: int) -> NDArray[np.float64]:
@@ -296,6 +386,7 @@ def photo_signal_map(
     *,
     backend: ArrayBackend | None = None,
     fixed_patterns: FixedPatternMaps | None = None,
+    out: Any | None = None,
 ) -> Any:
     """Per-pixel *mean* photo-generated signal in electrons (noise-free).
 
@@ -324,7 +415,18 @@ def photo_signal_map(
 
     # Write broadcast addition and scaling into one owned output buffer.  Keeping
     # this mutable avoids two full-frame temporaries on both NumPy and CuPy.
-    mean_photo = xp.empty((height, width), dtype=float_dtype)
+    if out is None:
+        mean_photo = xp.empty((height, width), dtype=float_dtype)
+    else:
+        if not isinstance(out, xp.ndarray):
+            raise TypeError(f"out must be a {xp.__name__}.ndarray on the detector backend.")
+        if tuple(out.shape) != (height, width):
+            raise ValueError(
+                f"out shape {tuple(out.shape)} does not match detector shape {(height, width)}."
+            )
+        if out.dtype != np.dtype(float_dtype):
+            raise TypeError(f"out dtype must be {np.dtype(float_dtype)}, got {out.dtype}.")
+        mean_photo = out
     try:
         xp.add(rate, background, out=mean_photo)
     except ValueError as exc:
@@ -725,6 +827,9 @@ def digitize(
     *,
     backend: ArrayBackend | None = None,
     fixed_patterns: FixedPatternMaps | None = None,
+    out: Any | None = None,
+    _output_slices: tuple[slice, slice] | None = None,
+    _out_validated: bool = False,
 ) -> Any:
     """Add read/reset noise, convert electrons to ADU, then saturate and quantise.
 
@@ -791,7 +896,14 @@ def digitize(
     signal += bias_structure
     xp.rint(signal, out=signal)
     xp.clip(signal, 0, config.max_adu, out=signal)
-    return signal.astype(np.uint32)
+    if out is None:
+        return signal.astype(np.uint32)
+    source = signal if _output_slices is None else signal[_output_slices]
+    signal_shape = (int(source.shape[0]), int(source.shape[1]))
+    if not _out_validated:
+        _validate_output_buffer(out, resolved, signal_shape)
+    out[...] = source
+    return out
 
 
 class SimulationResult(NamedTuple):
@@ -884,6 +996,12 @@ def simulate_frame(
     backend: ArrayBackend | None = None,
     fixed_patterns: FixedPatternMaps | None = None,
     _dark_signal: Any | None = None,
+    workspace: DetectorWorkspace | None = None,
+    out: Any | None = None,
+    _workspace_claimed: bool = False,
+    _preserve_truth: bool = True,
+    _output_slices: tuple[slice, slice] | None = None,
+    _out_validated: bool = False,
 ) -> SimulationResult:
     """Simulate one frame end-to-end, returning ADU and the noise-free truth.
 
@@ -928,6 +1046,15 @@ def simulate_frame(
         exact default) or ``float32`` for the memory-light fast path used for large
         detectors and bulk dataset generation. The digitised ADU stay integer
         regardless; only the floating-point signal chain and the truth arrays change.
+    workspace:
+        Optional reusable :class:`DetectorWorkspace`. Scratch arrays are private
+        and never escape in the returned result. A workspace is sequential-use
+        only and binds to this detector geometry/device on first use.
+    out:
+        Optional C-contiguous, writable backend-native ``uint32`` destination for
+        the digitised frame. The returned ``adu`` is this exact array. The caller
+        owns its lifetime and must not reuse it while a consumer still needs the
+        frame.
     """
     resolved = backend or get_backend()
     if exposure_s < 0:
@@ -939,6 +1066,50 @@ def simulate_frame(
     if rng is None:
         rng = resolved.default_rng(seed)
 
+    if workspace is not None and not _workspace_claimed:
+        with workspace._using(resolved, config.resolution, float_dtype):
+            return simulate_frame(
+                config,
+                photon_rate,
+                exposure_s,
+                temperature_c=temperature_c,
+                background_photon_rate=background_photon_rate,
+                quantum_efficiency=quantum_efficiency,
+                extra_electrons=extra_electrons,
+                binning=binning,
+                binning_mode=binning_mode,
+                rng=rng,
+                seed=seed,
+                float_dtype=float_dtype,
+                backend=resolved,
+                fixed_patterns=fixed_patterns,
+                _dark_signal=_dark_signal,
+                workspace=workspace,
+                out=out,
+                _workspace_claimed=True,
+                _preserve_truth=_preserve_truth,
+                _output_slices=_output_slices,
+                _out_validated=_out_validated,
+            )
+
+    output_shape = (config.resolution[0] // binning, config.resolution[1] // binning)
+    if out is not None and not _out_validated:
+        if _output_slices is None:
+            expected_output_shape = output_shape
+        else:
+            rows, columns = _output_slices
+            expected_output_shape = (
+                len(range(*rows.indices(output_shape[0]))),
+                len(range(*columns.indices(output_shape[1]))),
+            )
+        _validate_output_buffer(out, resolved, expected_output_shape)
+        _out_validated = True
+    elif out is None and _output_slices is not None:
+        raise ValueError("internal output slices require an explicit out buffer")
+
+    photo_out = None
+    if workspace is not None and not _preserve_truth:
+        photo_out = workspace._buffer("mean_photo", resolved, config.resolution, float_dtype)
     mean_photo = photo_signal_map(
         config,
         photon_rate,
@@ -948,6 +1119,7 @@ def simulate_frame(
         float_dtype,
         backend=resolved,
         fixed_patterns=fixed_patterns,
+        out=photo_out,
     )
     mean_dark = (
         dark_signal_map(
@@ -961,7 +1133,16 @@ def simulate_frame(
         if _dark_signal is None
         else _dark_signal
     )
-    mean_total = mean_photo + mean_dark
+    if workspace is None:
+        mean_total = mean_photo + mean_dark
+    elif not _preserve_truth:
+        # The photo expectation is private scratch when truth is disabled, so it
+        # can become the total in place with no allocation or extra copy kernel.
+        mean_total = mean_photo
+        mean_total += mean_dark
+    else:
+        mean_total = workspace._buffer("mean_total", resolved, config.resolution, float_dtype)
+        resolved.xp.add(mean_photo, mean_dark, out=mean_total)
     mean_total += resolved.asarray(extra_electrons, dtype=float_dtype)
 
     if binning > 1:
@@ -973,7 +1154,16 @@ def simulate_frame(
 
     if binning == 1:
         electrons = frame_electrons(config, mean_total, rng, exposure_s, backend=resolved)
-        adu = digitize(electrons, config, rng, backend=resolved, fixed_patterns=fixed_patterns)
+        adu = digitize(
+            electrons,
+            config,
+            rng,
+            backend=resolved,
+            fixed_patterns=fixed_patterns,
+            out=out,
+            _output_slices=_output_slices,
+            _out_validated=_out_validated,
+        )
     elif binning_mode == "on_chip":
         # Charge is summed before the amplifier: read out each super-pixel once, so a
         # single read noise applies. The summing well holds ~binning**2 more charge.
@@ -999,7 +1189,15 @@ def simulate_frame(
             binned_config, block_sum(mean_total, binning), rng, exposure_s, backend=resolved
         )
         # On-chip binning changes the pixel grid, so native cached maps do not apply.
-        adu = digitize(electrons, binned_config, rng, backend=resolved)
+        adu = digitize(
+            electrons,
+            binned_config,
+            rng,
+            backend=resolved,
+            out=out,
+            _output_slices=_output_slices,
+            _out_validated=_out_validated,
+        )
     else:
         # Digital / post-read: read every native pixel (its own read noise), then sum
         # the digitised values, so read noise adds in quadrature over binning**2 pixels.
@@ -1008,6 +1206,9 @@ def simulate_frame(
             electrons, config, rng, backend=resolved, fixed_patterns=fixed_patterns
         )
         adu = block_sum(native_adu.astype(np.uint64), binning).astype(np.uint32)
+        if out is not None:
+            resolved.xp.copyto(out, adu)
+            adu = out
 
     return SimulationResult(
         adu, block_sum(mean_photo, binning), block_sum(mean_dark, binning), photon_rate

@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "date": "2026-08-01",
+  "hardware": {
+    "cpu": "Intel Core i7-10700",
+    "gpu": "NVIDIA Quadro P620 2 GiB"
+  },
+  "workload": {
+    "detector": "andor_ocam2k",
+    "sensor_shape": [240, 240],
+    "roi": [4, 4, 228, 228],
+    "precision": "float64",
+    "include_truth": false,
+    "seed_policy": "per-call deterministic seed",
+    "method": "alternating warmed blocks"
+  },
+  "cpu": {
+    "calls_per_block": 100,
+    "baseline_ns_per_frame": [3955349.22, 3947427.11, 3972073.37, 3859580.1, 3884668.66, 4113012.02, 3877675.02, 3932351.1, 3908754.37],
+    "workspace_out_ns_per_frame": [3321994.02, 3321763.07, 3288151.44, 3234645.9, 3245421.18, 3221629.85, 3262854.5, 3257687.41, 3277385.99],
+    "baseline_median_ns": 3932351.1,
+    "workspace_out_median_ns": 3262854.5,
+    "speedup": 1.2051873903663188,
+    "latency_reduction_percent": 17.025351576567004,
+    "baseline_tracemalloc_peak_bytes": 2792320,
+    "workspace_out_tracemalloc_peak_bytes": 1410364,
+    "peak_reduction_percent": 49.49242063874876
+  },
+  "gpu": {
+    "calls_per_block": 500,
+    "baseline_ns_per_frame": [2678067.616, 2649117.662, 2657861.516, 2644801.524, 2649907.02, 2640878.182, 2636979.608],
+    "workspace_out_ns_per_frame": [2668534.164, 2666870.46, 2801336.1, 2663492.58, 2649310.238, 2648818.144, 2651349.598],
+    "baseline_median_ns": 2649117.662,
+    "workspace_out_median_ns": 2663492.58,
+    "speedup": 0.994602981773653,
+    "latency_reduction_percent": -0.5426310554173708,
+    "decision": "opt-in only; no isolated CUDA speedup claimed"
+  },
+  "workspace_owned_bytes": 921600,
+  "correctness": "Seeded output is exact within each backend; full detector versus ROI crop identity covers glow, amplifier structure, cosmic rays, blooming, CTI, IPC, and fixed patterns. Returned default frames and truth never alias workspace scratch."
+}

@@ -129,6 +129,7 @@ src/getframes/
 | ✅ | **1.6** | Scale & datasets | float32 path, chunked/vectorised rendering, `dataset` generator for raw+truth pairs at scale, a `getframes` CLI, benchmarks | ML training data, large detectors |
 | ✅ | **2.0** | Stability | promote new APIs to stable, `astropy` as a core dep, validation suite vs. published characterisations, full docs (JOSS paper + citation deferred post-release) | — |
 | ✅ | **post-2.0** | GPU detector execution | optional CuPy photon → electron → ADU chain, device RNG/truth/fixed structure, CPU/GPU statistical parity, synchronized benchmarks | end-to-end GPU AO simulation |
+| ✅ | **post-2.0** | Reusable detector execution | lifetime-safe ROI/signal scratch and caller-owned ADU output for sequential high-rate loops | lower allocation pressure and direct pipeline destinations |
 
 Persistence (1.2) is the one item explicitly deferred from the 1.0 series; it lands
 once 1.2 introduces cross-frame state via `Observation`.
@@ -232,6 +233,15 @@ The artifacts a calibration pipeline must survive:
   CPU/GPU statistical parity rather than pixel-identical random streams.
 - [x] Add explicit host conversion, user documentation, and synchronized CPU/GPU
   benchmark modes.
+
+### Post-2.0 — Reusable detector execution ✅
+
+- [x] Add a lazy shape/precision/device-bound workspace for full-detector ROI
+  expansion and private detector intermediates.
+- [x] Add explicit caller-owned `out=` destinations to scalar and spectral
+  exposure while keeping default frame/truth lifetimes alias-safe.
+- [x] Validate seeded feature parity, concurrent-use rejection, CPU/GPU behavior,
+  stable warm storage, and physical OCAM2K ROI performance.
 
 ---
 
