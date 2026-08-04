@@ -6,7 +6,28 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`examples/16_detector_showcase.py`** renders an animated WebP that exposes one
+  incident photon field on a CCD, EMCCD, sCMOS, and eAPD side by side, each panel
+  overlaid with the frame rate that camera sustained on the running machine. The
+  clip is the README header image.
+
+### Changed
+
+- **The README follows the documentation-first structure** used across the sibling
+  projects: docs link, showcase clip, install, quickstart, benchmarks, then the
+  feature list. The preset table and the dark-frame model walkthrough now live
+  only in the presets and noise-model guides, which they already duplicated.
+- **Refreshed `benchmarks/device-results.{json,md}`** on the RTX 5090 / Ryzen 9
+  9950X3D reference machine against getframes 2.1.1, NumPy 2.2.6, and CuPy 14.1.1.
+
 ### Fixed
+
+- **Benchmark provenance now records the CuPy version** when CuPy is installed
+  under a CUDA-specific wheel name (`cupy-cuda12x`/`cupy-cuda11x`). The metadata
+  block previously reported `cupy: null` on exactly the machines that had
+  produced the GPU column.
 
 - **Persistent cameras now cache the dark-signal expectation.** Repeated exposures
   at the same exposure time, temperature, precision, and detector configuration

@@ -3,135 +3,48 @@
 [![CI](https://github.com/jacotay7/getframes/actions/workflows/ci.yml/badge.svg)](https://github.com/jacotay7/getframes/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/getframes.svg)](https://pypi.org/project/getframes/)
 [![Python](https://img.shields.io/pypi/pyversions/getframes.svg)](https://pypi.org/project/getframes/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-jacotay7.github.io%2Fgetframes-teal.svg)](https://jacotay7.github.io/getframes/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+**Documentation: [jacotay7.github.io/getframes](https://jacotay7.github.io/getframes/)**
 
 **Realistic synthetic camera frames for scientific imaging pipelines.**
 
-`getframes` gives you a clean, small API for generating physically realistic frames
-from **CCD**, **CMOS**, **EMCCD**, **eAPD**, and **sCMOS** detectors — with
-accurate, auditable noise physics (read noise, dark current, shot noise,
-fixed-pattern non-uniformity, a unified stochastic gain stage, clock-induced
-charge, nonlinearity, and cosmic rays) so you can build and validate
-image-processing pipelines against ground truth.
+<p align="center">
+  <img src="examples/detector_showcase.webp" width="503" alt="Animated detector showcase: one incident photon field exposed on a CCD, EMCCD, sCMOS and eAPD, with live throughput.">
+</p>
 
-It generates **dark**, **bias**, and **flat** frames, and renders **star fields**
-through a PSF and telescope into a realistic science frame — the full
-photon → electron → ADU signal path, with optional opt-in spectral mode.
-
-> **Status:** stable. `getframes` 2.0 freezes the full public surface — the
-> detector, scene, calibration, observation, radiometry, and dataset APIs — under
-> [Semantic Versioning](https://semver.org/spec/v2.0.0.html); see
-> [API stability](docs/stability.md). An optional CuPy backend now keeps the
-> photon → electron → ADU detector path and truth arrays on NVIDIA GPUs.
+`getframes` generates the frames a real detector would have produced: the full
+**photon → electron → ADU** signal path for **CCD**, **CMOS**, **EMCCD**,
+**eAPD** and **sCMOS** sensors, with auditable noise physics (read noise, dark
+current, shot noise, fixed-pattern non-uniformity, a unified stochastic gain
+stage, clock-induced charge, nonlinearity, cosmic rays). It produces **dark**,
+**bias** and **flat** frames, and renders **star fields** through a PSF and
+telescope into a realistic science frame — so you can build and validate
+image-processing pipelines against ground truth. It runs on NumPy by default and
+switches to CUDA (via CuPy) with a single argument.
 
 ## Install
 
 ```bash
-pip install getframes
-pip install 'getframes[gpu]'  # optional CUDA 12.x / CuPy detector backend
+pip install getframes            # CPU (NumPy + SciPy + astropy)
+pip install 'getframes[gpu]'     # + CuPy for CUDA 12.x
+pip install -e '.[dev]'          # from a clone, for development
 ```
 
-From source (for development):
-
-```bash
-git clone https://github.com/jacotay7/getframes
-cd getframes
-pip install -e ".[dev]"
-```
-
-## Quick start
+## Quickstart
 
 ```python
 import getframes as gf
 
-# Pick a camera from the built-in preset library...
-cam = gf.Camera.from_preset("andor_ikon_m934")
-
-# ...and generate a reproducible dark frame.
+cam = gf.Camera.from_preset("andor_ikon_m934")  # 21 presets, or your own CameraConfig
 frame = cam.dark_frame(exposure=60.0, temperature=-60.0, seed=0)
 
-frame.data  # 2-D numpy array of ADU, shape (1024, 1024)
+frame.data  # (1024, 1024) array of ADU
 frame.stats()  # {'mean': ..., 'median': ..., 'std': ..., 'min': ..., 'max': ...}
 frame.metadata  # camera/exposure/temperature provenance
-```
 
-`Frame` is array-like, so it drops straight into NumPy:
-
-```python
-import numpy as np
-
-master_dark = np.mean([np.asarray(f) for f in cam.dark_series(60.0, n_frames=20, seed=1)], axis=0)
-```
-
-### Define your own camera
-
-```python
-cam = gf.Camera(
-    gf.CameraConfig(
-        name="My Lab CMOS",
-        sensor_type="CMOS",
-        resolution=(2048, 2048),  # (height, width)
-        pixel_size_um=6.5,
-        quantum_efficiency=0.82,
-        full_well_e=30_000,
-        bit_depth=12,
-        gain_e_per_adu=0.8,
-        bias_offset_adu=300,
-        read_noise_e=1.8,
-        dark_current_e_per_s=0.5,  # at the reference temperature
-        dark_current_ref_temp_c=20.0,
-        dark_current_doubling_temp_c=6.0,
-    )
-)
-frame = cam.dark_frame(exposure=30.0, temperature=-10.0)
-```
-
-### Run the detector on a GPU
-
-```python
-import cupy as cp
-import getframes as gf
-
-cam = gf.Camera.from_preset("andor_ocam2k", device="gpu", precision="float32")
-rate = cp.full(cam.resolution, 2.0e6, dtype=cp.float32)  # photons/s/pixel
-frame = cam.expose(rate, exposure=1.0e-3, seed=0)
-
-frame.data  # CuPy uint32 ADU array; no host copy
-frame.truth.mean_electrons  # CuPy truth array
-host_adu = gf.to_numpy(frame.data)  # explicit device-to-host boundary
-```
-
-CPU and GPU use independent random-number streams: a seed repeats exactly on a
-fixed backend, while parity across backends means matching detector statistics,
-not identical pixels. See the [GPU guide](docs/guides/gpu.md).
-
-## CPU/GPU throughput
-
-Warm bulk-frame throughput on an AMD Ryzen 9 9950X3D and NVIDIA RTX 5090
-(`float32`, truth enabled, persistent camera, device-resident input/output, no
-host transfers) is:
-
-| Workflow | Native shape | CPU (frames/s) | GPU (frames/s) | Speedup |
-| --- | ---: | ---: | ---: | ---: |
-| Pyramid WFS CMOS | 80x80 | 5,264.9 | 10,565.4 | 2.01x |
-| Shack-Hartmann WFS CMOS | 160x160 | 1,372.0 | 10,538.1 | 7.68x |
-| OCAM2K EMCCD | 240x240 | 347.7 | 8,057.1 | 23.17x |
-| SAPHIRA eAPD | 256x320 | 283.2 | 7,481.8 | 26.42x |
-| Large science CMOS | 1024x1024 | 31.5 | 1,431.9 | 45.39x |
-
-Higher is better. CUDA was synchronized around every timed region; construction
-was excluded. Even the smallest case reaches about 2x, while larger arrays and
-gain-stage detectors expose much more parallel work. See the
-[full snapshot](benchmarks/device-results.md), [raw JSON](benchmarks/device-results.json),
-and [GPU benchmark methodology](docs/guides/gpu.md#reference-throughput).
-
-### Observe a simulated star field
-
-Render astronomical sources through a PSF and telescope, then expose them on a
-detector — the full photon → electron → ADU path:
-
-```python
-scene = gf.Scene(
+scene = gf.Scene(  # render a sky, then expose it
     shape=(256, 256),
     optics=gf.Telescope(
         aperture_diameter_m=2.5,
@@ -143,73 +56,104 @@ scene = gf.Scene(
     sources=[gf.PointSource(x=128, y=128, magnitude=20.0)],
     sky=gf.Sky(surface_brightness_mag_arcsec2=21.0),
 )
-cam = gf.Camera.from_preset("zwo_asi2600mm").with_config(resolution=(256, 256))
-frame = cam.observe(scene, exposure=300.0, seed=0)  # a realistic science frame
+frame = cam.with_config(resolution=(256, 256)).observe(scene, exposure=300.0, seed=0)
+
+import cupy as cp  # and the same path on a GPU
+
+cam = gf.Camera.from_preset("andor_ocam2k", device="gpu", precision="float32")
+rate = cp.full(cam.resolution, 2.0e6, dtype=cp.float32)  # photons/s/pixel
+frame = cam.expose(rate, exposure=1.0e-3, seed=0)  # CuPy ADU, no host copy
 ```
 
-You can also drive the detector directly with a photon-rate map (a scalar for a
-uniform flat, or a per-pixel array): `cam.expose(photon_rate, exposure)`.
+See **[Getting started](https://jacotay7.github.io/getframes/guides/getting-started/)**
+for the full walkthrough,
+**[Observing scenes](https://jacotay7.github.io/getframes/guides/scenes/)** for
+sources, PSFs and telescopes,
+**[Camera presets](https://jacotay7.github.io/getframes/guides/presets/)** for the
+preset library, and
+**[The noise model](https://jacotay7.github.io/getframes/guides/noise-model/)** for
+the physics behind every stage.
 
-### Browse the preset library
+## Benchmarks
 
-```python
-from getframes import available_presets
-from getframes.presets import preset_info
+Warm bulk-frame throughput on an AMD Ryzen 9 9950X3D and an NVIDIA RTX 5090
+(`float32`, truth enabled, persistent camera, device-resident input/output, no
+host transfers). The raw artifact and its invocation are
+[versioned with the benchmarks](benchmarks/device-results.json):
 
-available_presets()  # ['andor_ikon_m934', 'andor_ixon_ultra_888', 'generic_ccd', ...]
-preset_info()  # rich descriptors for each preset
+| Workflow | Native shape | CPU (frames/s) | GPU (frames/s) | Speedup |
+| --- | ---: | ---: | ---: | ---: |
+| Pyramid WFS CMOS | 80×80 | 5,240 | 11,514 | 2.20× |
+| Shack-Hartmann WFS CMOS | 160×160 | 1,386 | 11,471 | 8.27× |
+| OCAM2K EMCCD | 240×240 | 357 | 8,045 | 22.53× |
+| SAPHIRA eAPD | 256×320 | 280 | 7,497 | 26.74× |
+| Large science CMOS | 1024×1024 | 31 | 1,453 | 47.21× |
+
+Higher is better; CUDA was synchronized around every timed region and
+construction was excluded. Even the smallest case reaches about 2×, while larger
+arrays and gain-stage detectors expose much more parallel work. Reproduce the
+table with
+
+```bash
+python benchmarks/bench_devices.py --seconds 2 --warmup 10 --device both
+python benchmarks/run.py                    # the CPU hot-path sweep
 ```
 
-| Preset | Sensor | Notes |
-| --- | --- | --- |
-| `andor_ikon_m934` | CCD | Deep-cooled back-illuminated scientific CCD |
-| `andor_ixon_ultra_888` | EMCCD | Single-photon-sensitive EMCCD |
-| `leonardo_saphira` | EAPD | HgCdTe avalanche IR array (AO wavefront sensing) |
-| `zwo_asi2600mm` | CMOS | Sony IMX571 cooled CMOS |
-| `hamamatsu_orca_fusion` | sCMOS | Back-thinned sCMOS with per-pixel read noise |
-| `andor_marana_4_2b_11` | sCMOS | 11 µm-pixel, back-illuminated scientific CMOS |
-| `photometrics_prime_95b` | sCMOS | 11 µm-pixel, 95% peak-QE scientific CMOS |
-| `princeton_instruments_kuro_1200b` | sCMOS | Back-illuminated scientific CMOS |
-| `qhy530_pro_ii` | CMOS | Global-shutter Sony IMX530 scientific camera |
-| `tucsen_aries_6504_pro` | sCMOS | Sub-electron sensitive-mode read noise |
-| `generic_ccd` / `generic_cmos` / `generic_emccd` / `generic_eapd` / `generic_scmos` | — | Idealised references for teaching/testing |
+See the [full snapshot](benchmarks/device-results.md) and the
+**[GPU guide](https://jacotay7.github.io/getframes/guides/gpu/#reference-throughput)**
+for the methodology.
 
-## How the dark-frame model works
+## Features
 
-The dark signal chain (see [`getframes/noise.py`](src/getframes/noise.py)):
+- **Five detector families** — CCD, CMOS, EMCCD, eAPD and sCMOS, from a library
+  of 21 sourced **[presets](https://jacotay7.github.io/getframes/guides/presets/)**
+  (`andor_ikon_m934`, `andor_ocam2k`, `leonardo_saphira`,
+  `andor_marana_4_2b_11`, `zwo_asi2600mm`, …) or any `CameraConfig` you define.
+- **Auditable noise physics** — dark current vs. temperature, shot noise, a
+  unified stochastic gain stage (EM and avalanche) with realistic excess noise,
+  clock-induced charge, per-pixel sCMOS read noise, polynomial nonlinearity,
+  saturation and quantisation, each a small documented pure function in
+  **[the noise model](https://jacotay7.github.io/getframes/guides/noise-model/)**.
+- **Detector realism** — CTI, blooming, IPC, kTC/reset noise, multi-amplifier
+  readout, cosmic-ray tracks, defect and structured-bias maps, vignetting and
+  radial distortion.
+- **Fixed patterns that behave like silicon** — PRNU, DSNU, hot pixels, defects
+  and amplifier structure are keyed on `fixed_pattern_seed`, so they repeat in
+  every frame and are genuinely removable by a master frame.
+- **Scenes** — point, extended and catalog sources, Gaussian/Moffat/Airy/array
+  PSFs, a `Telescope` with Vega (Johnson) and AB (ugriz, Gaia, 2MASS) bandpasses,
+  extinction, graybody thermal background, WCS pixel↔world, and light curves.
+- **Calibration & ground truth** — master bias/dark/flat builders and a
+  `calibrate` reduction that closes the
+  **[raw → reduced → truth loop](https://jacotay7.github.io/getframes/guides/calibration/)**.
+- **Observations** — `Observation` drives time series with jitter, drift, dither
+  and persistence, carrying per-frame
+  **[truth](https://jacotay7.github.io/getframes/guides/time-series/)**.
+- **Spectral mode** (opt-in) — QE curves, relative or absolute SEDs, transmission
+  products and wavelength-resolved exposure; see
+  **[Spectral mode](https://jacotay7.github.io/getframes/guides/spectral/)** and
+  **[Radiometry & the infrared](https://jacotay7.github.io/getframes/guides/radiometry/)**.
+- **Analysis on real data too** — aperture sums, centroids, photon-transfer
+  curves and `characterize_dark`/`characterize_flat` are stack-driven, so they
+  run on measured detector frames as readily as on simulated ones.
+- **Scale & datasets** — a float32 fast path, vectorised multi-source rendering,
+  a streaming raw+truth `dataset` generator and a `getframes` CLI; see
+  **[Scale & datasets](https://jacotay7.github.io/getframes/guides/datasets/)**.
+- **GPU-optional** — every camera takes `device="gpu"` (CuPy) and keeps the
+  detector path and truth arrays device-resident. CPU and GPU have independent
+  RNG streams, so a `seed` repeats exactly on a fixed backend while parity across
+  backends means matching statistics, not identical pixels.
+- **Reproducible and typed** — all randomness flows through a camera-owned seeded
+  generator, never global state; `mypy --strict` passes; every public name is
+  frozen under [SemVer](https://jacotay7.github.io/getframes/stability/) as of 2.0.
+- **Validated** — noise models are checked against published forms in CI; see
+  **[Validation](https://jacotay7.github.io/getframes/guides/validation/)**.
 
-1. **Dark current vs. temperature** — `D(T) = D_ref · 2^((T − T_ref) / T_double)`
-2. **Fixed-pattern non-uniformity (DSNU)** and **hot pixels** modulate the per-pixel mean
-3. **Shot noise** — Poisson statistics on the dark electrons
-4. **Clock-induced charge** (EMCCD) — small Poisson term
-5. **EM gain** (EMCCD) — stochastic multiplication with realistic excess noise
-6. **Read noise** — Gaussian at the output amplifier
-7. **Digitisation** — gain conversion to ADU, bias pedestal, saturation, quantisation
-
-All randomness flows through a seeded `numpy.random.Generator`, so every frame is
-reproducible.
-
-## Documentation
-
-- [Guides & API reference](docs/) (built with MkDocs) — getting started, the
-  noise model, observing scenes, spectral mode, and presets
-- [API stability & versioning](docs/stability.md)
-- [Runnable examples](examples/) — PTC, star-field exposure planning, AO limiting
-  magnitude, transit photometry, detector realism
-
-## Roadmap
-
-**1.0 is shipped:** the full photon → electron → ADU signal path (dark, bias,
-flat, and rendered scenes) across CCD / CMOS / EMCCD / eAPD / sCMOS, with a
-unified gain stage, detector-realism effects, opt-in spectral mode, analysis
-helpers, and a frozen API.
-
-The **2.0 plan** moves from a *frame* to an *observation* — closing the
-raw → reduced → ground-truth validation loop, making time-series (variability,
-jitter, persistence) and richer scenes (extended sources, catalogs, sky
-coordinates) first-class, and deepening detector and radiometric fidelity. See
-[docs/roadmap.md](docs/roadmap.md) for the full critique, phased plan, and worked
-examples.
+See the **[API reference](https://jacotay7.github.io/getframes/reference/)** for
+every public function and class, the
+**[runnable examples](examples/)** for PTC, exposure planning, AO limiting
+magnitude, transit photometry and detector realism, and the
+**[roadmap](https://jacotay7.github.io/getframes/roadmap/)** for what is next.
 
 ## Contributing
 

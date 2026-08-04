@@ -60,11 +60,17 @@ WORKFLOWS = (
 )
 
 
+# CuPy ships as a CUDA-specific wheel; the generic name is only used by source builds.
+_DISTRIBUTION_ALIASES = {"cupy": ("cupy", "cupy-cuda12x", "cupy-cuda11x")}
+
+
 def _installed_version(name: str) -> str | None:
-    try:
-        return importlib.metadata.version(name)
-    except importlib.metadata.PackageNotFoundError:
-        return None
+    for candidate in _DISTRIBUTION_ALIASES.get(name, (name,)):
+        try:
+            return importlib.metadata.version(candidate)
+        except importlib.metadata.PackageNotFoundError:
+            continue
+    return None
 
 
 def _git_state(root: Path) -> tuple[str | None, bool | None]:

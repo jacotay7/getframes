@@ -33,3 +33,12 @@ pip install -e ".[examples]"
 | [`13_crowded_field.py`](13_crowded_field.py) | Render a 20k-star catalog; vectorised vs. per-source, with flux conservation. |
 | [`14_keck_lgs_ttf_trade_study.ipynb`](14_keck_lgs_ttf_trade_study.ipynb) | Guided, cell-by-cell trade study of detector candidates for the Keck LGS tip/tilt sensor and low-bandwidth WFS: spot model → radiometry → one simulated frame → calibration → centroiding → the full TTS/LBWFS trades. |
 | [`15_detector_characterization.py`](15_detector_characterization.py) | Measure gain, read noise, dark current, DSNU, full well and PRNU from frame stacks (real or simulated), then rebuild the detector as a `CameraConfig`. |
+| [`16_detector_showcase.py`](16_detector_showcase.py) | Expose one incident photon field on a CCD, EMCCD, sCMOS and eAPD side by side, with live per-camera throughput; writes the animated WebP used in the README. |
+
+`16_detector_showcase.py` has its own flags (`--device`, `--frames`, `--out`)
+rather than the shared `_common.py` ones, and needs `pillow` alongside
+matplotlib. It picks up a GPU automatically when CuPy is installed:
+
+```bash
+python examples/16_detector_showcase.py --out examples/detector_showcase.webp
+```
