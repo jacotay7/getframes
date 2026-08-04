@@ -59,6 +59,77 @@ def test_ipc_conserves_charge_and_shares_with_neighbours():
     assert out.sum() == pytest.approx(100.0)  # interior: charge conserved
 
 
+# --- Charge diffusion -------------------------------------------------------
+def test_charge_diffusion_kernel_conserves_charge_and_matches_requested_width():
+    oversampling = 8
+    kernel = noise.charge_diffusion_kernel(0.37, oversampling=oversampling)
+    assert kernel.sum() == pytest.approx(1.0)
+    # Taps integrate the continuous Gaussian over a sample cell, so their discrete
+    # second moment includes the cell-width term in addition to the requested
+    # physical sigma.
+    offsets = np.arange(kernel.shape[0]) - (kernel.shape[0] - 1) / 2
+    profile = kernel.sum(axis=0)
+    sigma_px = float(np.sqrt((profile * offsets**2).sum())) / oversampling
+    expected_sigma_px = np.hypot(0.37 / 2.3548200450309493, 1 / (np.sqrt(12) * oversampling))
+    assert sigma_px == pytest.approx(expected_sigma_px, rel=1e-3)
+
+
+def test_charge_diffusion_adds_its_variance_before_pixel_integration():
+    # A sub-pixel width is only physical on an oversampled grid: diffuse there,
+    # integrate pixels afterwards, and the delivered spot must widen by exactly
+    # the kernel variance.
+    oversampling = 8
+    pixels = 41
+    # A source resolved by the native grid, so binning does not itself destroy
+    # the second moment the comparison relies on.
+    samples = pixels * oversampling
+    coordinate = (np.arange(samples) - (samples - 1) / 2) / oversampling
+    profile = np.exp(-0.5 * (coordinate / 2.0) ** 2)
+    grid = profile[:, None] * profile[None, :]
+    plain = noise.block_sum(grid, oversampling)
+    diffused = noise.block_sum(
+        noise.apply_charge_diffusion(grid, 0.37, oversampling=oversampling), oversampling
+    )
+    assert diffused.sum() == pytest.approx(plain.sum(), rel=1e-9)
+
+    def variance(image):
+        profile = image.sum(axis=0) / image.sum()
+        offsets = np.arange(image.shape[1]) - (image.shape[1] - 1) / 2
+        mean = float((profile * offsets).sum())
+        return float((profile * (offsets - mean) ** 2).sum())
+
+    expected = (0.37 / 2.3548200450309493) ** 2 + 1 / (12 * oversampling**2)
+    assert variance(diffused) - variance(plain) == pytest.approx(expected, rel=0.02)
+
+
+def test_charge_diffusion_rejects_widths_it_cannot_represent():
+    # Convolving an already pixel-integrated frame with a 0.37-pixel FWHM
+    # Gaussian is a numerical no-op, so it must fail loudly rather than report a
+    # measured detector property while applying nothing.
+    with pytest.raises(ValueError, match="samples per native pixel"):
+        noise.apply_charge_diffusion(np.zeros((8, 8)), 0.37, oversampling=1)
+    with pytest.raises(ValueError, match="samples per native pixel"):
+        noise.charge_diffusion_kernel(0.37, oversampling=2)
+
+
+def test_charge_diffusion_accepts_a_batch_and_is_disabled_at_zero():
+    batch = np.zeros((3, 16, 16))
+    batch[:, 8, 8] = 1.0
+    out = noise.apply_charge_diffusion(batch, 0.37, oversampling=4)
+    assert out.shape == batch.shape
+    assert out[0, 8, 8] < 1.0
+    assert noise.apply_charge_diffusion(batch, 0.0, oversampling=4) is batch
+
+
+def test_native_entry_points_record_unapplied_charge_diffusion():
+    # The pixel-integrated path cannot represent it, so the frame must say so.
+    cam = Camera.from_preset("andor_ocam2k")
+    assert cam.config.charge_diffusion_fwhm_px == pytest.approx(0.37)
+    frame = cam.dark_frame(exposure=0.001, temperature=-45.0)
+    assert frame.metadata["charge_diffusion_fwhm_px"] == pytest.approx(0.37)
+    assert frame.metadata["charge_diffusion_applied"] is False
+
+
 # --- Nonlinearity -----------------------------------------------------------
 def test_polynomial_nonlinearity_compresses(ccd):
     cfg = ccd.replace(nonlinearity_coeffs=(-0.1,), full_well_e=100_000.0)

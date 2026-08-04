@@ -32,6 +32,12 @@
 
 ::: getframes.noise.DetectorWorkspace
 
+## Charge diffusion
+
+::: getframes.noise.charge_diffusion_kernel
+
+::: getframes.noise.apply_charge_diffusion
+
 ## Calibration
 
 ::: getframes.calibrate

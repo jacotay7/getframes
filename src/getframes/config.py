@@ -157,11 +157,16 @@ class CameraConfig:
         in ``[0, 0.25)``. Applied as a charge-conserving 3x3 convolution (CMOS/IR
         hybrid arrays). ``0`` disables it.
     charge_diffusion_fwhm_px:
-        Lateral charge-diffusion full width at half maximum in native detector
-        pixels. ``0`` disables it. This is a focal-plane collection property used
-        by optics simulators through :func:`getframes.charge_diffusion_kernel`
-        before native-pixel integration; :class:`Camera` receives an already
-        integrated photon-rate map and therefore does not apply it a second time.
+        Lateral charge-diffusion FWHM in *native pixels*. Photo-electrons random
+        walk in the silicon before reaching a potential well, so the collected
+        charge is the incident irradiance convolved with this Gaussian and only
+        then integrated over each pixel's area. It is applied only by
+        :func:`~getframes.apply_charge_diffusion` (or its
+        :func:`~getframes.charge_diffusion_kernel`), which requires an
+        oversampled irradiance map. :class:`Camera` receives an already
+        integrated photon-rate map, so it does not apply diffusion a second time
+        and records that fact in frame metadata. ``0`` disables it. Distinct from
+        ``ipc_coupling``, which couples charge *after* collection.
     reset_noise_e:
         kTC / reset noise RMS in electrons: an independent per-pixel, per-frame
         Gaussian charge uncertainty from resetting the sense node, added alongside

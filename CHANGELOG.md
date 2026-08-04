@@ -35,11 +35,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   photo/total scratch, and digitised destinations can now be reused without
   allowing returned truth or default frames to alias mutable scratch. The
   workspace is device/shape/precision-bound and rejects concurrent use.
-- `CameraConfig.charge_diffusion_fwhm_px` and the public
-  `charge_diffusion_kernel()` helper make lateral detector charge spreading
-  available to focal-plane simulators at their own oversampling. The OCAM2K
-  preset declares its measured 0.37-pixel FWHM, and under-resolved kernels fail
-  explicitly instead of becoming a numerical no-op.
+- `CameraConfig.charge_diffusion_fwhm_px`, `charge_diffusion_kernel()`, and
+  `apply_charge_diffusion()` make lateral detector charge spreading available to
+  focal-plane simulators at their own oversampling. The OCAM2K preset declares
+  its measured 0.37-pixel FWHM; under-resolved kernels fail explicitly, while
+  native-resolution camera frames state in metadata that diffusion was not
+  applied rather than silently becoming a numerical no-op.
 - Full-detector region-of-interest simulation through
   `CameraConfig.roi=(left, top, width, height)`. Cameras accept and return
   ROI-shaped arrays while evaluating detector physics and fixed patterns on the

@@ -988,6 +988,13 @@ class Camera:
             "device": self.device,
             "seed": seed,
         }
+        if self.config.charge_diffusion_fwhm_px > 0:
+            # This entry point receives an already pixel-integrated photon rate,
+            # so a sub-pixel diffusion width cannot be represented here. Record
+            # that the configured sensor property was left to the caller's
+            # oversampled optical model rather than dropping it silently.
+            metadata["charge_diffusion_fwhm_px"] = self.config.charge_diffusion_fwhm_px
+            metadata["charge_diffusion_applied"] = False
         if self.roi is not None:
             metadata["detector_roi"] = self.roi
             metadata["sensor_resolution"] = self.sensor_resolution

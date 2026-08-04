@@ -161,12 +161,14 @@ default** and additive, so existing configs are unchanged. They fall in two grou
 
 `charge_diffusion_fwhm_px` is the lateral Gaussian charge-spread FWHM in native
 detector pixels. It belongs to the sensor but acts before native pixels collect
-charge, so an optics simulator should call `getframes.charge_diffusion_kernel`
-for its focal-plane oversampling and convolve the oversampled irradiance before
-pixel-area integration. `Camera.expose` already receives an integrated
-photons/s/pixel map and does not apply this operator again. The helper rejects a
-nonzero width sampled at less than one focal-plane sample per FWHM instead of
-silently turning a measured sub-pixel width into a no-op.
+charge, so an optics simulator should call
+`getframes.apply_charge_diffusion(irradiance, fwhm_px, oversampling=...)` before
+pixel-area integration. The lower-level `getframes.charge_diffusion_kernel()` is
+available for simulators that own their convolution. `Camera.expose` already
+receives an integrated photons/s/pixel map and does not apply this operator
+again; it records this in metadata when diffusion is configured. The helpers
+reject a nonzero width sampled at less than one focal-plane sample per FWHM
+instead of silently turning a measured sub-pixel width into a no-op.
 
 **Charge transport** (electron domain, after collection):
 

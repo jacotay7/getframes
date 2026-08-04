@@ -228,6 +228,56 @@ def charge_diffusion_kernel(fwhm_px: float, *, oversampling: int) -> NDArray[np.
     return kernel
 
 
+def apply_charge_diffusion(
+    values: Any,
+    fwhm_px: float,
+    *,
+    oversampling: int,
+    backend: ArrayBackend | None = None,
+) -> Any:
+    """Diffuse an oversampled irradiance map before pixel-area integration.
+
+    ``values`` is a two-dimensional irradiance or photon-rate map, or a batch of
+    such maps, sampled at ``oversampling`` cells per native detector pixel. The
+    returned map has the same shape and dtype. A zero width leaves ``values``
+    untouched. Charge that diffuses off the supplied map is lost at its edge.
+
+    Use this before summing focal-plane samples into native pixels. It accepts
+    CPU NumPy and optional GPU CuPy arrays; the public kernel itself remains a
+    portable NumPy array for callers that use another convolution implementation.
+
+    Parameters
+    ----------
+    values:
+        Two-dimensional irradiance or photon-rate map, or a leading batch of
+        maps, on the oversampled focal-plane grid.
+    fwhm_px:
+        Gaussian lateral charge-diffusion FWHM in native detector pixels.
+    oversampling:
+        Number of focal-plane grid samples per native detector pixel.
+    backend:
+        Array backend containing ``values``. Defaults to NumPy.
+
+    Returns
+    -------
+    array
+        Diffused array on the same backend, with the input shape and dtype.
+    """
+    if values.ndim not in (2, 3):
+        raise ValueError("charge diffusion expects a 2-D map or a batch of 2-D maps.")
+    if not np.issubdtype(values.dtype, np.floating):
+        raise TypeError("charge diffusion expects a floating-point irradiance map.")
+    kernel_host = charge_diffusion_kernel(fwhm_px, oversampling=oversampling)
+    if fwhm_px == 0:
+        return values
+    resolved = backend or get_backend()
+    kernel = resolved.asarray(kernel_host, dtype=values.dtype)
+    if values.ndim == 3:
+        kernel = kernel[None, ...]
+    convolved = resolved.convolve(values, kernel)
+    return convolved.astype(values.dtype, copy=False)
+
+
 def _fixed_pattern_rng(config: CameraConfig, stream: int, backend: ArrayBackend) -> Any:
     """A deterministic generator for the sensor's fixed-pattern noise.
 
@@ -1272,10 +1322,12 @@ def dark_frame_electrons(
 
 
 __all__ = [
+    "DetectorWorkspace",
     "FixedPatternMaps",
     "SimulationResult",
     "add_cosmic_rays",
     "apply_blooming",
+    "apply_charge_diffusion",
     "apply_cti",
     "apply_em_gain",
     "apply_gain_stage",

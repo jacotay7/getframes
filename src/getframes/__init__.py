@@ -19,7 +19,7 @@ from .calibrate import calibrate, combine
 from .camera import Camera
 from .config import CameraConfig, SensorType
 from .frame import Frame, FrameTruth
-from .noise import DetectorWorkspace, charge_diffusion_kernel
+from .noise import DetectorWorkspace, apply_charge_diffusion, charge_diffusion_kernel
 from .observation import Observation, ObservationTruth, Pointing
 from .presets import available_presets, load_preset
 from .scene import (
@@ -87,6 +87,7 @@ __all__ = [
     "WCSInfo",
     "__version__",
     "analysis",
+    "apply_charge_diffusion",
     "available_presets",
     "calibrate",
     "charge_diffusion_kernel",
