@@ -1,0 +1,90 @@
+# First Light Imaging C-RED One — full-frame global-reset raw-read operating point.
+#
+# Camera-wide spatial/read-noise terms are fitted to CRED1 dark cubes collected
+# 2026-07-15 at 84.6 K. The plastic cap was near 18 C and is therefore a thermal
+# IR source; its ~560 e-/pixel/s total inferred ramp is deliberately NOT baked into the
+# detector dark current. Add that scene-dependent term through `background`.
+name = "First Light Imaging C-RED One"
+manufacturer = "First Light Imaging"
+model = "C-RED One (SAPHIRA, global-reset raw)"
+sensor_type = "EAPD"
+resolution = [256, 320]
+pixel_size_um = 24.0
+quantum_efficiency = 0.70
+full_well_e = 60000.0
+output_full_well_e = 105000.0
+bit_depth = 16
+gain_e_per_adu = 2.4
+# This is the setting-50 operating point. Edge/channel structure raises the
+# central pedestal to the measured ~21,964 ADU array median.
+bias_offset_adu = 21036.0
+read_noise_e = 70.0
+avalanche_input_noise_e = 3.3
+# Requested setting 50 measured as 21.7x physical multiplication in the capped
+# 35 Hz ramps. Published C-RED One gain-calibration slopes are camera-dependent.
+em_gain = 21.7
+# Lanthermann et al. measure <M^2>/<M>^2 = 1.47. getframes uses the square-root
+# convention (the multiplier on standard deviation), hence sqrt(1.47) here.
+excess_noise_factor = 1.2124
+
+# Unity-gain, 3.5 kHz raw cubes: median temporal noise 28.7 ADU; log-normal
+# per-pixel core width 0.185. Separating the 32-channel component leaves ~0.10
+# pixel-level width and 0.158 channel-level width. The outer edge is ~1.4x noisier.
+read_noise_nonuniformity = 0.10
+read_noise_rts_fraction = 0.0015
+read_noise_rts_factor = 4.0
+readout_channel_count = 32
+readout_channel_axis = 1
+read_noise_channel_nonuniformity = 0.158
+read_noise_edge_factor = 1.4
+read_noise_edge_scale_px = 2.0
+readout_common_mode_noise_adu = 69.0
+readout_common_mode_correlation = 0.0
+ndr_bias_offset_adu_per_s = 51700.0
+ndr_bias_gain_coefficient_adu_per_s = 1730.0
+ndr_common_mode_gain_noise_adu_per_s = 180.0
+
+# Raw-read fixed pattern: ~424 ADU interleaved-channel RMS and a ~3.3 kADU measured
+# outer-edge rise. The procedural edge/base amplitudes jointly match the full-map
+# 1--99% range and spatial RMS rather than copying one camera's calibration frame.
+bias_structure_amplitude_adu = 2850.0
+bias_channel_spread_adu = 290.0
+bias_pixel_spread_adu = 700.0
+bias_edge_amplitude_adu = 3200.0
+bias_edge_scale_px = 20.0
+
+# Conservative intrinsic detector/camera background at 80 K. Warm entrance
+# optics/caps are modeled as incident thermal background, not detector dark current.
+dark_current_e_per_s = 80.0
+detector_glow_e_per_s = 0.0
+detector_glow_edge_scale_px = 0.0
+dark_current_ref_temp_c = -193.15
+dark_current_doubling_temp_c = 8.0
+dark_current_nonuniformity = 0.10
+hot_pixel_fraction = 0.0003
+hot_pixel_factor = 50.0
+# Split-half repeated-ramp covariance gives 5.5% high-pass response RMS. This is
+# the combined detector response and any stable small-scale cap illumination.
+prnu = 0.055
+# Successive 200-read ramps show little additional per-pixel reset scatter beyond
+# the measured read-noise map; retain a small non-zero kTC term rather than the
+# unconstrained amplifier-noise-sized value used by the generic detector preset.
+reset_noise_e = 5.0
+ipc_coupling = 0.015
+notes = "C-RED One raw global-reset profile at requested eAPD setting 50, measured as 21.7x effective multiplication on this camera. Spatial/read-noise/conversion-gain parameters are fitted to local 84.6 K CRED1 cubes; QE, full well, ENF, intrinsic dark/background ceiling, format, and speed are constrained by FLI/Oxford specifications and published characterization. Add a room-temperature cap or warm optics as incident thermal background."
+
+[extra]
+operating_mode = "global reset, nondestructive raw reads"
+nominal_full_frame_fps = 3500.0
+detector_temperature_k = 84.6
+local_characterization = "cred1data/dark, acquired 2026-07-15"
+requested_eapd_gain = 50.0
+measured_effective_avalanche_gain = 21.7
+measured_capped_total_rate_e_per_s = 560.0
+source_url = "https://andor.oxinst.com/products/c-red-series/c-red-one"
+characterization_url = "https://arxiv.org/abs/2409.04247"
+performance_url = "https://arxiv.org/abs/2208.00377"
+
+[qe_curve]
+wavelength_nm = [800.0, 1000.0, 1200.0, 1500.0, 1750.0, 2000.0, 2400.0, 2500.0]
+qe = [0.20, 0.50, 0.62, 0.70, 0.70, 0.68, 0.60, 0.10]

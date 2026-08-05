@@ -65,6 +65,9 @@ _FPN_STREAM_AMP_OFFSET = 4
 _FPN_STREAM_BIAS = 5
 _FPN_STREAM_DEFECT = 6
 _FPN_STREAM_READ_NOISE = 7
+_FPN_STREAM_CHANNEL_BIAS = 8
+_FPN_STREAM_CHANNEL_READ_NOISE = 9
+_FPN_STREAM_PIXEL_BIAS = 10
 
 
 class FixedPatternMaps(NamedTuple):
@@ -357,7 +360,13 @@ def _read_noise_sigma_map(
         return 0.0
     resolved = backend or get_backend()
     shape = config.resolution
-    if config.read_noise_nonuniformity <= 0 and config.read_noise_rts_fraction <= 0:
+    structured = (
+        config.read_noise_nonuniformity > 0
+        or config.read_noise_rts_fraction > 0
+        or config.read_noise_channel_nonuniformity > 0
+        or (config.read_noise_edge_factor > 1 and config.read_noise_edge_scale_px > 0)
+    )
+    if not structured:
         return float(config.read_noise_e)
     rng = _fixed_pattern_rng(config, _FPN_STREAM_READ_NOISE, resolved)
     spread = config.read_noise_nonuniformity
@@ -368,7 +377,55 @@ def _read_noise_sigma_map(
     if config.read_noise_rts_fraction > 0:
         rts = rng.random(shape) < config.read_noise_rts_fraction
         sigma[rts] *= config.read_noise_rts_factor
+
+    if config.read_noise_channel_nonuniformity > 0:
+        channel_rng = _fixed_pattern_rng(config, _FPN_STREAM_CHANNEL_READ_NOISE, resolved)
+        spread = config.read_noise_channel_nonuniformity
+        log_factors = channel_rng.normal(0.0, 1.0, size=config.readout_channel_count)
+        log_factors -= resolved.xp.mean(log_factors)
+        log_factors *= spread / resolved.xp.std(log_factors)
+        factors = resolved.xp.exp(log_factors)
+        factors /= resolved.xp.mean(factors)
+        sigma *= _interleaved_channel_map(config, factors, resolved, float_dtype)
+
+    if config.read_noise_edge_factor > 1 and config.read_noise_edge_scale_px > 0:
+        edge = _edge_profile(config, resolved, float_dtype, config.read_noise_edge_scale_px)
+        sigma *= 1.0 + (config.read_noise_edge_factor - 1.0) * edge
     return sigma.astype(float_dtype)
+
+
+def _interleaved_channel_map(
+    config: CameraConfig,
+    values: Any,
+    backend: ArrayBackend,
+    float_dtype: DTypeLike,
+) -> Any:
+    """Broadcast one value per interleaved video channel over the detector."""
+    xp = backend.xp
+    axis = config.readout_channel_axis
+    size = config.resolution[axis]
+    channel = xp.arange(size) % config.readout_channel_count
+    profile = xp.asarray(values, dtype=float_dtype)[channel]
+    reshape = (size, 1) if axis == 0 else (1, size)
+    return xp.broadcast_to(profile.reshape(reshape), config.resolution)
+
+
+def _edge_profile(
+    config: CameraConfig,
+    backend: ArrayBackend,
+    float_dtype: DTypeLike,
+    scale_px: float,
+) -> Any:
+    """Unit-amplitude exponential profile of distance from the nearest edge."""
+    xp = backend.xp
+    height, width = config.resolution
+    rows = xp.arange(height, dtype=float_dtype).reshape(height, 1)
+    cols = xp.arange(width, dtype=float_dtype).reshape(1, width)
+    distance = xp.minimum(
+        xp.minimum(rows, height - 1 - rows),
+        xp.minimum(cols, width - 1 - cols),
+    )
+    return xp.exp(-distance / scale_px)
 
 
 def dark_signal_map(
@@ -767,21 +824,57 @@ def _bias_structure_map(
     height, width = config.resolution
     resolved = backend or get_backend()
     xp = resolved.xp
-    if config.bias_structure_amplitude_adu <= 0:
+    has_base = config.bias_structure_amplitude_adu > 0
+    has_channels = config.bias_channel_spread_adu > 0
+    has_pixels = config.bias_pixel_spread_adu > 0
+    has_edge = config.bias_edge_amplitude_adu > 0 and config.bias_edge_scale_px > 0
+    if not (has_base or has_channels or has_pixels or has_edge):
         return 0.0
-    rng = _fixed_pattern_rng(config, _FPN_STREAM_BIAS, resolved)
-    yy = xp.linspace(-1.0, 1.0, height, dtype=float_dtype).reshape(height, 1)
-    xx = xp.linspace(-1.0, 1.0, width, dtype=float_dtype).reshape(1, width)
-    coefficients = xp.asarray(rng.uniform(-1.0, 1.0, size=2), dtype=float_dtype)
-    a, b = coefficients
-    plane = a * xx + b * yy
-    col_offsets = xp.asarray(rng.normal(0.0, 1.0, size=width), dtype=float_dtype).reshape(1, width)
-    pattern = 0.6 * plane + 0.4 * col_offsets
-    peak = resolved.scalar(xp.max(xp.abs(pattern)))
-    if peak == 0.0:
-        return xp.zeros((height, width), dtype=float_dtype)
-    scaled: NDArray[np.float64] = pattern / peak * config.bias_structure_amplitude_adu
-    return xp.broadcast_to(scaled, (height, width)).astype(float_dtype)
+    pattern = xp.zeros((height, width), dtype=float_dtype)
+
+    if has_base:
+        rng = _fixed_pattern_rng(config, _FPN_STREAM_BIAS, resolved)
+        yy = xp.linspace(-1.0, 1.0, height, dtype=float_dtype).reshape(height, 1)
+        xx = xp.linspace(-1.0, 1.0, width, dtype=float_dtype).reshape(1, width)
+        coefficients = xp.asarray(rng.uniform(-1.0, 1.0, size=2), dtype=float_dtype)
+        a, b = coefficients
+        plane = a * xx + b * yy
+        col_offsets = xp.asarray(rng.normal(0.0, 1.0, size=width), dtype=float_dtype).reshape(
+            1, width
+        )
+        base = 0.6 * plane + 0.4 * col_offsets
+        peak = resolved.scalar(xp.max(xp.abs(base)))
+        if peak > 0.0:
+            pattern += base / peak * config.bias_structure_amplitude_adu
+
+    if has_channels:
+        rng = _fixed_pattern_rng(config, _FPN_STREAM_CHANNEL_BIAS, resolved)
+        offsets = xp.asarray(
+            rng.normal(0.0, 1.0, size=config.readout_channel_count),
+            dtype=float_dtype,
+        )
+        offsets -= xp.mean(offsets)
+        rms = resolved.scalar(xp.sqrt(xp.mean(offsets**2)))
+        if rms > 0:
+            offsets *= config.bias_channel_spread_adu / rms
+            pattern += _interleaved_channel_map(config, offsets, resolved, float_dtype)
+
+    if has_pixels:
+        rng = _fixed_pattern_rng(config, _FPN_STREAM_PIXEL_BIAS, resolved)
+        texture = xp.asarray(
+            rng.lognormal(mean=-0.18, sigma=0.6, size=(height, width)),
+            dtype=float_dtype,
+        )
+        texture -= xp.mean(texture)
+        texture *= config.bias_pixel_spread_adu / xp.std(texture)
+        pattern += texture
+
+    if has_edge:
+        pattern += config.bias_edge_amplitude_adu * _edge_profile(
+            config, resolved, float_dtype, config.bias_edge_scale_px
+        )
+
+    return pattern
 
 
 def _glow_profile(
@@ -894,6 +987,8 @@ def digitize(
     *,
     backend: ArrayBackend | None = None,
     fixed_patterns: FixedPatternMaps | None = None,
+    reset_noise_e: Any | None = None,
+    common_mode_adu: Any | None = None,
     out: Any | None = None,
     _output_slices: tuple[slice, slice] | None = None,
     _out_validated: bool = False,
@@ -902,12 +997,14 @@ def digitize(
 
     Read noise is referenced to the sensor output amplifier. When
     ``read_noise_nonuniformity`` is set (sCMOS), each pixel gets its own read-noise
-    RMS drawn from a log-normal distribution about ``read_noise_e``.
+    RMS drawn from a log-normal distribution about ``read_noise_e``. Hybrid arrays
+    can additionally carry fixed interleaved-channel and edge noise scales.
 
     Detector-depth structure is folded in here: dead pixels/columns collect no
-    charge; kTC/reset noise adds a per-pixel Gaussian; a multi-amplifier layout
-    applies per-block conversion gain and offset; and a fixed structured-bias
-    pattern rides on the flat pedestal.
+    charge; kTC/reset noise adds a per-pixel Gaussian; amplifier/channel layouts
+    apply fixed gain, offset, and noise differences; and structured/edge bias rides
+    on the flat pedestal. Nondestructive ramps may inject their shared reset draw
+    and correlated common-mode pedestal explicitly.
     """
     resolved = backend or get_backend()
     xp = resolved.xp
@@ -934,10 +1031,21 @@ def digitize(
             return draw
         return rng.normal(0.0, sigma, size=signal.shape)
 
-    # kTC / reset noise: an independent per-pixel, per-frame Gaussian (electrons).
-    # Added in place so the working dtype (e.g. the float32 fast path) is preserved.
-    if config.reset_noise_e > 0:
-        signal += normal_noise(config.reset_noise_e)
+    # An ordinary exposure draws a fresh kTC uncertainty. A nondestructive ramp
+    # passes one cached draw back on every read so reset noise remains common to
+    # the ramp and cancels under correlated double sampling.
+    if reset_noise_e is None:
+        if config.reset_noise_e > 0:
+            signal += normal_noise(config.reset_noise_e)
+    else:
+        signal += reset_noise_e
+
+    # Some eAPD stacks carry an additional per-read component that scales with
+    # avalanche multiplication rather than remaining fixed at the output
+    # amplifier. Keep it separate so ``read_noise_e`` retains its usual output
+    # reference and high-gain data can identify the two terms independently.
+    if config.avalanche_input_noise_e > 0:
+        signal += normal_noise(config.avalanche_input_noise_e * config.em_gain)
 
     # Read noise in electrons, added at the amplifier. The per-pixel RMS is a
     # fixed property of the sensor (see :func:`_read_noise_sigma_map`), so only the
@@ -961,6 +1069,11 @@ def digitize(
     signal += config.bias_offset_adu
     signal += amp_offset
     signal += bias_structure
+    if common_mode_adu is None:
+        if config.readout_common_mode_noise_adu > 0:
+            signal += rng.normal(0.0, config.readout_common_mode_noise_adu)
+    else:
+        signal += common_mode_adu
     xp.rint(signal, out=signal)
     xp.clip(signal, 0, config.max_adu, out=signal)
     if out is None:

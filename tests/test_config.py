@@ -91,13 +91,27 @@ def test_dark_current_doubles_at_doubling_temp():
         ("quantum_efficiency", 1.5),
         ("bit_depth", 0),
         ("gain_e_per_adu", 0.0),
+        ("avalanche_input_noise_e", -0.1),
+        ("ndr_bias_offset_adu_per_s", -1.0),
+        ("ndr_bias_gain_coefficient_adu_per_s", -1.0),
+        ("ndr_common_mode_gain_noise_adu_per_s", -1.0),
         ("read_noise_e", -1.0),
+        ("readout_channel_count", 0),
+        ("readout_channel_axis", 2),
+        ("read_noise_edge_factor", 0.9),
+        ("read_noise_edge_scale_px", -1.0),
+        ("readout_common_mode_noise_adu", -1.0),
+        ("readout_common_mode_correlation", 1.0),
         ("charge_diffusion_fwhm_px", -0.1),
         ("dark_current_e_per_s", -0.1),
         ("dark_current_doubling_temp_c", 0.0),
         ("em_gain", 0.5),
         ("full_well_e", 0.0),
         ("output_full_well_e", 0.0),
+        ("bias_channel_spread_adu", -1.0),
+        ("bias_pixel_spread_adu", -1.0),
+        ("bias_edge_amplitude_adu", -1.0),
+        ("bias_edge_scale_px", -1.0),
         ("hot_pixel_fraction", 2.0),
     ],
 )
@@ -162,6 +176,20 @@ def test_roundtrip_dict():
 def test_amplifier_configuration_validation(overrides, match):
     with pytest.raises(ValueError, match=match):
         make_config(**overrides)
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["read_noise_channel_nonuniformity", "bias_channel_spread_adu"],
+)
+def test_channel_structure_requires_multiple_channels(field):
+    with pytest.raises(ValueError, match="readout_channel_count"):
+        make_config(**{field: 0.1})
+
+
+def test_avalanche_input_noise_requires_gain_stage():
+    with pytest.raises(ValueError, match="em_gain"):
+        make_config(avalanche_input_noise_e=1.0)
 
 
 def test_from_dict_stashes_unknown_keys():

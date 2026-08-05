@@ -225,3 +225,4 @@ __marimo__/
 keck_ttf
 *.png
 .vscode
+*.npz

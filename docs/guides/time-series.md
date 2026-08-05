@@ -107,3 +107,40 @@ obs = cam.observe_series(scene, exposure=2.0, n_frames=20, seed=0)
 
 The latent charge is real charge in the well, so it picks up shot noise and any
 EM/avalanche gain. Persistence is off by default (`persistence_fraction = 0`).
+
+## Global-reset nondestructive reads
+
+SAPHIRA-class arrays can be sampled repeatedly without clearing the charge well.
+Use `nondestructive_series` to accumulate charge between global resets while
+drawing fresh read noise on every sample:
+
+```python
+import numpy as np
+import getframes as gf
+
+cam = gf.Camera.from_preset("first_light_imaging_cred_one")
+reads = list(
+    cam.nondestructive_series(
+        photon_rate=0.0,
+        background=630.0,  # example warm-cap photons/s/pixel at QE ~0.7
+        read_interval=1 / 35,
+        n_frames=250,
+        reads_per_reset=42,
+        temperature=-188.55,  # 84.6 K
+        seed=0,
+    )
+)
+
+# A correlated-double-sampling difference within one ramp.
+cds = np.asarray(reads[1], dtype=float) - np.asarray(reads[0], dtype=float)
+```
+
+Photo-electrons and dark charge arrive as independent Poisson increments, then
+remain in the well until the next reset. The reset-noise realization is shared by
+all reads in a ramp, while read noise is redrawn each time. The CRED One preset
+also includes its measured interval/gain-dependent pedestal and common-mode
+scale. The example reproduces the 42-read strong-reset cadence observed in the
+local 35 Hz capped data; acquisition metadata requested 250 reads, so callers
+should use the cadence their camera actually produces. Each frame records
+`ramp_index`, `read_index`, `reads_per_reset`, and
+`time_since_reset_s` in its metadata.

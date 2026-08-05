@@ -1,7 +1,8 @@
 # SPDX-License-Identifier: MIT
+import numpy as np
 import pytest
 
-from getframes import CameraConfig, available_presets, load_preset
+from getframes import CameraConfig, available_presets, load_preset, noise
 from getframes.presets import preset_info
 
 
@@ -29,6 +30,37 @@ def test_emccd_preset_has_em_gain():
     cfg = load_preset("andor_ixon_ultra_888")
     assert cfg.sensor_type.value == "EMCCD"
     assert cfg.em_gain > 1.0
+
+
+def test_cred_one_preset_is_camera_specific_and_data_constrained():
+    cfg = load_preset("first_light_imaging_cred_one")
+    assert cfg.sensor_type.value == "EAPD"
+    assert cfg.resolution == (256, 320)
+    assert cfg.readout_channel_count == 32
+    assert cfg.em_gain == pytest.approx(21.7)
+    assert cfg.full_well_e == 60_000.0
+    assert cfg.output_full_well_e is not None
+    assert cfg.extra["local_characterization"].startswith("cred1data/dark")
+
+    # The fixed pedestal plus the preset's NDR interval/signal terms reproduces
+    # the setting-50 3.5 kHz raw median (~21,964 ADU). This checks the zero-interval
+    # fixed component itself.
+    bias = cfg.bias_offset_adu + np.asarray(noise._bias_structure_map(cfg))
+    assert np.median(bias) == pytest.approx(21_764.0, abs=20.0)
+    assert np.std(bias) == pytest.approx(1_565.0, rel=0.08)
+    p1, p99 = np.percentile(bias, [1, 99])
+    assert p1 == pytest.approx(19_317.0, abs=350.0)
+    assert p99 == pytest.approx(25_805.0, abs=150.0)
+
+
+def test_saphira_and_cred_one_presets_have_distinct_scope():
+    detector = load_preset("leonardo_saphira")
+    camera = load_preset("first_light_imaging_cred_one")
+    assert detector.model == "SAPHIRA (Mark 13/14)"
+    assert camera.model is not None and "C-RED One" in camera.model
+    assert detector.bias_offset_adu != camera.bias_offset_adu
+    assert detector.readout_channel_count == 1
+    assert camera.readout_channel_count == 32
 
 
 def test_ocam2k_has_separate_input_and_output_saturation_domains():

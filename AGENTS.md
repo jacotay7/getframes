@@ -37,12 +37,12 @@ removals. A JOSS paper + citation remain a post-2.0 follow-up.
 | `noise.py` | The physics. Pure functions: `CameraConfig` + exposure + temperature + seeded `Generator` → electrons/ADU. This is where noise models and the opt-in reusable `DetectorWorkspace` live. |
 | `backend.py` | Optional NumPy/CuPy array and RNG boundary, explicit host conversion, and backend convolution. NumPy is the reference/default. |
 | `frame.py` | `Frame` container: a NumPy array (ADU) plus metadata; array-like; optional FITS export. |
-| `camera.py` | `Camera`, the main user-facing object. Orchestrates config + scene + noise into `Frame`s. Holds the RNG and high-level methods (`dark_frame`, `dark_series`, `expose`, `observe`, `*_series`, `master_*`). |
+| `camera.py` | `Camera`, the main user-facing object. Orchestrates config + scene + noise into `Frame`s. Holds the RNG and high-level methods (`dark_frame`, `dark_series`, reset-correlated `nondestructive_series`, `expose`, `observe`, `*_series`, `master_*`). |
 | `calibrate.py` | Master-frame builders (`combine`) and `calibrate` reduction — the raw → reduced → truth loop (phase 1.1). |
 | `observation.py` | `Observation` / `ObservationTruth` / `Pointing`: the time-series driver, jitter/drift/dither, per-frame truth (phase 1.2). |
 | `spectral.py` | Opt-in spectral mode: `QE`, `SED` (relative or absolute via `from_flux_density`), `Spectrum`, `SpectralBandpass`, effective-QE folding, transmission-product helpers (`product`, `from_file`/`from_product`), optional `astropy.units` coercion. |
 | `scene/` | The scene/optics layer: `Scene`, `Source` hierarchy (`PointSource`, `ExtendedSource`, `UniformIllumination`, `Catalog`; point/extended sources accept a `flux_sed` absolute SED), PSFs (`GaussianPSF`/`MoffatPSF`/`AiryPSF`/`ArrayPSF`/`EllipticalGaussianPSF`), `Telescope` (+ `Vignetting`/`RadialDistortion`), `Bandpass` (Vega `johnson` / AB `ab` ugriz·Gaia·2MASS + `Extinction`) in `photometry.py`, `Thermal` graybody background in `thermal.py`, `WCSInfo`, `LightCurve`. Renders a photon-rate map; no randomness. |
-| `analysis/` | Measurement helpers: `apertures.py` (`aperture_sum`, `centroid`), `ptc.py` (`photon_transfer_curve`, camera-driven), `characterize.py` (`stack_statistics`, `characterize_dark`, `characterize_flat` — stack-driven, so it runs on *real* detector data as well as simulated frames; `DarkCharacterization.to_config()` returns a `CameraConfig`). |
+| `analysis/` | Measurement helpers: `apertures.py` (`aperture_sum`, `centroid`), `ptc.py` (`photon_transfer_curve`, camera-driven), `characterize.py` (independent-stack dark/flat characterization), and `nondestructive.py` (reset-aware raw-read statistics and repeated-ramp photon transfer). These run on real or simulated frames. |
 | `dataset.py` | Scalable raw+truth dataset generation (phase 1.6): `pairs()` → a streaming `PairDataset` (`to_npz`/`to_arrays`), `random_star_fields()` re-iterable scene source. float32-friendly; no global state. |
 | `cli.py` | The `getframes` console entry point (phase 1.6): `presets` / `generate` / `dataset` subcommands driven by a TOML config. |
 | `presets/` | Preset library. TOML data files in `presets/data/`, loaded via `importlib.resources`. `load_preset`, `available_presets`, `preset_info`. |
@@ -68,7 +68,8 @@ detector-sized float64 coefficients. Keep `config`, `noise`, `scene`, and
    a backend but are statistically, not pixel-for-pixel, matched across devices.
 3. **Fixed patterns come from `fixed_pattern_seed`, never the per-frame RNG.**
    Anything that is a property of the *silicon* — PRNU, DSNU, hot pixels, defects,
-   amplifier gain/offset, structured bias, and the sCMOS per-pixel read-noise RMS —
+   amplifier/channel gain and offset, structured/edge bias, and fixed per-pixel or
+   per-channel read-noise RMS —
    belongs in `fixed_pattern_maps()` / `FixedPatternMaps`, keyed on
    `fixed_pattern_seed`, so it is identical in every frame and therefore removable
    by a master frame. Only the *draw* is per-frame (e.g. read noise re-draws the

@@ -126,8 +126,8 @@ def test_invalid_qe_curve_type_raises():
 def test_saphira_preset_ships_a_qe_curve():
     cfg = gf.load_preset("leonardo_saphira")
     assert isinstance(cfg.qe_curve, QE)
-    # Peak near-IR QE around 1.5 um.
-    assert cfg.qe_curve(1500.0) == pytest.approx(0.9, abs=0.05)
+    # Sourced peak near-IR QE around 1.5 um.
+    assert cfg.qe_curve(1500.0) == pytest.approx(0.70, abs=0.05)
 
 
 @pytest.mark.parametrize(

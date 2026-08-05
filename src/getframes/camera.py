@@ -312,6 +312,212 @@ class Camera:
             frame.metadata["frame_index"] = i
             yield frame
 
+    def nondestructive_series(
+        self,
+        photon_rate: PhotonRate,
+        read_interval: float,
+        n_frames: int,
+        reads_per_reset: int,
+        temperature: float | None = None,
+        *,
+        background: PhotonRate = 0.0,
+        quantum_efficiency: float | None = None,
+        seed: int | None = None,
+        include_truth: bool = True,
+    ) -> Iterator[Frame]:
+        """Yield correlated nondestructive reads separated by global resets.
+
+        Newly collected photo- and dark electrons are sampled once per
+        ``read_interval`` and accumulated in the pixel well. For an EMCCD/eAPD,
+        each new increment passes through the stochastic gain stage once when it
+        is collected; already accumulated charge is not re-multiplied on later
+        reads. Reset noise is drawn once at the start of a ramp and is therefore
+        common to every read in that ramp, while amplifier read noise is fresh on
+        every read. This gives correlated double sampling and up-the-ramp fitting
+        the correct temporal covariance.
+
+        A reset occurs immediately before reads ``0, reads_per_reset, ...``. The
+        first returned frame therefore contains one read interval of accumulated
+        charge. Detector transport terms that are linear in charge (IPC) act on
+        each collected increment; CCD-only transfer/blooming models are outside
+        this hybrid-array readout path.
+
+        Parameters
+        ----------
+        photon_rate:
+            Incident photons/s/pixel, scalar or a map matching the active camera
+            resolution.
+        read_interval:
+            Time between consecutive reads in seconds.
+        n_frames:
+            Total number of raw reads to return, across all ramps.
+        reads_per_reset:
+            Number of nondestructive reads between global resets.
+        temperature:
+            Detector temperature in degrees Celsius.
+        background:
+            Additive incident background in photons/s/pixel.
+        quantum_efficiency:
+            Optional scalar QE override.
+        seed:
+            Seed for the complete correlated sequence.
+        include_truth:
+            Attach the cumulative noise-free input-electron expectation.
+
+        Yields
+        ------
+        Frame
+            Raw digitised reads with ramp/read metadata.
+        """
+        if read_interval <= 0:
+            raise ValueError("read_interval must be positive.")
+        if n_frames < 1:
+            raise ValueError("n_frames must be >= 1.")
+        if reads_per_reset < 1:
+            raise ValueError("reads_per_reset must be >= 1.")
+        if self.config.blooming or self.config.cti > 0:
+            raise ValueError("nondestructive_series does not support CCD blooming or CTI.")
+        if self.config.nonlinearity > 0 or self.config.nonlinearity_coeffs is not None:
+            raise ValueError("nondestructive_series does not yet support detector nonlinearity.")
+
+        temp = self.default_temperature_c if temperature is None else temperature
+        rng = self._resolve_rng(seed)
+        resolved = self._backend
+        xp = resolved.xp
+        dtype = self._float_dtype
+        full_rate = self._full_detector_input(photon_rate, "photon_rate")
+        full_background = self._full_detector_input(background, "background")
+        mean_photo_increment = noise.photo_signal_map(
+            self.config,
+            full_rate,
+            read_interval,
+            full_background,
+            quantum_efficiency,
+            dtype,
+            backend=resolved,
+            fixed_patterns=self._fixed_patterns,
+        )
+        mean_dark_increment = self._dark_signal(read_interval, temp)
+        mean_increment = mean_photo_increment + mean_dark_increment
+        accumulated_input = xp.zeros(self.sensor_resolution, dtype=dtype)
+        accumulated_output = xp.zeros(self.sensor_resolution, dtype=dtype)
+
+        reset_noise: Any = 0.0
+        common_mode = 0.0
+        common_sigma = self.config.readout_common_mode_noise_adu + (
+            self.config.ndr_common_mode_gain_noise_adu_per_s
+            * max(self.config.em_gain - 1.0, 0.0)
+            * read_interval
+        )
+        common_rho = self.config.readout_common_mode_correlation
+        common_innovation = common_sigma * np.sqrt(1.0 - common_rho**2)
+        interval_bias = read_interval * (
+            self.config.ndr_bias_offset_adu_per_s
+            + self.config.ndr_bias_gain_coefficient_adu_per_s * max(self.config.em_gain - 1.0, 0.0)
+        )
+
+        for frame_index in range(n_frames):
+            read_index = frame_index % reads_per_reset
+            ramp_index = frame_index // reads_per_reset
+            if read_index == 0:
+                accumulated_input.fill(0)
+                accumulated_output.fill(0)
+                if self.config.reset_noise_e > 0:
+                    reset_noise = rng.normal(
+                        0.0,
+                        self.config.reset_noise_e,
+                        size=self.sensor_resolution,
+                    ).astype(dtype, copy=False)
+                else:
+                    reset_noise = 0.0
+
+            increment = rng.poisson(mean_increment).astype(dtype, copy=False)
+            if self.config.cosmic_ray_rate_per_cm2_s > 0:
+                increment = noise.add_cosmic_rays(
+                    increment,
+                    self.config,
+                    read_interval,
+                    rng,
+                    backend=resolved,
+                )
+            room = xp.maximum(self.config.full_well_e - accumulated_input, 0.0)
+            xp.minimum(increment, room, out=increment)
+            accumulated_input += increment
+            if self.config.ipc_coupling > 0:
+                increment = noise.apply_ipc(increment, self.config.ipc_coupling, backend=resolved)
+            if self.config.has_gain_stage:
+                increment = noise.apply_gain_stage(
+                    increment,
+                    self.config.em_gain,
+                    self.config.gain_excess_noise_factor,
+                    rng,
+                    backend=resolved,
+                )
+            accumulated_output += increment
+
+            if common_sigma > 0:
+                if frame_index == 0:
+                    common_mode = float(resolved.scalar(rng.normal(0.0, common_sigma)))
+                else:
+                    innovation = float(resolved.scalar(rng.normal(0.0, common_innovation)))
+                    common_mode = common_rho * common_mode + innovation
+
+            raw = noise.digitize(
+                xp.array(accumulated_output, copy=True),
+                self.config,
+                rng,
+                backend=resolved,
+                fixed_patterns=self._fixed_patterns,
+                reset_noise_e=reset_noise,
+                common_mode_adu=common_mode + interval_bias,
+            )
+            data = self._crop_to_roi(raw)
+            elapsed = (read_index + 1) * read_interval
+            truth = None
+            if include_truth:
+                truth = FrameTruth(
+                    mean_electrons=self._crop_to_roi(mean_increment * (read_index + 1)),
+                    mean_photoelectrons=self._crop_to_roi(mean_photo_increment * (read_index + 1)),
+                    photon_rate=photon_rate,
+                )
+            metadata = self._metadata("nondestructive", elapsed, temp, seed)
+            metadata.update(
+                {
+                    "frame_index": frame_index,
+                    "ramp_index": ramp_index,
+                    "read_index": read_index,
+                    "reads_per_reset": reads_per_reset,
+                    "read_interval_s": read_interval,
+                    "time_since_reset_s": elapsed,
+                    "readout_mode": "global_reset_nondestructive",
+                }
+            )
+            yield Frame(data=data, metadata=metadata, truth=truth)
+
+    def dark_nondestructive_series(
+        self,
+        read_interval: float,
+        n_frames: int,
+        reads_per_reset: int,
+        temperature: float | None = None,
+        *,
+        seed: int | None = None,
+        include_truth: bool = True,
+    ) -> Iterator[Frame]:
+        """Yield global-reset nondestructive dark reads.
+
+        This is :meth:`nondestructive_series` with zero incident photon rate.
+        """
+        return self.nondestructive_series(
+            0.0,
+            read_interval,
+            n_frames,
+            reads_per_reset,
+            temperature,
+            seed=seed,
+            include_truth=include_truth,
+        )
+
     def expose(
         self,
         photon_rate: PhotonRate,

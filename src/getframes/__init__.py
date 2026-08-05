@@ -14,6 +14,13 @@ from __future__ import annotations
 
 from . import analysis, dataset
 from .__about__ import __version__
+from .analysis import (
+    NondestructiveStackStats,
+    RampPhotonTransfer,
+    infer_reset_indices,
+    nondestructive_stack_statistics,
+    ramp_photon_transfer,
+)
 from .backend import ArrayBackend, get_array_module, get_backend, to_numpy
 from .calibrate import calibrate, combine
 from .camera import Camera
@@ -69,11 +76,13 @@ __all__ = [
     "GaussianPSF",
     "LightCurve",
     "MoffatPSF",
+    "NondestructiveStackStats",
     "Observation",
     "ObservationTruth",
     "PointSource",
     "Pointing",
     "RadialDistortion",
+    "RampPhotonTransfer",
     "Scene",
     "SensorType",
     "Sky",
@@ -95,6 +104,9 @@ __all__ = [
     "dataset",
     "get_array_module",
     "get_backend",
+    "infer_reset_indices",
     "load_preset",
+    "nondestructive_stack_statistics",
+    "ramp_photon_transfer",
     "to_numpy",
 ]

@@ -8,6 +8,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Global-reset nondestructive read series for eAPD arrays.**
+  `Camera.nondestructive_series` and `dark_nondestructive_series` accumulate
+  Poisson charge between resets, preserve a ramp's kTC realization, redraw read
+  noise on every sample, and expose ramp/read timing in frame metadata.
+- **A measured C-RED One preset and hybrid-array readout structure.** The new
+  `first_light_imaging_cred_one` preset separates the complete camera from the
+  bare `leonardo_saphira` detector and models its 32 interleaved output channels,
+  edge-dependent pedestal/noise, stable per-channel offsets and noise scales, and
+  correlated frame-wide readout pedestal. Its spatial and temporal dark-frame
+  parameters are constrained by the July 2026 CRED1 dark stack.
+- **Reset-aware stack characterization.** `nondestructive_stack_statistics`
+  measures strong-reset cadence, ramp slopes, common mode, CDS/pixel noise,
+  interleaved channels, and edge structure without treating correlated reads as
+  independent exposures. `ramp_photon_transfer` fits conversion gain and
+  split-ramp response nonuniformity from repeated NDR ramps.
 - **`examples/16_detector_showcase.py`** renders an animated WebP that exposes one
   incident photon field on a CCD, EMCCD, sCMOS, and eAPD side by side, each panel
   overlaid with the frame rate that camera sustained on the running machine. The

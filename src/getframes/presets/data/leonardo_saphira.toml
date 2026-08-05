@@ -7,26 +7,31 @@ model = "SAPHIRA (Mark 13/14)"
 sensor_type = "EAPD"
 resolution = [256, 320]              # (height, width)
 pixel_size_um = 24.0
-quantum_efficiency = 0.90            # HgCdTe, broad near-IR response
-full_well_e = 100000.0
+quantum_efficiency = 0.70            # peak value; >60% across most of J/H/K
+full_well_e = 60000.0                # input well at avalanche gain 1
+output_full_well_e = 110000.0        # representative post-avalanche/ADC headroom
 bit_depth = 16
-gain_e_per_adu = 2.5                 # system gain at the ADC
+gain_e_per_adu = 2.0                 # representative camera conversion gain
 bias_offset_adu = 1000.0
-read_noise_e = 45.0                  # CDS read noise at the amplifier (pre-avalanche)
-em_gain = 50.0                       # avalanche gain M; effective read noise ~ 45/M ~ 1 e-
-excess_noise_factor = 1.3            # eAPDs are far quieter than EMCCDs (sqrt(2))
-dark_current_e_per_s = 5.0           # incl. dark-current avalanche / glow, cooled (~80 K)
-dark_current_ref_temp_c = -193.0
+read_noise_e = 58.0                  # output-amplifier noise; camera electronics dependent
+em_gain = 50.0                       # avalanche gain M; input-referred noise ~ 58/M e-
+excess_noise_factor = 1.25           # manufacturer specification; measured cameras can be higher
+dark_current_e_per_s = 80.0          # conservative detector+camera-background ceiling at 80 K
+dark_current_ref_temp_c = -193.15
 dark_current_doubling_temp_c = 8.0
 clock_induced_charge_e = 0.0
 dark_current_nonuniformity = 0.05
 hot_pixel_fraction = 0.0005
 hot_pixel_factor = 50.0
-notes = "Sub-electron effective read noise at high avalanche gain; near-unity excess noise."
+notes = "Bare/representative SAPHIRA detector profile, not a complete C-RED One raw-read model. Updated from FLI/Oxford specifications: 60 ke- input full well, ~70% peak QE, ENF <=1.25, and <80 e-/pixel/s dark-plus-background at 80 K. Camera conversion gain, pedestal, and channel electronics vary by implementation."
+
+[extra]
+source_url = "https://andor.oxinst.com/products/c-red-series/c-red-one"
+characterization_url = "https://arxiv.org/abs/2409.04247"
 
 # Wavelength-resolved quantum efficiency (HgCdTe, ~2.5 um cutoff). Optional; only
 # used in spectral mode (Camera.observe with a band that has a spectral response).
 # Representative shape --- supply a measured curve for quantitative IR work.
 [qe_curve]
-wavelength_nm = [800.0, 1000.0, 1500.0, 2000.0, 2400.0, 2500.0]
-qe = [0.45, 0.85, 0.90, 0.90, 0.80, 0.30]
+wavelength_nm = [800.0, 1000.0, 1200.0, 1500.0, 2000.0, 2400.0, 2500.0]
+qe = [0.20, 0.50, 0.62, 0.70, 0.68, 0.60, 0.10]

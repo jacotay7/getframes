@@ -37,6 +37,7 @@ cam = gf.Camera(warmer)
 | `andor_ikon_m934` | CCD | Deep-cooled (−80 °C) back-illuminated scientific CCD |
 | `andor_ixon_ultra_888` | EMCCD | Single-photon-sensitive EMCCD |
 | `leonardo_saphira` | EAPD | HgCdTe avalanche IR array (AO wavefront sensing) |
+| `first_light_imaging_cred_one` | EAPD | C-RED One global-reset raw reads, with 32-channel structure |
 | `zwo_asi2600mm` | CMOS | Sony IMX571 cooled CMOS |
 | `hamamatsu_orca_fusion` | sCMOS | Back-thinned sCMOS with per-pixel read noise |
 | `hamamatsu_orca_quest_2` | sCMOS | qCMOS low-noise camera, digitized full QE curve |
@@ -60,6 +61,21 @@ cam = gf.Camera(warmer)
     Preset values are representative of published specifications but are not a
     substitute for characterising your own hardware. Treat them as realistic
     starting points.
+
+`leonardo_saphira` describes a representative bare SAPHIRA detector. Camera-body
+electronics are deliberately generic. `first_light_imaging_cred_one` is the
+camera-specific full-frame profile: its raw pedestal, interleaved 32-output
+pattern, edge structure, per-pixel/channel read-noise distribution, and temporal
+common mode are fitted to 84.6 K CRED1 dark cubes. Repeated capped ramps also
+constrain conversion gain, physical avalanche multiplication, response
+nonuniformity, and the combined cap-plus-camera rate. The physical format, QE,
+full well, excess-noise factor, and intrinsic-background limit are constrained by
+[FLI/Oxford specifications](https://andor.oxinst.com/products/c-red-series/c-red-one)
+and [published characterization](https://arxiv.org/abs/2409.04247).
+
+A warm cap is not a zero-flux dark in the near infrared. Model its emission as an
+incident `background` passed to `Camera.nondestructive_series`; do not add it to
+the preset's intrinsic `dark_current_e_per_s`.
 
 ## Adding your own preset
 

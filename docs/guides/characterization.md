@@ -17,6 +17,49 @@ This is the complement to
 [`photon_transfer_curve`][getframes.analysis.ptc.photon_transfer_curve], which
 drives a *simulated* camera to characterise it. Here the frames come first.
 
+## Nondestructive-read stacks
+
+A global-reset NDR cube is not a stack of independent exposures: accumulated
+charge and reset noise are shared within each ramp. Reduce it with the dedicated
+helpers so those correlations are retained:
+
+```python
+from getframes.analysis import (
+    nondestructive_stack_statistics,
+    ramp_photon_transfer,
+)
+
+stats = nondestructive_stack_statistics(
+    cube,
+    channel_count=32,
+    channel_axis=1,
+    saturation_adu=65535,
+)
+stats.inferred_reads_per_reset
+stats.ramp_slope_adu_per_read
+stats.common_mode_noise_adu
+stats.temporal_noise_adu
+stats.cds_noise_adu
+
+ptc = ramp_photon_transfer(cube, reset_after_indices=stats.reset_after_indices)
+ptc.conversion_gain_e_per_adu
+ptc.response_nonuniformity
+ptc.response_repeatability
+```
+
+`nondestructive_stack_statistics` removes frame-wide levels before measuring
+pixel noise, detects only strong reset drops, and reports interleaved-channel and
+edge statistics. `ramp_photon_transfer` compares the same read index between
+repeated ramps. Its signal axis is accumulated ADU relative to the first fitted
+read, so the fitted variance intercept is the variance at that read rather than
+an extrapolation to zero raw pedestal.
+
+The response-nonuniformity estimate high-pass filters each ramp's slope map and
+uses covariance between alternating ramp halves. Uncorrelated slope-fit noise
+therefore does not inflate the result; `response_repeatability` shows whether the
+same pixel structure was recovered in both halves. With a nonuniform warm cap,
+interpret this as detector response plus any stable small-scale illumination.
+
 A runnable end-to-end version of everything below is
 [`examples/15_detector_characterization.py`](https://github.com/jacotay7/getframes/blob/main/examples/15_detector_characterization.py).
 

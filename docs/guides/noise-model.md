@@ -83,7 +83,7 @@ EMCCD or eAPD this is applied after the gain stage, which is why a high mean gai
 makes the effective (input-referred) read noise sub-electron — the eAPD's
 `read_noise_e` is the pre-avalanche amplifier noise, divided down by `em_gain`.
 
-#### Per-pixel read noise (sCMOS)
+#### Per-pixel and per-channel read noise
 
 An sCMOS pixel has its own source-follower and column ADC, so its read noise is a
 **fixed property of that pixel** rather than a single array-wide number.
@@ -119,6 +119,20 @@ print(cfg.read_noise_rts_fraction, cfg.read_noise_rts_factor)
 
 These are the pixels that limit faint-source detection, so they matter for any
 threshold or detection-completeness study.
+
+Hybrid IR arrays can instead have several interleaved output channels.
+`readout_channel_count` and `readout_channel_axis` describe that geometry, while
+`read_noise_channel_nonuniformity` gives each channel a fixed log-normal noise
+scale. `read_noise_edge_factor` and `read_noise_edge_scale_px` optionally raise
+the temporal noise near the detector boundary. All of these scales belong to the
+fixed sensor; only their Gaussian samples change from read to read.
+
+For an avalanche array, `avalanche_input_noise_e` adds a zero-mean noise term
+before referring the signal back through the physical multiplication. Its output
+RMS is therefore `avalanche_input_noise_e * em_gain`. This is distinct from
+`read_noise_e`, which is output-amplifier noise and does not scale with avalanche
+gain. It is useful when measured raw-read noise rises with physical gain more
+quickly than shot noise and the documented excess-noise factor predict.
 
 #### Detector glow
 
@@ -185,9 +199,10 @@ instead of silently turning a measured sub-pixel width into a no-op.
   `q -> q * (1 + c1 u + c2 u**2 + ...)` with `u = q / full_well_e`, generalising the
   single-parameter `nonlinearity`.
 
-**Readout structure** (digitisation domain, fixed per sensor):
+**Readout structure** (digitisation domain):
 
-- `reset_noise_e` — kTC/reset noise, an independent per-pixel, per-frame Gaussian.
+- `reset_noise_e` — kTC/reset noise. Ordinary exposures draw it independently;
+  `Camera.nondestructive_series` shares one realization across each reset ramp.
 - `amplifier_layout=(n_rows, n_cols)` with `amp_gain_nonuniformity` /
   `amp_offset_spread_adu` — multi-amplifier readout: each block reads out with its
   own small, fixed gain/offset error, producing quadrant seams.
@@ -199,6 +214,20 @@ instead of silently turning a measured sub-pixel width into a no-op.
   pixels that collect no charge.
 - `bias_structure_amplitude_adu` — a fixed gradient-plus-column pattern riding on
   the flat `bias_offset_adu` pedestal.
+- `bias_pixel_spread_adu` — a fixed, positively skewed pixel pedestal texture
+  with the configured array RMS.
+- `readout_channel_count` / `readout_channel_axis` with
+  `bias_channel_spread_adu` — fixed offsets from interleaved output channels.
+- `bias_edge_amplitude_adu` / `bias_edge_scale_px` — a fixed pedestal rise toward
+  the detector perimeter; the corresponding read-noise edge fields control its
+  temporal-noise envelope independently.
+- `readout_common_mode_noise_adu` — a frame-wide stochastic pedestal. In an NDR
+  ramp, `readout_common_mode_correlation` sets its AR(1) lag correlation.
+- `ndr_bias_offset_adu_per_s` and `ndr_bias_gain_coefficient_adu_per_s` — an
+  interval-dependent raw-read pedestal, including an optional dependence on
+  physical avalanche gain. `ndr_common_mode_gain_noise_adu_per_s` similarly adds
+  gain- and read-interval-dependent frame-wide noise. These apply only to
+  `Camera.nondestructive_series`, not ordinary integrated exposures.
 
 ```python
 from getframes import Camera, load_preset

@@ -40,6 +40,27 @@ def test_unity_gain_is_noop():
     np.testing.assert_array_equal(out, electrons)
 
 
+def test_input_referred_avalanche_noise_scales_with_gain():
+    cfg = CameraConfig(
+        name="gain noise",
+        sensor_type="EAPD",
+        resolution=(64, 64),
+        pixel_size_um=24.0,
+        quantum_efficiency=1.0,
+        full_well_e=60_000.0,
+        bit_depth=16,
+        gain_e_per_adu=1.0,
+        bias_offset_adu=1000.0,
+        read_noise_e=0.0,
+        avalanche_input_noise_e=2.0,
+        em_gain=20.0,
+        excess_noise_factor=1.0,
+        dark_current_e_per_s=0.0,
+    )
+    frame = np.asarray(Camera(cfg).bias_frame(-100.0, seed=7), dtype=float)
+    assert np.std(frame) == pytest.approx(40.0, rel=0.05)
+
+
 def test_apply_em_gain_matches_gain_stage_at_sqrt2():
     # The back-compat EMCCD wrapper must equal the general stage with F = sqrt(2).
     electrons = np.random.default_rng(4).poisson(8.0, size=(64, 64)).astype(float)

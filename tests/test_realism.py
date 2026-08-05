@@ -190,6 +190,61 @@ def test_rts_defaults_off_leaves_the_sigma_map_log_normal():
     assert float(np.mean(sigma > 3.0 * np.median(sigma))) == pytest.approx(expected, abs=3e-4)
 
 
+# --- interleaved IR-array channels and edge readout structure --------------
+
+
+def test_interleaved_channel_bias_repeats_at_channel_period():
+    cfg = base_config(
+        resolution=(64, 96),
+        readout_channel_count=8,
+        bias_channel_spread_adu=20.0,
+        read_noise_e=0.0,
+    )
+    frame = np.asarray(Camera(cfg).bias_frame(-100.0, seed=1), dtype=float)
+    column_level = np.median(frame, axis=0)
+    np.testing.assert_array_equal(column_level[:8], column_level[8:16])
+    assert np.std(column_level[:8]) == pytest.approx(20.0, abs=1.0)
+
+
+def test_fixed_pixel_bias_texture_has_configured_spread():
+    cfg = base_config(
+        resolution=(128, 128),
+        read_noise_e=0.0,
+        bias_pixel_spread_adu=100.0,
+    )
+    first = np.asarray(noise._bias_structure_map(cfg))
+    second = np.asarray(noise._bias_structure_map(cfg))
+    np.testing.assert_array_equal(first, second)
+    assert np.std(first) == pytest.approx(100.0, rel=0.02)
+
+
+def test_interleaved_channels_have_fixed_read_noise_levels():
+    cfg = base_config(
+        resolution=(64, 96),
+        readout_channel_count=8,
+        read_noise_channel_nonuniformity=0.3,
+    )
+    sigma = np.asarray(noise._read_noise_sigma_map(cfg))
+    channel_level = np.array([np.median(sigma[:, c::8]) for c in range(8)])
+    assert np.std(np.log(channel_level)) == pytest.approx(0.3)
+    for c in range(8):
+        np.testing.assert_array_equal(sigma[:, c], sigma[:, c + 8])
+
+
+def test_bias_and_read_noise_rise_towards_detector_edges():
+    cfg = base_config(
+        resolution=(128, 128),
+        bias_edge_amplitude_adu=100.0,
+        bias_edge_scale_px=8.0,
+        read_noise_edge_factor=2.0,
+        read_noise_edge_scale_px=8.0,
+    )
+    bias = np.asarray(noise._bias_structure_map(cfg))
+    sigma = np.asarray(noise._read_noise_sigma_map(cfg))
+    assert bias[0, 64] - bias[64, 64] > 95.0
+    assert sigma[0, 64] / sigma[64, 64] > 1.95
+
+
 # --- structured (edge-concentrated) detector glow --------------------------
 
 

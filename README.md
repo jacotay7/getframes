@@ -106,8 +106,9 @@ for the methodology.
 ## Features
 
 - **Five detector families** — CCD, CMOS, EMCCD, eAPD and sCMOS, from a library
-  of 21 sourced **[presets](https://jacotay7.github.io/getframes/guides/presets/)**
+  of sourced **[presets](https://jacotay7.github.io/getframes/guides/presets/)**
   (`andor_ikon_m934`, `andor_ocam2k`, `leonardo_saphira`,
+  `first_light_imaging_cred_one`,
   `andor_marana_4_2b_11`, `zwo_asi2600mm`, …) or any `CameraConfig` you define.
 - **Auditable noise physics** — dark current vs. temperature, shot noise, a
   unified stochastic gain stage (EM and avalanche) with realistic excess noise,
@@ -134,8 +135,8 @@ for the methodology.
   **[Spectral mode](https://jacotay7.github.io/getframes/guides/spectral/)** and
   **[Radiometry & the infrared](https://jacotay7.github.io/getframes/guides/radiometry/)**.
 - **Analysis on real data too** — aperture sums, centroids, photon-transfer
-  curves and `characterize_dark`/`characterize_flat` are stack-driven, so they
-  run on measured detector frames as readily as on simulated ones.
+  curves, independent-stack characterization, and reset-aware nondestructive-ramp
+  analysis run on measured detector frames as readily as on simulated ones.
 - **Scale & datasets** — a float32 fast path, vectorised multi-source rendering,
   a streaming raw+truth `dataset` generator and a `getframes` CLI; see
   **[Scale & datasets](https://jacotay7.github.io/getframes/guides/datasets/)**.

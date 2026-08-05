@@ -100,6 +100,13 @@ class CameraConfig:
         RMS is ``read_noise_e`` and the median is
         ``read_noise_e * exp(-read_noise_nonuniformity**2 / 2)``, a few percent
         lower. See ``read_noise_nonuniformity`` and ``read_noise_rts_fraction``.
+    avalanche_input_noise_e:
+        RMS per-read noise in input-referred electrons that scales with the mean
+        avalanche gain. This empirical term captures gain-dependent tunnelling or
+        multiplication-region noise that is not part of the output-amplifier
+        ``read_noise_e``. It is added as an output-equivalent Gaussian with RMS
+        ``avalanche_input_noise_e * em_gain``. Relevant only to gain-stage sensors;
+        ``0`` disables it.
     read_noise_nonuniformity:
         Fractional pixel-to-pixel spread of the read-noise RMS (e.g. ``0.3`` for a
         30% log-normal spread). Models the per-pixel read-noise distribution of
@@ -119,6 +126,38 @@ class CameraConfig:
     read_noise_rts_factor:
         Multiplier applied to the read-noise RMS of the RTS population selected by
         ``read_noise_rts_fraction``. Ignored when that fraction is ``0``.
+    readout_channel_count:
+        Number of interleaved video-output channels. Channel ``c`` reads detector
+        coordinates whose index along ``readout_channel_axis`` is congruent to
+        ``c`` modulo this count. ``1`` disables channel structure. SAPHIRA uses 32
+        parallel outputs interleaved across the row.
+    readout_channel_axis:
+        Detector axis carrying the interleaved channel assignment: ``0`` for rows
+        or ``1`` for columns.
+    read_noise_channel_nonuniformity:
+        Log-normal fractional spread of read-noise RMS between interleaved output
+        channels. The factors have unit mean and are fixed by
+        ``fixed_pattern_seed``. ``0`` gives equal channel noise.
+    read_noise_edge_factor, read_noise_edge_scale_px:
+        Multiplicative rise in read-noise RMS at the detector boundary and its
+        exponential falloff scale in pixels. A factor of ``1`` or a scale of ``0``
+        disables the edge term.
+    readout_common_mode_noise_adu:
+        Frame-wide electronic offset noise RMS in ADU. Unlike the fixed bias map,
+        this scalar is redrawn for each ordinary frame and therefore survives a
+        master bias. ``0`` disables it.
+    readout_common_mode_correlation:
+        Lag-one correlation coefficient of common-mode noise in
+        :meth:`Camera.nondestructive_series`, in ``(-1, 1)``. Ordinary independent
+        frame methods still draw independent common-mode offsets.
+    ndr_bias_offset_adu_per_s, ndr_bias_gain_coefficient_adu_per_s:
+        Read-interval-dependent pedestal coefficients for nondestructive sequences.
+        The added pedestal is ``read_interval * (offset + gain_coefficient *
+        (em_gain - 1))`` ADU. These empirical terms describe read-rate and
+        avalanche-dependent ROIC settling; both default to zero.
+    ndr_common_mode_gain_noise_adu_per_s:
+        Additional frame-wide common-mode RMS in an NDR sequence, equal to this
+        coefficient times ``read_interval * (em_gain - 1)``. Defaults to zero.
     detector_glow_edge_scale_px:
         Exponential falloff scale, in pixels, of the ``detector_glow_e_per_s`` term
         away from the detector edges. Amplifier/array glow originates at the readout
@@ -168,10 +207,9 @@ class CameraConfig:
         and records that fact in frame metadata. ``0`` disables it. Distinct from
         ``ipc_coupling``, which couples charge *after* collection.
     reset_noise_e:
-        kTC / reset noise RMS in electrons: an independent per-pixel, per-frame
-        Gaussian charge uncertainty from resetting the sense node, added alongside
-        read noise. ``0`` disables it (or assumes it is removed by correlated double
-        sampling).
+        kTC / reset noise RMS in electrons. Ordinary exposures draw an independent
+        per-pixel Gaussian; nondestructive reads share one draw per reset ramp.
+        ``0`` disables it (or assumes correlated double sampling removes it).
     amplifier_layout:
         Multi-amplifier readout as ``(n_rows, n_cols)`` of amplifiers tiling the
         sensor (e.g. ``(2, 2)`` for a four-quadrant CCD). Each amplifier block gets
@@ -212,6 +250,16 @@ class CameraConfig:
         Peak amplitude in ADU of a fixed, structured bias pattern (a smooth gradient
         plus per-column offsets) added on top of the flat ``bias_offset_adu``
         pedestal. ``0`` keeps the bias a flat pedestal.
+    bias_channel_spread_adu:
+        RMS fixed offset in ADU between the interleaved readout channels. Requires
+        ``readout_channel_count > 1``.
+    bias_pixel_spread_adu:
+        RMS fixed pixel-scale bias texture in ADU, drawn once from
+        ``fixed_pattern_seed``. This is additive readout structure, not PRNU or
+        dark-signal non-uniformity. ``0`` disables it.
+    bias_edge_amplitude_adu, bias_edge_scale_px:
+        Additive fixed pedestal at the detector boundary and its exponential
+        falloff scale in pixels. Either value at ``0`` disables the edge term.
     cosmic_ray_rate_per_cm2_s:
         Cosmic-ray hit rate in events per cm^2 per second (sea level is ~5). The
         number of hits scales with sensor area and exposure; each deposits a burst
@@ -265,8 +313,9 @@ class CameraConfig:
     hot_pixel_factor:
         Multiplicative dark-current factor applied to hot pixels.
     fixed_pattern_seed:
-        Seed for the sensor's *fixed-pattern* noise (PRNU, DSNU, and the hot-pixel
-        map). These patterns are a property of the physical sensor, so they are the
+        Seed for the sensor's *fixed-pattern* noise (PRNU, DSNU, hot-pixel,
+        read-noise scale, channel-offset, and bias-structure maps). These patterns
+        are a property of the physical sensor, so they are the
         *same in every frame* this camera produces --- which is exactly what lets a
         master flat or dark capture and remove them. Two configs with the same seed
         and shape share a pattern; change it to mint a different sensor. Independent
@@ -292,9 +341,20 @@ class CameraConfig:
     output_full_well_e: float | None = None
     detector_glow_e_per_s: float = 0.0
     prnu: float = 0.0
+    avalanche_input_noise_e: float = 0.0
     read_noise_nonuniformity: float = 0.0
     read_noise_rts_fraction: float = 0.0
     read_noise_rts_factor: float = 2.5
+    readout_channel_count: int = 1
+    readout_channel_axis: int = 1
+    read_noise_channel_nonuniformity: float = 0.0
+    read_noise_edge_factor: float = 1.0
+    read_noise_edge_scale_px: float = 0.0
+    readout_common_mode_noise_adu: float = 0.0
+    readout_common_mode_correlation: float = 0.0
+    ndr_bias_offset_adu_per_s: float = 0.0
+    ndr_bias_gain_coefficient_adu_per_s: float = 0.0
+    ndr_common_mode_gain_noise_adu_per_s: float = 0.0
     detector_glow_edge_scale_px: float = 0.0
     nonlinearity: float = 0.0
     nonlinearity_coeffs: tuple[float, ...] | None = None
@@ -314,6 +374,10 @@ class CameraConfig:
     bad_column_fraction: float = 0.0
     dead_pixel_fraction: float = 0.0
     bias_structure_amplitude_adu: float = 0.0
+    bias_channel_spread_adu: float = 0.0
+    bias_pixel_spread_adu: float = 0.0
+    bias_edge_amplitude_adu: float = 0.0
+    bias_edge_scale_px: float = 0.0
     cosmic_ray_rate_per_cm2_s: float = 0.0
     dark_current_ref_temp_c: float = 20.0
     dark_current_doubling_temp_c: float = 6.3
@@ -336,6 +400,8 @@ class CameraConfig:
         # Normalise/validate without mutating frozen fields directly.
         object.__setattr__(self, "sensor_type", SensorType.coerce(self.sensor_type))
         object.__setattr__(self, "resolution", tuple(int(n) for n in self.resolution))
+        object.__setattr__(self, "readout_channel_count", int(self.readout_channel_count))
+        object.__setattr__(self, "readout_channel_axis", int(self.readout_channel_axis))
         if self.roi is not None:
             object.__setattr__(self, "roi", tuple(int(value) for value in self.roi))
         object.__setattr__(self, "amplifier_layout", tuple(int(n) for n in self.amplifier_layout))
@@ -402,10 +468,38 @@ class CameraConfig:
             raise ValueError("prnu must be non-negative.")
         if self.read_noise_nonuniformity < 0:
             raise ValueError("read_noise_nonuniformity must be non-negative.")
+        if self.avalanche_input_noise_e < 0:
+            raise ValueError("avalanche_input_noise_e must be non-negative.")
+        if self.avalanche_input_noise_e > 0 and not self.has_gain_stage:
+            raise ValueError("avalanche_input_noise_e requires em_gain > 1.")
         if not 0.0 <= self.read_noise_rts_fraction <= 1.0:
             raise ValueError("read_noise_rts_fraction must be in [0, 1].")
         if self.read_noise_rts_factor < 0:
             raise ValueError("read_noise_rts_factor must be non-negative.")
+        if self.readout_channel_count < 1:
+            raise ValueError("readout_channel_count must be >= 1.")
+        if self.readout_channel_axis not in (0, 1):
+            raise ValueError("readout_channel_axis must be 0 (rows) or 1 (columns).")
+        if self.readout_channel_count > self.resolution[self.readout_channel_axis]:
+            raise ValueError("readout_channel_count cannot exceed its detector axis length.")
+        if self.read_noise_channel_nonuniformity < 0:
+            raise ValueError("read_noise_channel_nonuniformity must be non-negative.")
+        if self.read_noise_channel_nonuniformity > 0 and self.readout_channel_count == 1:
+            raise ValueError("read_noise_channel_nonuniformity requires readout_channel_count > 1.")
+        if self.read_noise_edge_factor < 1:
+            raise ValueError("read_noise_edge_factor must be >= 1.")
+        if self.read_noise_edge_scale_px < 0:
+            raise ValueError("read_noise_edge_scale_px must be non-negative.")
+        if self.readout_common_mode_noise_adu < 0:
+            raise ValueError("readout_common_mode_noise_adu must be non-negative.")
+        if not -1.0 < self.readout_common_mode_correlation < 1.0:
+            raise ValueError("readout_common_mode_correlation must be in (-1, 1).")
+        if self.ndr_bias_offset_adu_per_s < 0:
+            raise ValueError("ndr_bias_offset_adu_per_s must be non-negative.")
+        if self.ndr_bias_gain_coefficient_adu_per_s < 0:
+            raise ValueError("ndr_bias_gain_coefficient_adu_per_s must be non-negative.")
+        if self.ndr_common_mode_gain_noise_adu_per_s < 0:
+            raise ValueError("ndr_common_mode_gain_noise_adu_per_s must be non-negative.")
         if self.detector_glow_edge_scale_px < 0:
             raise ValueError("detector_glow_edge_scale_px must be non-negative.")
         if not 0.0 <= self.nonlinearity < 0.5:
@@ -482,6 +576,16 @@ class CameraConfig:
             raise ValueError("dead_pixel_fraction must be in [0, 1].")
         if self.bias_structure_amplitude_adu < 0:
             raise ValueError("bias_structure_amplitude_adu must be non-negative.")
+        if self.bias_channel_spread_adu < 0:
+            raise ValueError("bias_channel_spread_adu must be non-negative.")
+        if self.bias_pixel_spread_adu < 0:
+            raise ValueError("bias_pixel_spread_adu must be non-negative.")
+        if self.bias_channel_spread_adu > 0 and self.readout_channel_count == 1:
+            raise ValueError("bias_channel_spread_adu requires readout_channel_count > 1.")
+        if self.bias_edge_amplitude_adu < 0:
+            raise ValueError("bias_edge_amplitude_adu must be non-negative.")
+        if self.bias_edge_scale_px < 0:
+            raise ValueError("bias_edge_scale_px must be non-negative.")
         if self.cosmic_ray_rate_per_cm2_s < 0:
             raise ValueError("cosmic_ray_rate_per_cm2_s must be non-negative.")
         if self.dark_current_e_per_s < 0:

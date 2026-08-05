@@ -105,6 +105,148 @@ def test_dark_series_rejects_bad_count():
         list(cam.dark_series(5.0, n_frames=0))
 
 
+def test_nondestructive_series_accumulates_charge_and_resets():
+    cam = Camera.from_preset("generic_eapd").with_config(
+        resolution=(128, 128),
+        quantum_efficiency=1.0,
+        em_gain=10.0,
+        excess_noise_factor=1.0,
+        read_noise_e=0.0,
+        reset_noise_e=0.0,
+        dark_current_e_per_s=0.0,
+        detector_glow_e_per_s=0.0,
+        bias_offset_adu=1000.0,
+        gain_e_per_adu=1.0,
+    )
+    frames = list(
+        cam.nondestructive_series(
+            20.0,
+            read_interval=0.1,
+            n_frames=7,
+            reads_per_reset=3,
+            temperature=-100.0,
+            seed=4,
+        )
+    )
+    signal = np.array([frame.stats()["mean"] - 1000.0 for frame in frames])
+    assert signal[1] > signal[0] + 15.0
+    assert signal[2] > signal[1] + 15.0
+    assert signal[3] == pytest.approx(signal[0], abs=1.0)
+    assert signal[6] == pytest.approx(signal[0], abs=1.0)
+    assert [frame.metadata["read_index"] for frame in frames] == [0, 1, 2, 0, 1, 2, 0]
+    assert [frame.metadata["ramp_index"] for frame in frames] == [0, 0, 0, 1, 1, 1, 2]
+
+
+def test_reset_noise_is_shared_within_each_nondestructive_ramp():
+    cam = Camera.from_preset("generic_eapd").with_config(
+        resolution=(32, 32),
+        em_gain=1.0,
+        read_noise_e=0.0,
+        reset_noise_e=30.0,
+        dark_current_e_per_s=0.0,
+        detector_glow_e_per_s=0.0,
+        bias_offset_adu=1000.0,
+        gain_e_per_adu=1.0,
+    )
+    frames = list(
+        cam.dark_nondestructive_series(
+            read_interval=0.001,
+            n_frames=6,
+            reads_per_reset=3,
+            temperature=-100.0,
+            seed=8,
+        )
+    )
+    np.testing.assert_array_equal(frames[0].data, frames[1].data)
+    np.testing.assert_array_equal(frames[1].data, frames[2].data)
+    np.testing.assert_array_equal(frames[3].data, frames[4].data)
+    assert not np.array_equal(frames[2].data, frames[3].data)
+
+
+def test_nondestructive_series_is_reproducible_as_a_correlated_sequence():
+    cam = Camera.from_preset("generic_eapd").with_config(resolution=(32, 32))
+    kwargs = {
+        "photon_rate": 2.0,
+        "read_interval": 0.01,
+        "n_frames": 5,
+        "reads_per_reset": 3,
+        "temperature": -100.0,
+        "seed": 12,
+    }
+    a = list(cam.nondestructive_series(**kwargs))
+    b = list(cam.nondestructive_series(**kwargs))
+    for first, second in zip(a, b):
+        np.testing.assert_array_equal(first.data, second.data)
+
+
+def test_nondestructive_series_common_mode_has_configured_lag_correlation():
+    cam = Camera.from_preset("generic_eapd").with_config(
+        resolution=(16, 16),
+        em_gain=1.0,
+        read_noise_e=0.0,
+        reset_noise_e=0.0,
+        dark_current_e_per_s=0.0,
+        detector_glow_e_per_s=0.0,
+        bias_offset_adu=1000.0,
+        gain_e_per_adu=1.0,
+        readout_common_mode_noise_adu=20.0,
+        readout_common_mode_correlation=-0.6,
+    )
+    frames = list(
+        cam.dark_nondestructive_series(
+            read_interval=0.001,
+            n_frames=500,
+            reads_per_reset=500,
+            temperature=-100.0,
+            seed=18,
+        )
+    )
+    levels = np.array([frame.stats()["mean"] for frame in frames])
+    lag_correlation = np.corrcoef(levels[:-1], levels[1:])[0, 1]
+    assert lag_correlation == pytest.approx(-0.6, abs=0.1)
+    assert all(np.ptp(frame.data) == 0 for frame in frames)
+
+
+def test_nondestructive_series_applies_interval_and_gain_dependent_bias():
+    cam = Camera.from_preset("generic_eapd").with_config(
+        resolution=(8, 8),
+        em_gain=5.0,
+        excess_noise_factor=1.0,
+        read_noise_e=0.0,
+        reset_noise_e=0.0,
+        dark_current_e_per_s=0.0,
+        detector_glow_e_per_s=0.0,
+        bias_offset_adu=1000.0,
+        gain_e_per_adu=1.0,
+        ndr_bias_offset_adu_per_s=100.0,
+        ndr_bias_gain_coefficient_adu_per_s=10.0,
+    )
+    frame = next(
+        cam.dark_nondestructive_series(
+            read_interval=0.2,
+            n_frames=1,
+            reads_per_reset=1,
+            temperature=-100.0,
+            seed=3,
+        )
+    )
+    np.testing.assert_array_equal(frame.data, np.full((8, 8), 1028, dtype=np.uint32))
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"read_interval": 0.0, "n_frames": 2, "reads_per_reset": 2},
+        {"read_interval": 1.0, "n_frames": 0, "reads_per_reset": 2},
+        {"read_interval": 1.0, "n_frames": 2, "reads_per_reset": 0},
+    ],
+)
+def test_nondestructive_series_validates_sequence_geometry(kwargs):
+    cam = Camera.from_preset("generic_eapd")
+    with pytest.raises(ValueError):
+        list(cam.nondestructive_series(0.0, temperature=-100.0, **kwargs))
+
+
 def test_emccd_gain_amplifies_signal():
     cam = Camera.from_preset("generic_emccd")
     frame = cam.dark_frame(10.0, -70.0, seed=5)
