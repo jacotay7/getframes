@@ -312,6 +312,156 @@ def test_nondestructive_series_validates_sequence_geometry(kwargs):
         list(cam.nondestructive_series(0.0, temperature=-100.0, **kwargs))
 
 
+def test_correlated_double_sample_cancels_reset_noise():
+    """kTC noise is common to both reads of a ramp, so differencing removes it."""
+    cam = Camera.from_preset("generic_eapd").with_config(
+        resolution=(64, 64),
+        em_gain=1.0,
+        excess_noise_factor=1.0,
+        read_noise_e=0.0,
+        reset_noise_e=40.0,
+        dark_current_e_per_s=0.0,
+        detector_glow_e_per_s=0.0,
+        bias_offset_adu=1000.0,
+        gain_e_per_adu=1.0,
+    )
+    raw = next(cam.nondestructive_series(0.0, 0.1, 1, 2, temperature=-100.0, seed=11))
+    cds = cam.correlated_double_sample(0.0, 0.1, temperature=-100.0, seed=11)
+    assert np.asarray(raw.data, dtype=float).std() > 20.0
+    assert np.asarray(cds.data, dtype=float).std() < 1.0
+
+
+def test_correlated_double_sample_doubles_read_noise_variance():
+    """Amplifier read noise is redrawn per read, so the difference carries sqrt(2)x."""
+    cam = Camera.from_preset("generic_eapd").with_config(
+        resolution=(128, 128),
+        em_gain=1.0,
+        excess_noise_factor=1.0,
+        read_noise_e=25.0,
+        reset_noise_e=0.0,
+        avalanche_input_noise_e=0.0,
+        dark_current_e_per_s=0.0,
+        detector_glow_e_per_s=0.0,
+        read_noise_nonuniformity=0.0,
+        read_noise_rts_fraction=0.0,
+        bias_offset_adu=1000.0,
+        gain_e_per_adu=1.0,
+    )
+    cds = cam.correlated_double_sample(0.0, 0.1, temperature=-100.0, seed=12)
+    assert np.asarray(cds.data, dtype=float).std() == pytest.approx(25.0 * np.sqrt(2.0), rel=0.05)
+
+
+def test_correlated_double_sample_removes_fixed_bias_structure():
+    """The measured C-RED One pedestal and channel structure differences away."""
+    cam = Camera.from_preset("first_light_imaging_cred_one")
+    exposure = 1.0 / 1750.0
+    raw = next(cam.nondestructive_series(0.0, exposure, 1, 2, seed=13))
+    cds = cam.correlated_double_sample(0.0, exposure, seed=13)
+    raw_values = np.asarray(raw.data, dtype=float)
+    cds_values = np.asarray(cds.data, dtype=float)
+    assert np.median(raw_values) > 20000.0
+    assert abs(np.median(cds_values)) < 100.0
+    assert cds_values.std() < 0.1 * raw_values.std()
+
+
+def test_correlated_double_sample_is_linear_in_signal_and_exposure():
+    cam = Camera.from_preset("first_light_imaging_cred_one").with_config(
+        # Isolate the collected charge from the interval-proportional bias rate,
+        # which by construction survives differencing.
+        ndr_bias_offset_adu_per_s=0.0,
+        ndr_bias_gain_coefficient_adu_per_s=0.0,
+        ndr_reset_settling_input_e=0.0,
+        dark_current_e_per_s=0.0,
+        hot_pixel_fraction=0.0,
+    )
+    exposure = 1.0 / 1750.0
+    config = cam.config
+    for rate in (5.0e4, 2.0e5):
+        expected = (
+            rate * exposure * config.quantum_efficiency * config.em_gain / config.gain_e_per_adu
+        )
+        measured = np.asarray(cam.correlated_double_sample(rate, exposure, seed=14).data).mean()
+        assert measured == pytest.approx(expected, rel=0.05)
+    doubled = np.asarray(cam.correlated_double_sample(5.0e4, 2 * exposure, seed=15).data).mean()
+    single = np.asarray(cam.correlated_double_sample(5.0e4, exposure, seed=15).data).mean()
+    assert doubled == pytest.approx(2.0 * single, rel=0.05)
+
+
+def test_correlated_double_sample_truth_is_the_collected_charge():
+    cam = Camera.from_preset("generic_eapd").with_config(
+        resolution=(32, 32),
+        quantum_efficiency=1.0,
+        dark_current_e_per_s=0.0,
+        detector_glow_e_per_s=0.0,
+        prnu=0.0,
+    )
+    frame = cam.correlated_double_sample(1000.0, 0.05, temperature=-100.0, seed=16)
+    assert frame.truth is not None
+    np.testing.assert_allclose(np.asarray(frame.truth.mean_electrons), 50.0, rtol=1e-6)
+
+
+def test_correlated_double_sample_is_reproducible_and_signed():
+    cam = Camera.from_preset("first_light_imaging_cred_one")
+    first = cam.correlated_double_sample(0.0, 1.0 / 1750.0, seed=17)
+    second = cam.correlated_double_sample(0.0, 1.0 / 1750.0, seed=17)
+    np.testing.assert_array_equal(first.data, second.data)
+    assert np.asarray(first.data).dtype == np.int32
+    # A dark CDS frame must be able to go negative; an unsigned raw read cannot.
+    assert np.asarray(first.data).min() < 0
+    assert first.metadata["readout_mode"] == "global_reset_cds"
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"exposure": 0.0},
+        {"exposure": -1.0},
+        {"exposure": 0.1, "pedestal_interval_s": -0.1},
+        {"exposure": 0.1, "pedestal_interval_s": 0.1},
+    ],
+)
+def test_correlated_double_sample_validates_timing(kwargs):
+    cam = Camera.from_preset("generic_eapd")
+    with pytest.raises(ValueError):
+        cam.correlated_double_sample(0.0, temperature=-100.0, **kwargs)
+
+
+def test_correlated_double_sample_pedestal_interval_holds_the_signal_but_moves_the_bias():
+    """``exposure`` is the read-to-read integration, so the measured charge is invariant.
+
+    A finite reset-to-pedestal delay changes only the terms evaluated at the
+    pedestal read's own interval — here the interval-proportional bias rate,
+    which then partly cancels against the signal read's instead of surviving in
+    full.
+    """
+    cam = Camera.from_preset("generic_eapd").with_config(
+        resolution=(64, 64),
+        quantum_efficiency=1.0,
+        em_gain=1.0,
+        excess_noise_factor=1.0,
+        read_noise_e=0.0,
+        reset_noise_e=0.0,
+        dark_current_e_per_s=0.0,
+        detector_glow_e_per_s=0.0,
+        prnu=0.0,
+        bias_offset_adu=1000.0,
+        gain_e_per_adu=1.0,
+        ndr_bias_offset_adu_per_s=100.0,
+    )
+    prompt = cam.correlated_double_sample(1000.0, 0.1, temperature=-100.0, seed=18)
+    delayed = cam.correlated_double_sample(
+        1000.0, 0.1, temperature=-100.0, pedestal_interval_s=0.04, seed=18
+    )
+    assert prompt.truth is not None and delayed.truth is not None
+    np.testing.assert_allclose(np.asarray(prompt.truth.mean_electrons), 100.0, rtol=1e-6)
+    np.testing.assert_allclose(np.asarray(delayed.truth.mean_electrons), 100.0, rtol=1e-6)
+    # Bias rate 100 ADU/s: the prompt pedestal read contributes nothing, so the
+    # difference keeps 0.1 * 100 = 10 ADU; the delayed one keeps (0.1 - 0.04) * 100 = 6.
+    prompt_mean = np.asarray(prompt.data, dtype=float).mean()
+    delayed_mean = np.asarray(delayed.data, dtype=float).mean()
+    assert prompt_mean - delayed_mean == pytest.approx(4.0, abs=1.0)
+
+
 def test_emccd_gain_amplifies_signal():
     cam = Camera.from_preset("generic_emccd")
     frame = cam.dark_frame(10.0, -70.0, seed=5)

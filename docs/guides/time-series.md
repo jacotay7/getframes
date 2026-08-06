@@ -144,3 +144,40 @@ local 35 Hz capped data; acquisition metadata requested 250 reads, so callers
 should use the cadence their camera actually produces. Each frame records
 `ramp_index`, `read_index`, `reads_per_reset`, and
 `time_since_reset_s` in its metadata.
+
+## Correlated double sampling
+
+CDS is the standard low-noise operating mode for these arrays, and a two-read
+ramp taken on its own. `correlated_double_sample` runs that ramp and returns the
+difference directly, which is what a camera in CDS mode delivers:
+
+```python
+import getframes as gf
+
+cam = gf.Camera.from_preset("first_light_imaging_cred_one")
+frame = cam.correlated_double_sample(
+    photon_rate=5.0e4,
+    exposure=1 / 1750,  # read-to-read integration time
+    seed=0,
+)
+```
+
+The returned frame is a **signed** `int32` difference in ADU — bias-subtracted by
+construction, and free to go negative on a dark pixel. `exposure` is the
+read-to-read integration time, so it is the charge the difference measures.
+
+What differencing does to each noise term follows from whether that term is
+common to the two reads:
+
+| Term | Effect of CDS |
+| --- | --- |
+| kTC / reset noise, fixed bias structure | removed — one realization per ramp |
+| Amplifier read noise, eAPD input noise | $\sqrt{2}\times$ — redrawn per read |
+| Readout common mode | partly removed; AR(1) leaves $\sqrt{2(1-\rho)}$ |
+| Reset settling | leaves the pedestal-to-signal residual |
+| Interval-proportional bias rate | **not** removed — it scales with integration time, not with the read |
+
+That last row is the one worth planning for: a CDS frame still sits on a small
+exposure-dependent pedestal (about +50 ADU for this preset at 1750 Hz, against
+−8 ADU of settling residual). Remove it with a dark CDS frame taken at the same
+exposure and gain, exactly as you would on the real camera.

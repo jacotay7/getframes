@@ -375,11 +375,54 @@ class Camera:
             raise ValueError("n_frames must be >= 1.")
         if reads_per_reset < 1:
             raise ValueError("reads_per_reset must be >= 1.")
-        if self.config.blooming or self.config.cti > 0:
-            raise ValueError("nondestructive_series does not support CCD blooming or CTI.")
-        if self.config.nonlinearity > 0 or self.config.nonlinearity_coeffs is not None:
-            raise ValueError("nondestructive_series does not yet support detector nonlinearity.")
+        yield from self._ramp_reads(
+            photon_rate,
+            (read_interval,) * reads_per_reset,
+            n_frames,
+            temperature,
+            background=background,
+            quantum_efficiency=quantum_efficiency,
+            seed=seed,
+            include_truth=include_truth,
+            caller="nondestructive_series",
+        )
 
+    def _ramp_reads(
+        self,
+        photon_rate: PhotonRate,
+        read_intervals: Sequence[float],
+        n_frames: int,
+        temperature: float | None,
+        *,
+        background: PhotonRate,
+        quantum_efficiency: float | None,
+        seed: int | None,
+        include_truth: bool,
+        caller: str,
+    ) -> Iterator[Frame]:
+        """Yield global-reset ramp reads on an arbitrary per-read interval pattern.
+
+        This is the single reset-correlated readout core.
+        :meth:`nondestructive_series` drives it with a uniform cadence, and
+        :meth:`correlated_double_sample` drives it with a short pedestal read
+        followed by the integration read. ``read_intervals[i]`` is the time
+        between read ``i - 1`` (or the reset, for ``i = 0``) and read ``i``, so
+        ``len(read_intervals)`` is the ramp length in reads.
+
+        Interval-dependent terms — the collected charge, the read-rate bias
+        pedestal, the eAPD input-referred noise, and the gain-driven part of the
+        common-mode sigma — are evaluated per read at that read's own interval,
+        and cached per distinct interval so a long uniform ramp still holds only
+        one set of detector-sized expectation maps.
+        """
+        if any(interval < 0 for interval in read_intervals):
+            raise ValueError("read intervals must be non-negative.")
+        if self.config.blooming or self.config.cti > 0:
+            raise ValueError(f"{caller} does not support CCD blooming or CTI.")
+        if self.config.nonlinearity > 0 or self.config.nonlinearity_coeffs is not None:
+            raise ValueError(f"{caller} does not yet support detector nonlinearity.")
+
+        reads_per_reset = len(read_intervals)
         temp = self.default_temperature_c if temperature is None else temperature
         rng = self._resolve_rng(seed)
         resolved = self._backend
@@ -387,46 +430,84 @@ class Camera:
         dtype = self._float_dtype
         full_rate = self._full_detector_input(photon_rate, "photon_rate")
         full_background = self._full_detector_input(background, "background")
-        mean_photo_increment = noise.photo_signal_map(
-            self.config,
-            full_rate,
-            read_interval,
-            full_background,
-            quantum_efficiency,
-            dtype,
-            backend=resolved,
-            fixed_patterns=self._fixed_patterns,
-        )
-        mean_dark_increment = self._dark_signal(read_interval, temp)
-        mean_increment = mean_photo_increment + mean_dark_increment
+
+        # Cache the detector-sized expectation maps on the interval, not the read
+        # index: a uniform ramp of any length keeps exactly one entry.
+        mean_maps: dict[float, tuple[Any, Any]] = {}
+        for interval in read_intervals:
+            if interval in mean_maps:
+                continue
+            mean_photo = noise.photo_signal_map(
+                self.config,
+                full_rate,
+                interval,
+                full_background,
+                quantum_efficiency,
+                dtype,
+                backend=resolved,
+                fixed_patterns=self._fixed_patterns,
+            )
+            mean_maps[interval] = (mean_photo, mean_photo + self._dark_signal(interval, temp))
+
+        excess_gain = max(self.config.em_gain - 1.0, 0.0)
+        common_rho = self.config.readout_common_mode_correlation
+        common_sigmas = [
+            self.config.readout_common_mode_noise_adu
+            + self.config.ndr_common_mode_gain_noise_adu_per_s * excess_gain * interval
+            for interval in read_intervals
+        ]
+        common_innovations = [sigma * np.sqrt(1.0 - common_rho**2) for sigma in common_sigmas]
+        interval_biases = [
+            interval
+            * (
+                self.config.ndr_bias_offset_adu_per_s
+                + self.config.ndr_bias_gain_coefficient_adu_per_s * excess_gain
+            )
+            for interval in read_intervals
+        ]
+        avalanche_input_noises = [
+            self.config.avalanche_input_noise_e
+            * (interval / self.config.ndr_avalanche_input_noise_reference_interval_s)
+            ** self.config.ndr_avalanche_input_noise_interval_exponent
+            for interval in read_intervals
+        ]
+        settles = [
+            (
+                self.config.ndr_reset_settling_input_e
+                * self.config.em_gain
+                / self.config.gain_e_per_adu
+                * (interval / self.config.ndr_reset_settling_reference_interval_s)
+                ** self.config.ndr_reset_settling_interval_exponent
+                * np.exp(-read_index / self.config.ndr_reset_settling_scale_reads)
+                if self.config.ndr_reset_settling_input_e > 0
+                and self.config.ndr_reset_settling_scale_reads > 0
+                else 0.0
+            )
+            for read_index, interval in enumerate(read_intervals)
+        ]
+        elapsed_times = list(np.cumsum(np.asarray(read_intervals, dtype=np.float64)))
+
         accumulated_input = xp.zeros(self.sensor_resolution, dtype=dtype)
         accumulated_output = xp.zeros(self.sensor_resolution, dtype=dtype)
-
+        cumulative_mean: Any = None
+        cumulative_photo: Any = None
+        if include_truth:
+            cumulative_mean = xp.zeros(self.sensor_resolution, dtype=dtype)
+            cumulative_photo = xp.zeros(self.sensor_resolution, dtype=dtype)
         reset_noise: Any = 0.0
         common_mode = 0.0
-        common_sigma = self.config.readout_common_mode_noise_adu + (
-            self.config.ndr_common_mode_gain_noise_adu_per_s
-            * max(self.config.em_gain - 1.0, 0.0)
-            * read_interval
-        )
-        common_rho = self.config.readout_common_mode_correlation
-        common_innovation = common_sigma * np.sqrt(1.0 - common_rho**2)
-        interval_bias = read_interval * (
-            self.config.ndr_bias_offset_adu_per_s
-            + self.config.ndr_bias_gain_coefficient_adu_per_s * max(self.config.em_gain - 1.0, 0.0)
-        )
-        avalanche_input_noise = (
-            self.config.avalanche_input_noise_e
-            * (read_interval / self.config.ndr_avalanche_input_noise_reference_interval_s)
-            ** self.config.ndr_avalanche_input_noise_interval_exponent
-        )
 
         for frame_index in range(n_frames):
             read_index = frame_index % reads_per_reset
             ramp_index = frame_index // reads_per_reset
+            read_interval = read_intervals[read_index]
+            mean_photo_increment, mean_increment = mean_maps[read_interval]
             if read_index == 0:
                 accumulated_input.fill(0)
                 accumulated_output.fill(0)
+                if include_truth:
+                    cumulative_mean.fill(0)
+                    cumulative_photo.fill(0)
                 if self.config.reset_noise_e > 0:
                     reset_noise = rng.normal(
                         0.0,
@@ -461,11 +542,13 @@ class Camera:
                 increment *= self._fixed_patterns.avalanche_gain_multiplier
             accumulated_output += increment
 
-            if common_sigma > 0:
+            if common_sigmas[read_index] > 0:
                 if frame_index == 0:
-                    common_mode = float(resolved.scalar(rng.normal(0.0, common_sigma)))
+                    common_mode = float(resolved.scalar(rng.normal(0.0, common_sigmas[read_index])))
                 else:
-                    innovation = float(resolved.scalar(rng.normal(0.0, common_innovation)))
+                    innovation = float(
+                        resolved.scalar(rng.normal(0.0, common_innovations[read_index]))
+                    )
                     common_mode = common_rho * common_mode + innovation
 
             raw = noise.digitize(
@@ -475,30 +558,18 @@ class Camera:
                 backend=resolved,
                 fixed_patterns=self._fixed_patterns,
                 reset_noise_e=reset_noise,
-                common_mode_adu=(
-                    common_mode
-                    + interval_bias
-                    - (
-                        self.config.ndr_reset_settling_input_e
-                        * self.config.em_gain
-                        / self.config.gain_e_per_adu
-                        * (read_interval / self.config.ndr_reset_settling_reference_interval_s)
-                        ** self.config.ndr_reset_settling_interval_exponent
-                        * np.exp(-read_index / self.config.ndr_reset_settling_scale_reads)
-                        if self.config.ndr_reset_settling_input_e > 0
-                        and self.config.ndr_reset_settling_scale_reads > 0
-                        else 0.0
-                    )
-                ),
-                avalanche_input_noise_e=avalanche_input_noise,
+                common_mode_adu=common_mode + interval_biases[read_index] - settles[read_index],
+                avalanche_input_noise_e=avalanche_input_noises[read_index],
             )
             data = self._crop_to_roi(raw)
-            elapsed = (read_index + 1) * read_interval
+            elapsed = float(elapsed_times[read_index])
             truth = None
             if include_truth:
+                cumulative_mean += mean_increment
+                cumulative_photo += mean_photo_increment
                 truth = FrameTruth(
-                    mean_electrons=self._crop_to_roi(mean_increment * (read_index + 1)),
-                    mean_photoelectrons=self._crop_to_roi(mean_photo_increment * (read_index + 1)),
+                    mean_electrons=self._crop_to_roi(xp.array(cumulative_mean, copy=True)),
+                    mean_photoelectrons=self._crop_to_roi(xp.array(cumulative_photo, copy=True)),
                     photon_rate=photon_rate,
                 )
             metadata = self._metadata("nondestructive", elapsed, temp, seed)
@@ -538,6 +609,138 @@ class Camera:
             seed=seed,
             include_truth=include_truth,
         )
+
+    def correlated_double_sample(
+        self,
+        photon_rate: PhotonRate,
+        exposure: float,
+        temperature: float | None = None,
+        *,
+        background: PhotonRate = 0.0,
+        quantum_efficiency: float | None = None,
+        pedestal_interval_s: float = 0.0,
+        seed: int | None = None,
+        include_truth: bool = True,
+    ) -> Frame:
+        """Read the sensor in correlated double sampling and return the difference.
+
+        CDS is the standard low-noise operating mode of a nondestructive-readout
+        hybrid array such as the SAPHIRA in a C-RED One. The pixel is globally
+        reset, read once to record the reset pedestal, integrated for
+        ``exposure``, and read again; the reported value is the difference of
+        the two reads. This is one ramp of :meth:`nondestructive_series` with
+        two reads, differenced, and it uses that same reset-correlated core.
+
+        What the differencing does and does not remove follows from which terms
+        are common to the two reads:
+
+        - **Removed.** kTC/reset noise (``reset_noise_e``), drawn once per ramp,
+          and the fixed bias structure — pedestal, per-channel and per-pixel
+          offsets, and edge structure — which is a property of the silicon and
+          identical in both reads.
+        - **Amplified.** Amplifier read noise is redrawn per read, so the
+          difference carries ``sqrt(2) * read_noise_e``. The eAPD
+          input-referred noise likewise adds in quadrature across the two reads.
+        - **Partly removed.** Readout common mode is an AR(1) sequence with
+          correlation ``readout_common_mode_correlation``, so the difference
+          retains the ``sqrt(2 * (1 - rho))`` fraction of it rather than all or
+          none. Reset settling is read-index dependent and therefore leaves the
+          residual between its value at the pedestal and signal reads, which is
+          the physical CDS pedestal artifact rather than a modelling shortcut.
+        - **Not removed.** The interval-proportional bias rate
+          (``ndr_bias_offset_adu_per_s`` and
+          ``ndr_bias_gain_coefficient_adu_per_s``) scales with collected
+          integration time, not with the read operation, so it survives
+          differencing in full. A CDS frame therefore still sits on a small
+          exposure-dependent pedestal — for the C-RED One preset at 1750 Hz,
+          about ``+50 ADU`` of bias rate against ``-8 ADU`` of settling
+          residual. Subtract it with a dark CDS frame at the same exposure and
+          gain, exactly as on the real camera.
+
+        Charge is collected only between the two reads, so the well holds one
+        ``exposure`` worth of signal and full-well clipping happens at the
+        intended level.
+
+        Parameters
+        ----------
+        photon_rate:
+            Incident photons/s/pixel, scalar or a map matching the active camera
+            resolution.
+        exposure:
+            Integration time *between* the pedestal and signal reads, in
+            seconds. This is the charge the difference measures, so it is
+            independent of ``pedestal_interval_s``.
+        temperature:
+            Detector temperature in degrees Celsius. Defaults to
+            :attr:`default_temperature_c`.
+        background:
+            Additive incident background in photons/s/pixel.
+        quantum_efficiency:
+            Optional scalar QE override.
+        pedestal_interval_s:
+            Reset-to-pedestal-read time in seconds. ``0.0`` (the default) models
+            a pedestal read taken immediately after the reset, collecting no
+            charge. Set it to the camera's real reset-to-read delay when that
+            delay is a significant fraction of ``exposure``. It does not change
+            the measured signal; it sets the interval the pedestal read's own
+            terms are evaluated at — the bias rate, the eAPD input-referred
+            noise, and the gain-driven common-mode sigma — and it adds that much
+            charge to the well before the signal read.
+        seed:
+            Seed for the complete two-read sequence.
+        include_truth:
+            Attach the noise-free electron expectation *of the difference*, i.e.
+            the charge collected during ``exposure``.
+
+        Returns
+        -------
+        Frame
+            Signed difference frame in ADU (``int32``). Unlike a single raw
+            read it is bias-subtracted by construction and may go negative on a
+            dark pixel.
+        """
+        if exposure <= 0:
+            raise ValueError("exposure must be positive.")
+        if pedestal_interval_s < 0:
+            raise ValueError("pedestal_interval_s must be non-negative.")
+        if pedestal_interval_s == exposure:
+            raise ValueError(
+                "pedestal_interval_s must differ from exposure so the two reads "
+                "are distinguishable; use nondestructive_series for a uniform ramp."
+            )
+        pedestal, signal = self._ramp_reads(
+            photon_rate,
+            (pedestal_interval_s, exposure),
+            2,
+            temperature,
+            background=background,
+            quantum_efficiency=quantum_efficiency,
+            seed=seed,
+            include_truth=include_truth,
+            caller="correlated_double_sample",
+        )
+        xp = self._backend.xp
+        data = signal.data.astype(xp.int32) - pedestal.data.astype(xp.int32)
+        truth = None
+        if include_truth and signal.truth is not None and pedestal.truth is not None:
+            truth = FrameTruth(
+                mean_electrons=signal.truth.mean_electrons - pedestal.truth.mean_electrons,
+                mean_photoelectrons=(
+                    signal.truth.mean_photoelectrons - pedestal.truth.mean_photoelectrons
+                ),
+                photon_rate=photon_rate,
+            )
+        temp = self.default_temperature_c if temperature is None else temperature
+        metadata = self._metadata("correlated_double_sample", exposure, temp, seed)
+        metadata.update(
+            {
+                "readout_mode": "global_reset_cds",
+                "exposure_s": exposure,
+                "pedestal_interval_s": pedestal_interval_s,
+                "reads_per_reset": 2,
+            }
+        )
+        return Frame(data=data, metadata=metadata, truth=truth)
 
     def expose(
         self,
@@ -760,8 +963,51 @@ class Camera:
         ``qe_curve`` is required. ``workspace`` and ``out`` have the same
         reusable-scratch and caller-owned-lifetime contracts as :meth:`expose`.
         """
+        cube, wavelengths_host, electron_rate, integrated_rate = self._fold_spectral_cube(
+            photon_rate_cube, wavelengths_nm, "expose_spectral"
+        )
+        frame = self.expose(
+            electron_rate,
+            exposure,
+            temperature,
+            background=background,
+            quantum_efficiency=1.0,
+            binning=binning,
+            binning_mode=binning_mode,
+            seed=seed,
+            include_truth=include_truth,
+            workspace=workspace,
+            out=out,
+        )
+        frame.metadata["spectral"] = True
+        frame.metadata["spectral_wavelengths_nm"] = [float(value) for value in wavelengths_host]
+        if frame.truth is not None:
+            frame = replace(
+                frame,
+                truth=replace(
+                    frame.truth,
+                    photon_rate=integrated_rate,
+                    spectral_photon_rate=cube,
+                    wavelengths_nm=self._backend.asarray(wavelengths_host, dtype=np.float64),
+                ),
+            )
+        return frame
+
+    def _fold_spectral_cube(
+        self,
+        photon_rate_cube: NDArray[np.floating[Any]],
+        wavelengths_nm: NDArray[np.floating[Any]],
+        caller: str,
+    ) -> tuple[Any, NDArray[np.float64], Any, Any]:
+        """Validate a spectral cube and fold the configured QE through it once.
+
+        Returns the backend cube, the host wavelength nodes, the QE-weighted
+        photoelectron rate map, and the wavelength-integrated incident photon
+        rate. Both spectral entry points share this so a cube can never have QE
+        applied twice, or applied differently between readout modes.
+        """
         if self.config.qe_curve is None:
-            raise ValueError("expose_spectral requires CameraConfig.qe_curve")
+            raise ValueError(f"{caller} requires CameraConfig.qe_curve")
         xp = self._backend.xp
         cube = self._backend.asarray(photon_rate_cube, dtype=self._float_dtype)
         wavelengths_host = np.asarray(self._backend.to_numpy(wavelengths_nm), dtype=np.float64)
@@ -781,20 +1027,45 @@ class Camera:
         ):
             raise ValueError("photon_rate_cube must be finite and non-negative")
         qe = self._backend.asarray(self.config.qe_curve(wavelengths_host), dtype=self._float_dtype)
-        electron_rate = xp.tensordot(qe, cube, axes=(0, 0))
-        integrated_rate = xp.sum(cube, axis=0)
-        frame = self.expose(
+        return cube, wavelengths_host, xp.tensordot(qe, cube, axes=(0, 0)), xp.sum(cube, axis=0)
+
+    def correlated_double_sample_spectral(
+        self,
+        photon_rate_cube: NDArray[np.floating[Any]],
+        wavelengths_nm: NDArray[np.floating[Any]],
+        exposure: float,
+        temperature: float | None = None,
+        *,
+        background: PhotonRate = 0.0,
+        pedestal_interval_s: float = 0.0,
+        seed: int | None = None,
+        include_truth: bool = True,
+    ) -> Frame:
+        """Read a wavelength-resolved photon-rate cube in correlated double sampling.
+
+        This is :meth:`correlated_double_sample` for the spectral path, and
+        stands in the same relation to it as :meth:`expose_spectral` does to
+        :meth:`expose`: the configured :class:`~getframes.spectral.QE` is
+        evaluated at each wavelength node and folded in before the detector
+        signal chain runs once, so callers cannot apply QE twice.
+
+        ``photon_rate_cube`` is incident photons/s/native pixel with shape
+        ``(n_wavelength, height, width)``. A configured ``qe_curve`` is required.
+        The return is the signed ``int32`` ADU difference described in
+        :meth:`correlated_double_sample`.
+        """
+        cube, wavelengths_host, electron_rate, integrated_rate = self._fold_spectral_cube(
+            photon_rate_cube, wavelengths_nm, "correlated_double_sample_spectral"
+        )
+        frame = self.correlated_double_sample(
             electron_rate,
             exposure,
             temperature,
             background=background,
             quantum_efficiency=1.0,
-            binning=binning,
-            binning_mode=binning_mode,
+            pedestal_interval_s=pedestal_interval_s,
             seed=seed,
             include_truth=include_truth,
-            workspace=workspace,
-            out=out,
         )
         frame.metadata["spectral"] = True
         frame.metadata["spectral_wavelengths_nm"] = [float(value) for value in wavelengths_host]

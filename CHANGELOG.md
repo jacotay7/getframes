@@ -8,6 +8,19 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Correlated double sampling as a first-class readout mode.**
+  `Camera.correlated_double_sample` resets, reads the pedestal, integrates, reads
+  again, and returns the signed `int32` ADU difference — the frame a camera in
+  CDS mode actually delivers. It shares one reset-correlated readout core with
+  `nondestructive_series`, so kTC noise and fixed bias structure cancel, read
+  noise grows by `sqrt(2)`, common mode is partly removed through its AR(1)
+  correlation, and reset settling leaves its pedestal-to-signal residual. The
+  interval-proportional bias rate survives differencing by construction and is
+  documented as a dark-subtractable pedestal. `pedestal_interval_s` models a
+  finite reset-to-read delay. `correlated_double_sample_spectral` is the
+  wavelength-resolved twin, standing to it as `expose_spectral` does to
+  `expose`; both spectral entry points now share one QE-folding step, so a cube
+  cannot have QE applied twice or applied differently per readout mode.
 - **Global-reset nondestructive read series for eAPD arrays.**
   `Camera.nondestructive_series` and `dark_nondestructive_series` accumulate
   Poisson charge between resets, preserve a ramp's kTC realization, redraw read

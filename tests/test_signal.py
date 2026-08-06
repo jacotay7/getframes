@@ -104,6 +104,38 @@ def test_expose_spectral_rejects_missing_curve_and_bad_shapes(cam):
         spectral_cam.expose_spectral(np.ones(cam.resolution), np.array([500.0]), exposure=1.0)
 
 
+def test_correlated_double_sample_spectral_applies_qe_once_and_preserves_cube_truth(cam):
+    cam = cam.with_config(
+        resolution=[8, 8],
+        quantum_efficiency=0.5,
+        qe_curve=QE.from_arrays([500.0, 700.0], [0.2, 0.8]),
+    )
+    cube = np.stack([np.full(cam.resolution, 100.0), np.full(cam.resolution, 50.0)])
+    frame = cam.correlated_double_sample_spectral(
+        cube, np.array([500.0, 700.0]), exposure=1.0, seed=3
+    )
+    assert frame.truth is not None
+    # 100 * 0.2 + 50 * 0.8 = 60 photoelectrons/s, and the scalar QE must not
+    # be applied on top of the folded curve.
+    np.testing.assert_allclose(frame.truth.mean_photoelectrons, 60.0)
+    np.testing.assert_allclose(frame.truth.photon_rate, 150.0)
+    np.testing.assert_allclose(frame.truth.spectral_photon_rate, cube)
+    np.testing.assert_allclose(frame.truth.wavelengths_nm, [500.0, 700.0])
+    assert frame.metadata["spectral"] is True
+    assert frame.metadata["readout_mode"] == "global_reset_cds"
+
+
+def test_correlated_double_sample_spectral_rejects_missing_curve_and_bad_shapes(cam):
+    cube = np.ones((2, *cam.resolution))
+    with pytest.raises(ValueError, match="qe_curve"):
+        cam.correlated_double_sample_spectral(cube, np.array([500.0, 700.0]), exposure=1.0)
+    spectral_cam = cam.with_config(qe_curve=QE.from_arrays([500.0, 700.0], [0.5, 0.5]))
+    with pytest.raises(ValueError, match="shape"):
+        spectral_cam.correlated_double_sample_spectral(
+            np.ones(cam.resolution), np.array([500.0]), exposure=1.0
+        )
+
+
 def test_truth_photoelectrons_match_qe_relation(cam):
     photon_rate, exposure = 500.0, 4.0
     frame = cam.expose(photon_rate, exposure, -20.0, seed=2)
