@@ -42,6 +42,14 @@ _JOHNSON_PHOTON_ZEROPOINTS = {
     "I": 6.73e9,
 }
 
+# Vega-system zero-magnitude flux densities for the 2MASS near-infrared bands,
+# in janskys, from the 2MASS absolute calibration (Cohen, Wheaton & Megeath
+# 2003, AJ 126, 1090). Unlike the UBVRI entries above these are not textbook
+# band-integrated photon counts: the photon zero point is derived from them
+# below, with the same integral the AB path uses, so the two systems differ
+# only in the reference spectrum and not in the convention.
+_VEGA_FLUX_ZEROPOINTS_JY = {"J": 1594.0, "H": 1024.0, "KS": 666.7}
+
 # Representative ``(effective wavelength nm, FWHM nm)`` for common survey filters,
 # used to synthesise tophat band shapes for the AB system. Coarse stand-ins for the
 # real filter curves --- enough for a sensible zero point and colour term; load a
@@ -62,6 +70,23 @@ _AB_BANDS: dict[str, tuple[str, float, float]] = {
 }
 
 
+def _photon_zeropoint(response: SpectralBandpass, flux_zeropoint_si: float) -> float:
+    r"""Photon zero point of a band with a given zero-magnitude ``f_nu``.
+
+    .. math::
+
+        N_0 = \frac{f_{\nu,0}}{h} \int T(\lambda)\, \frac{d\lambda}{\lambda}
+
+    The photon energy ``hc/lambda`` turns the energy flux into a photon count,
+    leaving a dimensionless integral evaluated directly on the response grid.
+    AB and Vega differ only in ``flux_zeropoint_si``: AB fixes it at 3631 Jy
+    for every band, the Vega system takes it from the star.
+    """
+    wl = response.response.wavelength_nm
+    t = response.response.value
+    return flux_zeropoint_si / _H_PLANCK * float(_trapezoid(t / wl, wl))
+
+
 def _ab_photon_zeropoint(response: SpectralBandpass) -> float:
     r"""Photon zero point (photons/s/m^2 for ``m_AB = 0``) of an AB band.
 
@@ -76,10 +101,17 @@ def _ab_photon_zeropoint(response: SpectralBandpass) -> float:
     photon count). The integral is dimensionless, so it is evaluated directly on the
     response grid in nanometres.
     """
-    wl = response.response.wavelength_nm
-    t = response.response.value
-    integral = float(_trapezoid(t / wl, wl))
-    return _AB_FLUX_ZEROPOINT / _H_PLANCK * integral
+    return _photon_zeropoint(response, _AB_FLUX_ZEROPOINT)
+
+
+# Derived once, through the same integral the AB path uses, so the near-infrared
+# Vega bands cannot drift from the AB ones in convention.
+_JOHNSON_PHOTON_ZEROPOINTS.update(
+    {
+        band: _photon_zeropoint(SpectralBandpass.johnson(band), flux_jy * 1.0e-26)
+        for band, flux_jy in _VEGA_FLUX_ZEROPOINTS_JY.items()
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -108,10 +140,16 @@ class Bandpass:
 
     @classmethod
     def johnson(cls, band: str, *, spectral: bool = True) -> Bandpass:
-        """Return a standard Johnson-Cousins band (one of U, B, V, R, I).
+        """Return a Vega-system band (``U B V R I``, or 2MASS ``J H Ks``).
 
         By default the band also carries a tophat spectral ``response`` so spectral
         mode works out of the box; pass ``spectral=False`` for the bare zero point.
+
+        ``U`` through ``I`` carry representative textbook band-integrated photon
+        zero points. ``J``, ``H``, and ``Ks`` are derived from the 2MASS absolute
+        calibration instead, so near-infrared work does not have to leave the
+        Vega system to reach a defensible zero point. Use :meth:`ab` for the AB
+        system, which is a different magnitude for the same star.
         """
         key = band.strip().upper()
         if key not in _JOHNSON_PHOTON_ZEROPOINTS:

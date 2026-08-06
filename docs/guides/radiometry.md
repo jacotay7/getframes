@@ -15,9 +15,17 @@ factories:
 ```python
 import getframes as gf
 
-vega = gf.Bandpass.johnson("V")  # Vega system (Johnson-Cousins UBVRI)
+vega = gf.Bandpass.johnson("V")  # Vega system (Johnson-Cousins UBVRI + 2MASS JHKs)
 ab = gf.Bandpass.ab("r")  # AB system (SDSS r)
 ```
+
+The **Vega** system covers Johnson-Cousins `U B V R I` and 2MASS `J H Ks`.
+`U`–`I` carry representative textbook band-integrated photon zero points; the
+near-infrared three are derived from the 2MASS absolute calibration (Cohen,
+Wheaton & Megeath 2003) through the same integral the AB path uses, so the two
+systems differ only in the reference spectrum. The two are *different
+magnitudes for the same star*: AB − Vega is +0.89 in J, +1.37 in H, and +1.84
+in Ks, so mixing them silently is a factor of two or three in flux.
 
 The **AB** system references every band to a flat $f_\nu = 3631$ Jy source, so its
 zero point is *computed* from the band's transmission shape rather than tabulated.

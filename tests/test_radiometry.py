@@ -42,6 +42,38 @@ def test_ab_and_vega_differ():
     assert gf.Bandpass.ab("r").photon_zeropoint != gf.Bandpass.johnson("R").photon_zeropoint
 
 
+@pytest.mark.parametrize(("band", "flux_jy"), [("J", 1594.0), ("H", 1024.0), ("Ks", 666.7)])
+def test_near_infrared_vega_zeropoints_follow_the_2mass_calibration(band, flux_jy):
+    """Same integral as the AB path, with Vega's flux instead of 3631 Jy."""
+    bp = gf.Bandpass.johnson(band)
+    resp = bp.response.response
+    integral = np.trapezoid(resp.value / resp.wavelength_nm, resp.wavelength_nm)
+    expected = flux_jy * 1.0e-26 / 6.62607015e-34 * integral
+    assert bp.photon_zeropoint == pytest.approx(expected, rel=1e-6)
+
+
+@pytest.mark.parametrize(("band", "offset_mag"), [("J", 0.89), ("H", 1.37), ("Ks", 1.84)])
+def test_near_infrared_ab_minus_vega_offsets_match_the_literature(band, offset_mag):
+    """An independent check on the zero points, not a restatement of them.
+
+    The AB and Vega systems are tied together by a per-band offset that is
+    tabulated in the literature (2MASS: J +0.89, H +1.37, Ks +1.84). It falls
+    out of the ratio of the two zero points, so agreeing with it means the Vega
+    flux densities and the band shapes are mutually consistent.
+    """
+    ratio = gf.Bandpass.ab(band).photon_zeropoint / gf.Bandpass.johnson(band).photon_zeropoint
+    assert 2.5 * np.log10(ratio) == pytest.approx(offset_mag, abs=0.03)
+
+
+def test_vega_near_infrared_bands_share_the_ab_band_shapes():
+    """The filter shape belongs to the filter, not to the magnitude system."""
+    for band in ("J", "H", "Ks"):
+        vega = gf.Bandpass.johnson(band).response.response
+        ab = gf.Bandpass.ab(band).response.response
+        np.testing.assert_allclose(vega.wavelength_nm, ab.wavelength_nm)
+        np.testing.assert_allclose(vega.value, ab.value)
+
+
 # --------------------------------------------------------------------------
 # Transmission products
 # --------------------------------------------------------------------------

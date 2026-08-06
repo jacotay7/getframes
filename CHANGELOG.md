@@ -8,6 +8,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Vega-system J, H, and Ks bands.** `Bandpass.johnson` previously stopped at
+  I, so any near-infrared work had to leave the Vega system for AB — a
+  different magnitude for the same star, by +0.89 (J), +1.37 (H), and +1.84
+  (Ks). The zero points are derived from the 2MASS absolute calibration (Cohen,
+  Wheaton & Megeath 2003) through the same integral the AB path uses, so the
+  two systems now differ only in the reference spectrum and not in the
+  convention. `SpectralBandpass.johnson` gained the matching tophats, which are
+  the same shapes the AB survey table already used: a filter's shape is a
+  property of the filter, not of the magnitude system.
 - **Correlated double sampling as a first-class readout mode.**
   `Camera.correlated_double_sample` resets, reads the pedestal, integrates, reads
   again, and returns the signed `int32` ADU difference — the frame a camera in

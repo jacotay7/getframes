@@ -390,11 +390,20 @@ class SpectralBandpass:
         "V": (551.0, 88.0),
         "R": (658.0, 138.0),
         "I": (806.0, 149.0),
+        # 2MASS near-infrared bands, same centres and widths the AB survey
+        # table uses. The band shape is a property of the filter, not of the
+        # magnitude system, so the two must not disagree about it.
+        "J": (1235.0, 162.0),
+        "H": (1662.0, 251.0),
+        "KS": (2159.0, 262.0),
     }
 
     @classmethod
     def johnson(cls, band: str) -> SpectralBandpass:
-        """A tophat approximation of a Johnson-Cousins band (one of U, B, V, R, I)."""
+        """A tophat approximation of a Vega-system band.
+
+        One of Johnson-Cousins ``U B V R I`` or 2MASS ``J H Ks``.
+        """
         key = band.strip().upper()
         if key not in cls._JOHNSON_NM:
             valid = ", ".join(cls._JOHNSON_NM)
