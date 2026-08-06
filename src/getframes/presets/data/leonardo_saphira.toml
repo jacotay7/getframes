@@ -29,9 +29,8 @@ notes = "Bare/representative SAPHIRA detector profile, not a complete C-RED One 
 source_url = "https://andor.oxinst.com/products/c-red-series/c-red-one"
 characterization_url = "https://arxiv.org/abs/2409.04247"
 
-# Wavelength-resolved quantum efficiency (HgCdTe, ~2.5 um cutoff). Optional; only
-# used in spectral mode (Camera.observe with a band that has a spectral response).
-# Representative shape --- supply a measured curve for quantitative IR work.
+# Wavelength-resolved quantum efficiency digitized from the C-RED One
+# manufacturer curve. Optional; only used in spectral mode.
 [qe_curve]
-wavelength_nm = [800.0, 1000.0, 1200.0, 1500.0, 2000.0, 2400.0, 2500.0]
-qe = [0.20, 0.50, 0.62, 0.70, 0.68, 0.60, 0.10]
+wavelength_nm = [800.0, 950.0, 1200.0, 1450.0, 2500.0]
+qe = [0.60, 0.60, 0.70, 0.80, 0.80]

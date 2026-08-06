@@ -415,6 +415,11 @@ class Camera:
             self.config.ndr_bias_offset_adu_per_s
             + self.config.ndr_bias_gain_coefficient_adu_per_s * max(self.config.em_gain - 1.0, 0.0)
         )
+        avalanche_input_noise = (
+            self.config.avalanche_input_noise_e
+            * (read_interval / self.config.ndr_avalanche_input_noise_reference_interval_s)
+            ** self.config.ndr_avalanche_input_noise_interval_exponent
+        )
 
         for frame_index in range(n_frames):
             read_index = frame_index % reads_per_reset
@@ -453,6 +458,7 @@ class Camera:
                     rng,
                     backend=resolved,
                 )
+                increment *= self._fixed_patterns.avalanche_gain_multiplier
             accumulated_output += increment
 
             if common_sigma > 0:
@@ -469,7 +475,22 @@ class Camera:
                 backend=resolved,
                 fixed_patterns=self._fixed_patterns,
                 reset_noise_e=reset_noise,
-                common_mode_adu=common_mode + interval_bias,
+                common_mode_adu=(
+                    common_mode
+                    + interval_bias
+                    - (
+                        self.config.ndr_reset_settling_input_e
+                        * self.config.em_gain
+                        / self.config.gain_e_per_adu
+                        * (read_interval / self.config.ndr_reset_settling_reference_interval_s)
+                        ** self.config.ndr_reset_settling_interval_exponent
+                        * np.exp(-read_index / self.config.ndr_reset_settling_scale_reads)
+                        if self.config.ndr_reset_settling_input_e > 0
+                        and self.config.ndr_reset_settling_scale_reads > 0
+                        else 0.0
+                    )
+                ),
+                avalanche_input_noise_e=avalanche_input_noise,
             )
             data = self._crop_to_roi(raw)
             elapsed = (read_index + 1) * read_interval

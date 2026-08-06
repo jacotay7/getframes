@@ -30,6 +30,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Refined the measured C-RED One response across gain and read rate.** Fixed
+  avalanche-gain nonuniformity, sublinear gain noise, NDR read-interval scaling,
+  observed 42/3/5-read electronic cadences, reset settling, and separate broad
+  side/narrow row-edge pedestal terms now reproduce the local operating-point
+  stacks. The C-RED One and SAPHIRA QE curves were corrected to the manufacturer
+  plot: 60% through 950 nm, linear to 80% at 1450 nm, then 80% to 2500 nm.
+
 - **The README follows the documentation-first structure** used across the sibling
   projects: docs link, showcase clip, install, quickstart, benchmarks, then the
   feature list. The preset table and the dark-frame model walkthrough now live

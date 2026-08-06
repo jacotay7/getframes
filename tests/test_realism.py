@@ -245,6 +245,34 @@ def test_bias_and_read_noise_rise_towards_detector_edges():
     assert sigma[0, 64] / sigma[64, 64] > 1.95
 
 
+def test_bias_edge_axis_can_select_column_boundaries():
+    cfg = base_config(
+        resolution=(128, 128),
+        bias_edge_amplitude_adu=100.0,
+        bias_edge_scale_px=8.0,
+        bias_edge_axis=1,
+    )
+    bias = np.asarray(noise._bias_structure_map(cfg))
+    assert bias[64, 0] - bias[64, 64] > 95.0
+    assert bias[0, 64] == pytest.approx(bias[64, 64])
+
+
+def test_secondary_bias_edge_can_add_narrow_orthogonal_halo():
+    cfg = base_config(
+        resolution=(128, 128),
+        bias_edge_amplitude_adu=100.0,
+        bias_edge_scale_px=8.0,
+        bias_edge_axis=1,
+        bias_edge_secondary_amplitude_adu=30.0,
+        bias_edge_secondary_scale_px=2.0,
+        bias_edge_secondary_axis=0,
+    )
+    bias = np.asarray(noise._bias_structure_map(cfg))
+    assert bias[64, 0] - bias[64, 64] > 95.0
+    assert bias[0, 64] - bias[64, 64] > 29.0
+    assert bias[8, 64] - bias[64, 64] < 1.0
+
+
 # --- structured (edge-concentrated) detector glow --------------------------
 
 

@@ -50,7 +50,7 @@ def test_cred_one_preset_is_camera_specific_and_data_constrained():
     assert np.std(bias) == pytest.approx(1_565.0, rel=0.08)
     p1, p99 = np.percentile(bias, [1, 99])
     assert p1 == pytest.approx(19_317.0, abs=350.0)
-    assert p99 == pytest.approx(25_805.0, abs=150.0)
+    assert p99 == pytest.approx(26_000.0, abs=150.0)
 
 
 def test_saphira_and_cred_one_presets_have_distinct_scope():

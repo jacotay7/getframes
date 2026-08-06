@@ -133,6 +133,11 @@ RMS is therefore `avalanche_input_noise_e * em_gain`. This is distinct from
 `read_noise_e`, which is output-amplifier noise and does not scale with avalanche
 gain. It is useful when measured raw-read noise rises with physical gain more
 quickly than shot noise and the documented excess-noise factor predict.
+`avalanche_gain_nonuniformity` is instead a fixed response map whose fractional
+width grows as `log(em_gain)`. It captures spatial eAPD multiplication variation
+that is absent at unity gain and repeats from frame to frame.
+`avalanche_input_noise_gain_exponent` optionally makes the former scale
+sublinearly with physical gain while preserving its value at a reference gain.
 
 #### Detector glow
 
@@ -214,13 +219,16 @@ instead of silently turning a measured sub-pixel width into a no-op.
   pixels that collect no charge.
 - `bias_structure_amplitude_adu` — a fixed gradient-plus-column pattern riding on
   the flat `bias_offset_adu` pedestal.
-- `bias_pixel_spread_adu` — a fixed, positively skewed pixel pedestal texture
-  with the configured array RMS.
+- `bias_pixel_spread_adu` — a fixed Gaussian pixel pedestal texture with the
+  configured array RMS.
 - `readout_channel_count` / `readout_channel_axis` with
   `bias_channel_spread_adu` — fixed offsets from interleaved output channels.
 - `bias_edge_amplitude_adu` / `bias_edge_scale_px` — a fixed pedestal rise toward
-  the detector perimeter; the corresponding read-noise edge fields control its
-  temporal-noise envelope independently.
+  the detector perimeter. `bias_edge_axis` can restrict it to row or column
+  boundaries; the corresponding read-noise edge fields control its temporal-noise
+  envelope independently.
+- `bias_edge_secondary_amplitude_adu` / `bias_edge_secondary_scale_px` provide a
+  second independently oriented halo when the two detector axes differ.
 - `readout_common_mode_noise_adu` — a frame-wide stochastic pedestal. In an NDR
   ramp, `readout_common_mode_correlation` sets its AR(1) lag correlation.
 - `ndr_bias_offset_adu_per_s` and `ndr_bias_gain_coefficient_adu_per_s` — an
@@ -228,6 +236,12 @@ instead of silently turning a measured sub-pixel width into a no-op.
   physical avalanche gain. `ndr_common_mode_gain_noise_adu_per_s` similarly adds
   gain- and read-interval-dependent frame-wide noise. These apply only to
   `Camera.nondestructive_series`, not ordinary integrated exposures.
+- `ndr_avalanche_input_noise_reference_interval_s` and its interval exponent
+  scale input-referred avalanche noise with NDR read rate.
+- `ndr_reset_settling_input_e` / `ndr_reset_settling_scale_reads` — a negative,
+  exponentially decaying pedestal transient immediately after each global reset.
+  Its optional reference interval and interval exponent reproduce transients whose
+  amplitude changes with read rate.
 
 ```python
 from getframes import Camera, load_preset

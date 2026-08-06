@@ -61,6 +61,49 @@ def test_input_referred_avalanche_noise_scales_with_gain():
     assert np.std(frame) == pytest.approx(40.0, rel=0.05)
 
 
+def test_avalanche_noise_can_scale_sublinearly_around_reference_gain():
+    cfg = CameraConfig(
+        name="sublinear gain noise",
+        sensor_type="EAPD",
+        resolution=(128, 128),
+        pixel_size_um=24.0,
+        quantum_efficiency=1.0,
+        full_well_e=60_000.0,
+        bit_depth=16,
+        gain_e_per_adu=1.0,
+        bias_offset_adu=1000.0,
+        read_noise_e=0.0,
+        avalanche_input_noise_e=2.0,
+        avalanche_input_noise_gain_exponent=0.5,
+        avalanche_input_noise_reference_gain=20.0,
+        em_gain=80.0,
+        excess_noise_factor=1.0,
+        dark_current_e_per_s=0.0,
+    )
+    frame = np.asarray(Camera(cfg).bias_frame(-100.0, seed=8), dtype=float)
+    # 2 e- * 80 * (80 / 20)^(-0.5) = 80 output electrons.
+    assert np.std(frame) == pytest.approx(80.0, rel=0.05)
+
+
+def test_avalanche_gain_nonuniformity_is_fixed_and_grows_with_gain():
+    base = load_preset("generic_eapd").replace(
+        resolution=(256, 256),
+        avalanche_gain_nonuniformity=0.03,
+    )
+    unity = noise.fixed_pattern_maps(base.replace(em_gain=1.0)).avalanche_gain_multiplier
+    assert unity == 1.0
+
+    gain = 20.0
+    first = np.asarray(
+        noise.fixed_pattern_maps(base.replace(em_gain=gain)).avalanche_gain_multiplier
+    )
+    second = np.asarray(
+        noise.fixed_pattern_maps(base.replace(em_gain=gain)).avalanche_gain_multiplier
+    )
+    np.testing.assert_array_equal(first, second)
+    assert np.std(first) == pytest.approx(0.03 * np.log(gain), rel=0.05)
+
+
 def test_apply_em_gain_matches_gain_stage_at_sqrt2():
     # The back-compat EMCCD wrapper must equal the general stage with F = sqrt(2).
     electrons = np.random.default_rng(4).poisson(8.0, size=(64, 64)).astype(float)

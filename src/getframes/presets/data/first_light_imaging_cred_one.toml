@@ -17,12 +17,17 @@ bit_depth = 16
 gain_e_per_adu = 2.4
 # This is the setting-50 operating point. Edge/channel structure raises the
 # central pedestal to the measured ~21,964 ADU array median.
-bias_offset_adu = 21036.0
+bias_offset_adu = 20998.0
 read_noise_e = 70.0
 avalanche_input_noise_e = 3.3
+avalanche_input_noise_gain_exponent = 0.75
+avalanche_input_noise_reference_gain = 21.7
+ndr_avalanche_input_noise_reference_interval_s = 0.000285714
+ndr_avalanche_input_noise_interval_exponent = 0.28
 # Requested setting 50 measured as 21.7x physical multiplication in the capped
 # 35 Hz ramps. Published C-RED One gain-calibration slopes are camera-dependent.
 em_gain = 21.7
+avalanche_gain_nonuniformity = 0.026
 # Lanthermann et al. measure <M^2>/<M>^2 = 1.47. getframes uses the square-root
 # convention (the multiplier on standard deviation), hence sqrt(1.47) here.
 excess_noise_factor = 1.2124
@@ -39,19 +44,29 @@ read_noise_channel_nonuniformity = 0.158
 read_noise_edge_factor = 1.4
 read_noise_edge_scale_px = 2.0
 readout_common_mode_noise_adu = 69.0
-readout_common_mode_correlation = 0.0
+readout_common_mode_correlation = 0.995
 ndr_bias_offset_adu_per_s = 51700.0
 ndr_bias_gain_coefficient_adu_per_s = 1730.0
-ndr_common_mode_gain_noise_adu_per_s = 180.0
+ndr_common_mode_gain_noise_adu_per_s = 0.0
+# Slow capped ramps have a repeatable first-read reset undershoot rather than
+# large white frame-to-frame common mode: ~-1,130 ADU at physical gain 21.7.
+ndr_reset_settling_input_e = 120.0
+ndr_reset_settling_scale_reads = 0.30
+ndr_reset_settling_reference_interval_s = 0.02857143
+ndr_reset_settling_interval_exponent = 0.40
 
 # Raw-read fixed pattern: ~424 ADU interleaved-channel RMS and a ~3.3 kADU measured
 # outer-edge rise. The procedural edge/base amplitudes jointly match the full-map
 # 1--99% range and spatial RMS rather than copying one camera's calibration frame.
 bias_structure_amplitude_adu = 2850.0
 bias_channel_spread_adu = 290.0
-bias_pixel_spread_adu = 700.0
-bias_edge_amplitude_adu = 3200.0
-bias_edge_scale_px = 20.0
+bias_pixel_spread_adu = 250.0
+bias_edge_amplitude_adu = 4600.0
+bias_edge_scale_px = 28.0
+bias_edge_axis = 1
+bias_edge_secondary_amplitude_adu = 1800.0
+bias_edge_secondary_scale_px = 4.0
+bias_edge_secondary_axis = 0
 
 # Conservative intrinsic detector/camera background at 80 K. Warm entrance
 # optics/caps are modeled as incident thermal background, not detector dark current.
@@ -86,5 +101,7 @@ characterization_url = "https://arxiv.org/abs/2409.04247"
 performance_url = "https://arxiv.org/abs/2208.00377"
 
 [qe_curve]
-wavelength_nm = [800.0, 1000.0, 1200.0, 1500.0, 1750.0, 2000.0, 2400.0, 2500.0]
-qe = [0.20, 0.50, 0.62, 0.70, 0.70, 0.68, 0.60, 0.10]
+# Digitized from the manufacturer curve: 60% from 0.80--0.95 um, linear rise
+# to 80% at 1.45 um, then 80% through 2.50 um.
+wavelength_nm = [800.0, 950.0, 1200.0, 1450.0, 2500.0]
+qe = [0.60, 0.60, 0.70, 0.80, 0.80]

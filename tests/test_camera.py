@@ -207,6 +207,71 @@ def test_nondestructive_series_common_mode_has_configured_lag_correlation():
     assert all(np.ptp(frame.data) == 0 for frame in frames)
 
 
+def test_nondestructive_series_applies_reset_settling_transient():
+    cam = Camera.from_preset("generic_eapd").with_config(
+        resolution=(8, 8),
+        em_gain=4.0,
+        excess_noise_factor=1.0,
+        read_noise_e=0.0,
+        reset_noise_e=0.0,
+        dark_current_e_per_s=0.0,
+        detector_glow_e_per_s=0.0,
+        bias_offset_adu=1000.0,
+        gain_e_per_adu=2.0,
+        ndr_reset_settling_input_e=100.0,
+        ndr_reset_settling_scale_reads=0.25,
+        ndr_reset_settling_reference_interval_s=0.001,
+    )
+    frames = list(
+        cam.dark_nondestructive_series(
+            read_interval=0.001,
+            n_frames=4,
+            reads_per_reset=3,
+            temperature=-100.0,
+            seed=20,
+        )
+    )
+    levels = np.array([frame.stats()["mean"] for frame in frames])
+    assert levels[0] == pytest.approx(800.0)
+    assert levels[1] == pytest.approx(996.0, abs=1.0)
+    assert levels[2] == pytest.approx(1000.0)
+    assert levels[3] == pytest.approx(800.0)
+
+
+def test_nondestructive_avalanche_noise_scales_with_read_interval():
+    cam = Camera.from_preset("generic_eapd").with_config(
+        resolution=(128, 128),
+        em_gain=10.0,
+        excess_noise_factor=1.0,
+        read_noise_e=0.0,
+        reset_noise_e=0.0,
+        dark_current_e_per_s=0.0,
+        detector_glow_e_per_s=0.0,
+        bias_offset_adu=1000.0,
+        gain_e_per_adu=1.0,
+        avalanche_input_noise_e=2.0,
+        ndr_avalanche_input_noise_reference_interval_s=0.001,
+        ndr_avalanche_input_noise_interval_exponent=0.5,
+    )
+
+    def spatial_noise(read_interval: float) -> float:
+        frame = next(
+            cam.dark_nondestructive_series(
+                read_interval=read_interval,
+                n_frames=1,
+                reads_per_reset=1,
+                temperature=-100.0,
+                seed=21,
+            )
+        )
+        return float(np.std(frame.data))
+
+    short = spatial_noise(0.001)
+    long = spatial_noise(0.004)
+    assert short == pytest.approx(20.0, rel=0.05)
+    assert long / short == pytest.approx(2.0, rel=0.05)
+
+
 def test_nondestructive_series_applies_interval_and_gain_dependent_bias():
     cam = Camera.from_preset("generic_eapd").with_config(
         resolution=(8, 8),

@@ -68,6 +68,7 @@ _FPN_STREAM_READ_NOISE = 7
 _FPN_STREAM_CHANNEL_BIAS = 8
 _FPN_STREAM_CHANNEL_READ_NOISE = 9
 _FPN_STREAM_PIXEL_BIAS = 10
+_FPN_STREAM_AVALANCHE_GAIN = 11
 
 
 class FixedPatternMaps(NamedTuple):
@@ -80,6 +81,7 @@ class FixedPatternMaps(NamedTuple):
     bias_structure: Any
     defect_mask: Any | None
     read_noise_sigma: Any
+    avalanche_gain_multiplier: Any
 
 
 class DetectorWorkspace:
@@ -322,6 +324,12 @@ def fixed_pattern_maps(
         rng = _fixed_pattern_rng(config, _FPN_STREAM_PRNU, resolved)
         prnu *= rng.lognormal(mean=-0.5 * sigma**2, sigma=sigma, size=shape)
 
+    avalanche_gain: Any = 1.0
+    if config.avalanche_gain_nonuniformity > 0 and config.em_gain > 1:
+        sigma = config.avalanche_gain_nonuniformity * np.log(config.em_gain)
+        rng = _fixed_pattern_rng(config, _FPN_STREAM_AVALANCHE_GAIN, resolved)
+        avalanche_gain = rng.lognormal(mean=-0.5 * sigma**2, sigma=sigma, size=shape)
+
     gain, offset = _amplifier_maps(config, resolved, float_dtype=float_dtype)
     return FixedPatternMaps(
         dark,
@@ -331,6 +339,7 @@ def fixed_pattern_maps(
         _bias_structure_map(config, resolved, float_dtype=float_dtype),
         _defect_mask(config, resolved),
         _read_noise_sigma_map(config, resolved, float_dtype=float_dtype),
+        avalanche_gain,
     )
 
 
@@ -415,16 +424,21 @@ def _edge_profile(
     backend: ArrayBackend,
     float_dtype: DTypeLike,
     scale_px: float,
+    axis: int | None = None,
 ) -> Any:
     """Unit-amplitude exponential profile of distance from the nearest edge."""
     xp = backend.xp
     height, width = config.resolution
     rows = xp.arange(height, dtype=float_dtype).reshape(height, 1)
     cols = xp.arange(width, dtype=float_dtype).reshape(1, width)
-    distance = xp.minimum(
-        xp.minimum(rows, height - 1 - rows),
-        xp.minimum(cols, width - 1 - cols),
-    )
+    row_distance = xp.minimum(rows, height - 1 - rows)
+    column_distance = xp.minimum(cols, width - 1 - cols)
+    if axis == 0:
+        distance = row_distance
+    elif axis == 1:
+        distance = column_distance
+    else:
+        distance = xp.minimum(row_distance, column_distance)
     return xp.exp(-distance / scale_px)
 
 
@@ -828,7 +842,10 @@ def _bias_structure_map(
     has_channels = config.bias_channel_spread_adu > 0
     has_pixels = config.bias_pixel_spread_adu > 0
     has_edge = config.bias_edge_amplitude_adu > 0 and config.bias_edge_scale_px > 0
-    if not (has_base or has_channels or has_pixels or has_edge):
+    has_secondary_edge = (
+        config.bias_edge_secondary_amplitude_adu > 0 and config.bias_edge_secondary_scale_px > 0
+    )
+    if not (has_base or has_channels or has_pixels or has_edge or has_secondary_edge):
         return 0.0
     pattern = xp.zeros((height, width), dtype=float_dtype)
 
@@ -862,7 +879,7 @@ def _bias_structure_map(
     if has_pixels:
         rng = _fixed_pattern_rng(config, _FPN_STREAM_PIXEL_BIAS, resolved)
         texture = xp.asarray(
-            rng.lognormal(mean=-0.18, sigma=0.6, size=(height, width)),
+            rng.normal(0.0, 1.0, size=(height, width)),
             dtype=float_dtype,
         )
         texture -= xp.mean(texture)
@@ -871,7 +888,20 @@ def _bias_structure_map(
 
     if has_edge:
         pattern += config.bias_edge_amplitude_adu * _edge_profile(
-            config, resolved, float_dtype, config.bias_edge_scale_px
+            config,
+            resolved,
+            float_dtype,
+            config.bias_edge_scale_px,
+            config.bias_edge_axis,
+        )
+
+    if has_secondary_edge:
+        pattern += config.bias_edge_secondary_amplitude_adu * _edge_profile(
+            config,
+            resolved,
+            float_dtype,
+            config.bias_edge_secondary_scale_px,
+            config.bias_edge_secondary_axis,
         )
 
     return pattern
@@ -989,6 +1019,7 @@ def digitize(
     fixed_patterns: FixedPatternMaps | None = None,
     reset_noise_e: Any | None = None,
     common_mode_adu: Any | None = None,
+    avalanche_input_noise_e: float | None = None,
     out: Any | None = None,
     _output_slices: tuple[slice, slice] | None = None,
     _out_validated: bool = False,
@@ -1044,8 +1075,16 @@ def digitize(
     # avalanche multiplication rather than remaining fixed at the output
     # amplifier. Keep it separate so ``read_noise_e`` retains its usual output
     # reference and high-gain data can identify the two terms independently.
-    if config.avalanche_input_noise_e > 0:
-        signal += normal_noise(config.avalanche_input_noise_e * config.em_gain)
+    avalanche_noise = (
+        config.avalanche_input_noise_e
+        if avalanche_input_noise_e is None
+        else avalanche_input_noise_e
+    )
+    if avalanche_noise > 0:
+        gain_scale = config.em_gain * (
+            config.em_gain / config.avalanche_input_noise_reference_gain
+        ) ** (config.avalanche_input_noise_gain_exponent - 1.0)
+        signal += normal_noise(avalanche_noise * gain_scale)
 
     # Read noise in electrons, added at the amplifier. The per-pixel RMS is a
     # fixed property of the sensor (see :func:`_read_noise_sigma_map`), so only the
@@ -1102,6 +1141,7 @@ def frame_electrons(
     exposure_s: float = 0.0,
     *,
     backend: ArrayBackend | None = None,
+    fixed_patterns: FixedPatternMaps | None = None,
 ) -> Any:
     """Apply shot noise, CIC, cosmic rays, nonlinearity, and any gain stage.
 
@@ -1144,6 +1184,16 @@ def frame_electrons(
             rng,
             backend=resolved,
         )
+        gain_multiplier = (
+            fixed_patterns.avalanche_gain_multiplier
+            if fixed_patterns is not None
+            else fixed_pattern_maps(
+                config,
+                backend=resolved,
+                float_dtype=electrons.dtype,
+            ).avalanche_gain_multiplier
+        )
+        electrons *= gain_multiplier
 
     return electrons
 
@@ -1333,7 +1383,14 @@ def simulate_frame(
             )
 
     if binning == 1:
-        electrons = frame_electrons(config, mean_total, rng, exposure_s, backend=resolved)
+        electrons = frame_electrons(
+            config,
+            mean_total,
+            rng,
+            exposure_s,
+            backend=resolved,
+            fixed_patterns=fixed_patterns,
+        )
         adu = digitize(
             electrons,
             config,
@@ -1381,7 +1438,14 @@ def simulate_frame(
     else:
         # Digital / post-read: read every native pixel (its own read noise), then sum
         # the digitised values, so read noise adds in quadrature over binning**2 pixels.
-        electrons = frame_electrons(config, mean_total, rng, exposure_s, backend=resolved)
+        electrons = frame_electrons(
+            config,
+            mean_total,
+            rng,
+            exposure_s,
+            backend=resolved,
+            fixed_patterns=fixed_patterns,
+        )
         native_adu = digitize(
             electrons, config, rng, backend=resolved, fixed_patterns=fixed_patterns
         )

@@ -107,6 +107,11 @@ class CameraConfig:
         ``read_noise_e``. It is added as an output-equivalent Gaussian with RMS
         ``avalanche_input_noise_e * em_gain``. Relevant only to gain-stage sensors;
         ``0`` disables it.
+    avalanche_input_noise_gain_exponent, avalanche_input_noise_reference_gain:
+        Optional sublinear gain scaling of the avalanche-noise output RMS. The
+        ordinary input-referred result is multiplied by ``(em_gain /
+        reference_gain)**(gain_exponent - 1)``. An exponent of ``1`` preserves
+        linear input-referred scaling.
     read_noise_nonuniformity:
         Fractional pixel-to-pixel spread of the read-noise RMS (e.g. ``0.3`` for a
         30% log-normal spread). Models the per-pixel read-noise distribution of
@@ -158,6 +163,21 @@ class CameraConfig:
     ndr_common_mode_gain_noise_adu_per_s:
         Additional frame-wide common-mode RMS in an NDR sequence, equal to this
         coefficient times ``read_interval * (em_gain - 1)``. Defaults to zero.
+    ndr_avalanche_input_noise_reference_interval_s,
+    ndr_avalanche_input_noise_interval_exponent:
+        Optional read-rate scaling of ``avalanche_input_noise_e`` in NDR series.
+        Its effective input-referred RMS is multiplied by ``(read_interval /
+        reference_interval)**exponent``. An exponent of ``0`` preserves the
+        ordinary rate-independent behavior.
+    ndr_reset_settling_input_e, ndr_reset_settling_scale_reads,
+    ndr_reset_settling_reference_interval_s, ndr_reset_settling_interval_exponent:
+        Input-referred amplitude and exponential read-index scale of the negative
+        pedestal transient immediately following a global reset. The first read
+        is lowered by ``ndr_reset_settling_input_e * em_gain / gain_e_per_adu``
+        ADU at the reference read interval, then the term decays as
+        ``exp(-read_index / scale_reads)``. A nonzero interval exponent scales the
+        amplitude by ``(read_interval / reference_interval)**exponent``. Either
+        amplitude or scale at ``0`` disables it.
     detector_glow_edge_scale_px:
         Exponential falloff scale, in pixels, of the ``detector_glow_e_per_s`` term
         away from the detector edges. Amplifier/array glow originates at the readout
@@ -257,9 +277,15 @@ class CameraConfig:
         RMS fixed pixel-scale bias texture in ADU, drawn once from
         ``fixed_pattern_seed``. This is additive readout structure, not PRNU or
         dark-signal non-uniformity. ``0`` disables it.
-    bias_edge_amplitude_adu, bias_edge_scale_px:
+    bias_edge_amplitude_adu, bias_edge_scale_px, bias_edge_axis:
         Additive fixed pedestal at the detector boundary and its exponential
-        falloff scale in pixels. Either value at ``0`` disables the edge term.
+        falloff scale in pixels. ``bias_edge_axis`` optionally restricts the rise
+        to row edges (``0``) or column edges (``1``); ``None`` uses the full
+        perimeter. Either numeric value at ``0`` disables the edge term.
+    bias_edge_secondary_amplitude_adu, bias_edge_secondary_scale_px,
+    bias_edge_secondary_axis:
+        Optional second exponential edge pedestal. This represents detectors
+        with a broad halo on one axis and a weaker, narrower halo on the other.
     cosmic_ray_rate_per_cm2_s:
         Cosmic-ray hit rate in events per cm^2 per second (sea level is ~5). The
         number of hits scales with sensor area and exposure; each deposits a burst
@@ -285,6 +311,11 @@ class CameraConfig:
     em_gain:
         Mean gain of the stochastic multiplication stage: the EM register of an
         EMCCD or the avalanche gain of an eAPD. ``1.0`` disables it (CCD/CMOS).
+    avalanche_gain_nonuniformity:
+        Fixed pixel-to-pixel avalanche-gain variation per natural logarithm of
+        physical gain. The resulting log-normal multiplier has fractional width
+        ``avalanche_gain_nonuniformity * log(em_gain)``. This is distinct from
+        illumination PRNU and is ``0`` at unity gain.
     excess_noise_factor:
         Excess noise factor ``F`` of the gain stage, quantifying the extra noise
         from stochastic multiplication. ``F = 1`` is noiseless multiplication;
@@ -342,6 +373,8 @@ class CameraConfig:
     detector_glow_e_per_s: float = 0.0
     prnu: float = 0.0
     avalanche_input_noise_e: float = 0.0
+    avalanche_input_noise_gain_exponent: float = 1.0
+    avalanche_input_noise_reference_gain: float = 1.0
     read_noise_nonuniformity: float = 0.0
     read_noise_rts_fraction: float = 0.0
     read_noise_rts_factor: float = 2.5
@@ -355,6 +388,12 @@ class CameraConfig:
     ndr_bias_offset_adu_per_s: float = 0.0
     ndr_bias_gain_coefficient_adu_per_s: float = 0.0
     ndr_common_mode_gain_noise_adu_per_s: float = 0.0
+    ndr_avalanche_input_noise_reference_interval_s: float = 1.0
+    ndr_avalanche_input_noise_interval_exponent: float = 0.0
+    ndr_reset_settling_input_e: float = 0.0
+    ndr_reset_settling_scale_reads: float = 0.0
+    ndr_reset_settling_reference_interval_s: float = 1.0
+    ndr_reset_settling_interval_exponent: float = 0.0
     detector_glow_edge_scale_px: float = 0.0
     nonlinearity: float = 0.0
     nonlinearity_coeffs: tuple[float, ...] | None = None
@@ -378,10 +417,15 @@ class CameraConfig:
     bias_pixel_spread_adu: float = 0.0
     bias_edge_amplitude_adu: float = 0.0
     bias_edge_scale_px: float = 0.0
+    bias_edge_axis: int | None = None
+    bias_edge_secondary_amplitude_adu: float = 0.0
+    bias_edge_secondary_scale_px: float = 0.0
+    bias_edge_secondary_axis: int | None = None
     cosmic_ray_rate_per_cm2_s: float = 0.0
     dark_current_ref_temp_c: float = 20.0
     dark_current_doubling_temp_c: float = 6.3
     em_gain: float = 1.0
+    avalanche_gain_nonuniformity: float = 0.0
     excess_noise_factor: float | None = None
     clock_induced_charge_e: float = 0.0
     persistence_fraction: float = 0.0
@@ -472,6 +516,10 @@ class CameraConfig:
             raise ValueError("avalanche_input_noise_e must be non-negative.")
         if self.avalanche_input_noise_e > 0 and not self.has_gain_stage:
             raise ValueError("avalanche_input_noise_e requires em_gain > 1.")
+        if self.avalanche_input_noise_gain_exponent <= 0:
+            raise ValueError("avalanche_input_noise_gain_exponent must be positive.")
+        if self.avalanche_input_noise_reference_gain < 1:
+            raise ValueError("avalanche_input_noise_reference_gain must be >= 1.")
         if not 0.0 <= self.read_noise_rts_fraction <= 1.0:
             raise ValueError("read_noise_rts_fraction must be in [0, 1].")
         if self.read_noise_rts_factor < 0:
@@ -500,6 +548,18 @@ class CameraConfig:
             raise ValueError("ndr_bias_gain_coefficient_adu_per_s must be non-negative.")
         if self.ndr_common_mode_gain_noise_adu_per_s < 0:
             raise ValueError("ndr_common_mode_gain_noise_adu_per_s must be non-negative.")
+        if self.ndr_avalanche_input_noise_reference_interval_s <= 0:
+            raise ValueError("ndr_avalanche_input_noise_reference_interval_s must be positive.")
+        if self.ndr_avalanche_input_noise_interval_exponent < 0:
+            raise ValueError("ndr_avalanche_input_noise_interval_exponent must be non-negative.")
+        if self.ndr_reset_settling_input_e < 0:
+            raise ValueError("ndr_reset_settling_input_e must be non-negative.")
+        if self.ndr_reset_settling_scale_reads < 0:
+            raise ValueError("ndr_reset_settling_scale_reads must be non-negative.")
+        if self.ndr_reset_settling_reference_interval_s <= 0:
+            raise ValueError("ndr_reset_settling_reference_interval_s must be positive.")
+        if self.ndr_reset_settling_interval_exponent < 0:
+            raise ValueError("ndr_reset_settling_interval_exponent must be non-negative.")
         if self.detector_glow_edge_scale_px < 0:
             raise ValueError("detector_glow_edge_scale_px must be non-negative.")
         if not 0.0 <= self.nonlinearity < 0.5:
@@ -586,6 +646,14 @@ class CameraConfig:
             raise ValueError("bias_edge_amplitude_adu must be non-negative.")
         if self.bias_edge_scale_px < 0:
             raise ValueError("bias_edge_scale_px must be non-negative.")
+        if self.bias_edge_axis not in (None, 0, 1):
+            raise ValueError("bias_edge_axis must be None, 0, or 1.")
+        if self.bias_edge_secondary_amplitude_adu < 0:
+            raise ValueError("bias_edge_secondary_amplitude_adu must be non-negative.")
+        if self.bias_edge_secondary_scale_px < 0:
+            raise ValueError("bias_edge_secondary_scale_px must be non-negative.")
+        if self.bias_edge_secondary_axis not in (None, 0, 1):
+            raise ValueError("bias_edge_secondary_axis must be None, 0, or 1.")
         if self.cosmic_ray_rate_per_cm2_s < 0:
             raise ValueError("cosmic_ray_rate_per_cm2_s must be non-negative.")
         if self.dark_current_e_per_s < 0:
@@ -596,6 +664,8 @@ class CameraConfig:
             raise ValueError("dark_current_doubling_temp_c must be positive.")
         if self.em_gain < 1.0:
             raise ValueError("em_gain must be >= 1.0 (use 1.0 to disable).")
+        if self.avalanche_gain_nonuniformity < 0:
+            raise ValueError("avalanche_gain_nonuniformity must be non-negative.")
         if self.excess_noise_factor is not None and self.excess_noise_factor < 1.0:
             raise ValueError("excess_noise_factor must be >= 1.0 (1.0 is noiseless).")
         if self.full_well_e <= 0:
