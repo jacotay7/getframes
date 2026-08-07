@@ -1018,6 +1018,7 @@ def digitize(
     backend: ArrayBackend | None = None,
     fixed_patterns: FixedPatternMaps | None = None,
     reset_noise_e: Any | None = None,
+    correlated_read_noise_e: Any | None = None,
     common_mode_adu: Any | None = None,
     avalanche_input_noise_e: float | None = None,
     out: Any | None = None,
@@ -1034,8 +1035,9 @@ def digitize(
     Detector-depth structure is folded in here: dead pixels/columns collect no
     charge; kTC/reset noise adds a per-pixel Gaussian; amplifier/channel layouts
     apply fixed gain, offset, and noise differences; and structured/edge bias rides
-    on the flat pedestal. Nondestructive ramps may inject their shared reset draw
-    and correlated common-mode pedestal explicitly.
+    on the flat pedestal. Nondestructive ramps may inject their shared reset draw,
+    their shared correlated read-noise draw, and correlated common-mode pedestal
+    explicitly.
     """
     resolved = backend or get_backend()
     xp = resolved.xp
@@ -1089,13 +1091,26 @@ def digitize(
     # Read noise in electrons, added at the amplifier. The per-pixel RMS is a
     # fixed property of the sensor (see :func:`_read_noise_sigma_map`), so only the
     # Gaussian draw itself is per-frame.
+    #
+    # ``read_noise_correlated_fraction`` splits that draw in two. The correlated
+    # part is passed in by a nondestructive ramp, which holds one draw for the
+    # whole ramp so that differencing two reads removes it; the independent part
+    # is redrawn every read and survives the difference. An ordinary exposure has
+    # nothing to correlate against and draws the full RMS.
     if config.read_noise_e > 0:
         sigma_map = (
             fixed_patterns.read_noise_sigma
             if fixed_patterns is not None
             else _read_noise_sigma_map(config, resolved, float_dtype=signal.dtype)
         )
-        signal += normal_noise(sigma_map)
+        correlated_weight = (
+            config.read_noise_correlated_fraction if correlated_read_noise_e is not None else 0.0
+        )
+        if correlated_weight > 0.0 and correlated_read_noise_e is not None:
+            signal += correlated_read_noise_e
+            signal += normal_noise(sigma_map * np.sqrt(1.0 - correlated_weight))
+        else:
+            signal += normal_noise(sigma_map)
 
     if fixed_patterns is None:
         gain_map, amp_offset = _amplifier_maps(config, resolved, float_dtype=signal.dtype)

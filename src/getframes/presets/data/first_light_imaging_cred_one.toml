@@ -14,16 +14,38 @@ quantum_efficiency = 0.70
 full_well_e = 60000.0
 output_full_well_e = 105000.0
 bit_depth = 16
-gain_e_per_adu = 2.4
+# Ammeter method, First Light acceptance report TR_0778KECK-CR1_2024_0057 s4.2,
+# for this serial number. The local cubes give 2.407 e-/ADU from a photon
+# transfer curve, but a PTC reads the gain high when inter-pixel capacitance
+# suppresses pixel-to-pixel variance, and the vendor report says explicitly that
+# the ammeter method is preferred "because it is insensitive to the correlated
+# noise perturbation and requires no hypothesis on the noise like for the PTC".
+# The 1.287x ratio between the two implies ~2.8% IPC per neighbour, which is
+# where ipc_coupling below now sits.
+gain_e_per_adu = 1.87
 # This is the setting-50 operating point. Edge/channel structure raises the
 # central pedestal to the measured ~21,964 ADU array median.
 bias_offset_adu = 20998.0
-read_noise_e = 70.0
-avalanche_input_noise_e = 3.3
-avalanche_input_noise_gain_exponent = 0.75
-avalanche_input_noise_reference_gain = 21.7
-ndr_avalanche_input_noise_reference_interval_s = 0.000285714
-ndr_avalanche_input_noise_interval_exponent = 0.28
+# 28.86 ADU measured per-pixel at unity gain and 3.5 kHz, x 1.87 e-/ADU. The
+# unity-gain cubes are the clean ones: their noise does not depend on how many
+# frames were taken, so nothing is accumulating in them.
+read_noise_e = 54.0
+# Fitted to the vendor's CDS measurement (report s4.4: 0.87 e- at gain x50,
+# 1720 fps, and s4.5: 0.86 e- against both an 80 K blackbody and a room
+# temperature blank). Two thirds of the read-noise variance is common to the two
+# reads of a CDS pair and cancels; only sqrt(2*(1-f)) of it survives. Nothing in
+# the local cubes constrains this -- they were all taken in global-reset burst
+# mode, never in CDS -- so it comes from the vendor report alone.
+read_noise_correlated_fraction = 0.676
+# Deliberately zero. The local cubes appear to show a large gain-dependent
+# excess read noise (49.4 ADU at setting 50, 82.8 ADU at setting 100, against
+# 28.9 ADU at unity), and the previous fit put 3.3 e- of avalanche input noise
+# there. It is not read noise: it grows with the number of frames in the cube
+# (setting 100 reads 52.5 ADU over 100 frames and 82.8 ADU over 250), which read
+# noise cannot do, and the growth scales with avalanche gain. It is the warm
+# plastic cap's photon shot noise being multiplied. The vendor's cold-source CDS
+# measurement is consistent with no excess term at all.
+avalanche_input_noise_e = 0.0
 # Requested setting 50 measured as 21.7x physical multiplication in the capped
 # 35 Hz ramps. Published C-RED One gain-calibration slopes are camera-dependent.
 em_gain = 21.7
@@ -68,9 +90,11 @@ bias_edge_secondary_amplitude_adu = 1800.0
 bias_edge_secondary_scale_px = 4.0
 bias_edge_secondary_axis = 0
 
-# Conservative intrinsic detector/camera background at 80 K. Warm entrance
-# optics/caps are modeled as incident thermal background, not detector dark current.
-dark_current_e_per_s = 80.0
+# Vendor report s4.6: 2.65 e-/s measured at 80 K behind an 80 K cold stop. The
+# 48.8 e-/s of s4.7 is with a room-temperature blank, i.e. warm-optics thermal
+# background, which belongs in the scene's `background` term and not here -- the
+# previous 80.0 conflated the two and double-counted it.
+dark_current_e_per_s = 2.65
 detector_glow_e_per_s = 0.0
 detector_glow_edge_scale_px = 0.0
 dark_current_ref_temp_c = -193.15
@@ -85,8 +109,11 @@ prnu = 0.055
 # the measured read-noise map; retain a small non-zero kTC term rather than the
 # unconstrained amplifier-noise-sized value used by the generic detector preset.
 reset_noise_e = 5.0
-ipc_coupling = 0.015
-notes = "C-RED One raw global-reset profile at requested eAPD setting 50, measured as 21.7x effective multiplication on this camera. Spatial/read-noise/conversion-gain parameters are fitted to local 84.6 K CRED1 cubes; QE, full well, ENF, intrinsic dark/background ceiling, format, and speed are constrained by FLI/Oxford specifications and published characterization. Add a room-temperature cap or warm optics as incident thermal background."
+# Implied by the 1.287x disagreement between the local PTC conversion gain and
+# the vendor's ammeter value: a PTC overestimates the gain by ~1/(1-8a). Not
+# measured directly; a flat-field autocorrelation would settle it.
+ipc_coupling = 0.028
+notes = "C-RED One raw global-reset profile at requested eAPD setting 50, measured as 21.7x effective multiplication on this camera. Conversion gain, CDS read noise, and dark current come from First Light acceptance report TR_0778KECK-CR1_2024_0057 for this serial number; spatial structure, channel/edge signatures, bias, reset cadence, and the effective-gain table are fitted to local 84.6 K CRED1 cubes. Those cubes were all taken in global-reset burst mode and constrain single-read behaviour only; the CDS split comes from the report. QE, full well, ENF, format, and speed are FLI/Oxford specifications. Add a room-temperature cap or warm optics as incident thermal background rather than as dark current."
 
 [extra]
 operating_mode = "global reset, nondestructive raw reads"
@@ -96,6 +123,11 @@ local_characterization = "cred1data/dark, acquired 2026-07-15"
 requested_eapd_gain = 50.0
 measured_effective_avalanche_gain = 21.7
 measured_capped_total_rate_e_per_s = 560.0
+acceptance_report = "TR_0778KECK-CR1_2024_0057, First Light Imaging, 18/12/2024"
+measured_cds_read_noise_e = 0.87
+measured_cds_read_noise_gain = 50.0
+measured_cds_read_noise_fps = 1720.0
+measured_conversion_gain_e_per_adu = 1.87
 source_url = "https://andor.oxinst.com/products/c-red-series/c-red-one"
 characterization_url = "https://arxiv.org/abs/2409.04247"
 performance_url = "https://arxiv.org/abs/2208.00377"

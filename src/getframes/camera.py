@@ -495,7 +495,12 @@ class Camera:
             cumulative_mean = xp.zeros(self.sensor_resolution, dtype=dtype)
             cumulative_photo = xp.zeros(self.sensor_resolution, dtype=dtype)
         reset_noise: Any = 0.0
+        correlated_read_noise: Any = None
         common_mode = 0.0
+        correlated_fraction = self.config.read_noise_correlated_fraction
+        read_noise_sigma = (
+            self._fixed_patterns.read_noise_sigma if self.config.read_noise_e > 0 else None
+        )
 
         for frame_index in range(n_frames):
             read_index = frame_index % reads_per_reset
@@ -516,6 +521,15 @@ class Camera:
                     ).astype(dtype, copy=False)
                 else:
                     reset_noise = 0.0
+                # One draw per ramp, so every read of the ramp carries the same
+                # correlated read-noise pattern and a difference of two reads
+                # cancels it. This is the part of read noise that CDS removes.
+                if correlated_fraction > 0.0 and read_noise_sigma is not None:
+                    correlated_read_noise = (
+                        rng.normal(0.0, 1.0, size=self.sensor_resolution).astype(dtype, copy=False)
+                        * read_noise_sigma
+                        * np.sqrt(correlated_fraction)
+                    )
 
             increment = rng.poisson(mean_increment).astype(dtype, copy=False)
             if self.config.cosmic_ray_rate_per_cm2_s > 0:
@@ -558,6 +572,7 @@ class Camera:
                 backend=resolved,
                 fixed_patterns=self._fixed_patterns,
                 reset_noise_e=reset_noise,
+                correlated_read_noise_e=correlated_read_noise,
                 common_mode_adu=common_mode + interval_biases[read_index] - settles[read_index],
                 avalanche_input_noise_e=avalanche_input_noises[read_index],
             )

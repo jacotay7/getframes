@@ -230,6 +230,23 @@ class CameraConfig:
         kTC / reset noise RMS in electrons. Ordinary exposures draw an independent
         per-pixel Gaussian; nondestructive reads share one draw per reset ramp.
         ``0`` disables it (or assumes correlated double sampling removes it).
+    read_noise_correlated_fraction:
+        Fraction of the read-noise *variance* that is common to every read of a
+        nondestructive ramp, and therefore cancels when two reads are
+        differenced. ``0`` (the default) makes every read an independent draw.
+
+        Read noise measured from a single read is not all white. Reference-level
+        drift, bias settling, and 1/f components persist across the microseconds
+        between two reads of a correlated-double-sampling pair, and differencing
+        removes them --- which is the entire reason CDS is used. A detector
+        whose single-read noise is R and whose correlated fraction is ``f``
+        therefore shows ``R * sqrt(2 * (1 - f))`` in CDS, which is *below* R
+        whenever ``f > 0.5``.
+
+        Fitting this from single-read data alone is impossible: only a
+        differenced measurement separates the correlated part. Take it from a
+        CDS measurement, or leave it at ``0`` and accept that the model will
+        overstate CDS noise by up to ``sqrt(2 / (2 * (1 - f)))``.
     amplifier_layout:
         Multi-amplifier readout as ``(n_rows, n_cols)`` of amplifiers tiling the
         sensor (e.g. ``(2, 2)`` for a four-quadrant CCD). Each amplifier block gets
@@ -402,6 +419,7 @@ class CameraConfig:
     ipc_coupling: float = 0.0
     charge_diffusion_fwhm_px: float = 0.0
     reset_noise_e: float = 0.0
+    read_noise_correlated_fraction: float = 0.0
     amplifier_layout: tuple[int, int] = (1, 1)
     amplifier_boundaries_y_px: tuple[int, ...] = ()
     amplifier_boundaries_x_px: tuple[int, ...] = ()
@@ -574,6 +592,8 @@ class CameraConfig:
             raise ValueError("charge_diffusion_fwhm_px must be finite and non-negative.")
         if self.reset_noise_e < 0:
             raise ValueError("reset_noise_e must be non-negative.")
+        if not 0.0 <= self.read_noise_correlated_fraction < 1.0:
+            raise ValueError("read_noise_correlated_fraction must be in [0, 1).")
         if len(self.amplifier_layout) != 2 or any(n <= 0 for n in self.amplifier_layout):
             raise ValueError(
                 f"amplifier_layout must be two positive ints, got {self.amplifier_layout!r}."

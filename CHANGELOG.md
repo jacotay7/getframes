@@ -8,6 +8,15 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **`CameraConfig.read_noise_correlated_fraction`.** The part of read noise that
+  is common to every read of a nondestructive ramp, and so cancels when two
+  reads are differenced. Without it every read was an independent draw and
+  correlated double sampling could only ever cost a factor of `sqrt(2)` — but a
+  real CDS frame is often *quieter* than a single read, because reference-level
+  drift, bias settling, and 1/f noise persist between the two reads and
+  differencing removes them. Defaults to `0`, which is the previous behaviour.
+  Only a differenced measurement can constrain it; single-read data cannot.
+
 - **Vega-system J, H, and Ks bands.** `Bandpass.johnson` previously stopped at
   I, so any near-infrared work had to leave the Vega system for AB — a
   different magnitude for the same star, by +0.89 (J), +1.37 (H), and +1.84

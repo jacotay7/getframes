@@ -208,6 +208,21 @@ instead of silently turning a measured sub-pixel width into a no-op.
 
 - `reset_noise_e` — kTC/reset noise. Ordinary exposures draw it independently;
   `Camera.nondestructive_series` shares one realization across each reset ramp.
+- `read_noise_correlated_fraction` — the fraction of read-noise *variance* common
+  to every read of a ramp, and therefore removed when two reads are differenced.
+  Read noise measured from a single read is not all white: reference-level drift,
+  bias settling, and 1/f components persist across the microseconds between the
+  two reads of a CDS pair, and cancelling them is the entire reason CDS is used.
+  A detector with single-read noise `R` shows `R * sqrt(2 * (1 - f))` under
+  `correlated_double_sample`, which is *below* `R` once `f > 0.5`. The default
+  `0` makes every read independent, so CDS costs the usual `sqrt(2)`.
+
+  Single-read data cannot constrain this — only a differenced measurement
+  separates the correlated part — so take it from a CDS measurement. The shipped
+  `first_light_imaging_cred_one` preset uses `0.676`, fitted to the vendor's
+  acceptance report for that camera (0.87 e- at gain x50 in CDS at 1720 fps),
+  because the local characterization cubes were all taken in global-reset burst
+  mode and say nothing about CDS.
 - `amplifier_layout=(n_rows, n_cols)` with `amp_gain_nonuniformity` /
   `amp_offset_spread_adu` — multi-amplifier readout: each block reads out with its
   own small, fixed gain/offset error, producing quadrant seams.

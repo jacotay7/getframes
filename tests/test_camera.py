@@ -2,7 +2,7 @@
 import numpy as np
 import pytest
 
-from getframes import Camera, Frame, noise
+from getframes import Camera, CameraConfig, Frame, noise
 
 
 def test_from_preset_builds_camera():
@@ -479,3 +479,128 @@ def test_with_config_overrides():
 def test_invalid_config_type():
     with pytest.raises(TypeError):
         Camera({"not": "a config"})  # type: ignore[arg-type]
+
+
+def _cds_test_config(**overrides: object) -> "CameraConfig":
+    """A minimal detector whose only noise source is read noise."""
+    from getframes import CameraConfig, SensorType
+
+    base: dict[str, object] = {
+        "name": "cds-test",
+        "sensor_type": SensorType.CMOS,
+        "resolution": (64, 64),
+        "pixel_size_um": 10.0,
+        "quantum_efficiency": 1.0,
+        "full_well_e": 100000.0,
+        "bit_depth": 16,
+        "gain_e_per_adu": 1.0,
+        "bias_offset_adu": 1000.0,
+        "read_noise_e": 40.0,
+        "dark_current_e_per_s": 0.0,
+    }
+    base.update(overrides)
+    return CameraConfig(**base)  # type: ignore[arg-type]
+
+
+def test_correlated_read_noise_is_what_cds_removes():
+    """The fraction declared correlated must cancel in a differenced pair."""
+
+    def cds_rms(fraction: float) -> float:
+        camera = Camera(_cds_test_config(read_noise_correlated_fraction=fraction), seed=3)
+        frames = np.stack(
+            [
+                np.asarray(
+                    camera.correlated_double_sample(
+                        0.0, 1e-3, 20.0, seed=index, include_truth=False
+                    ).data,
+                    dtype=np.float64,
+                )
+                for index in range(128)
+            ]
+        )
+        return float(np.median(frames.std(axis=0, ddof=1)))
+
+    # Independent reads: the difference carries sqrt(2) times one read's noise.
+    assert cds_rms(0.0) == pytest.approx(40.0 * np.sqrt(2.0), rel=0.06)
+    # Half correlated: only half the variance survives, twice over.
+    assert cds_rms(0.5) == pytest.approx(40.0, rel=0.06)
+    # Above half correlated, CDS is quieter than a single read -- which is the
+    # entire reason the mode exists, and what a C-RED One actually measures.
+    assert cds_rms(0.75) == pytest.approx(40.0 * np.sqrt(0.5), rel=0.06)
+    assert cds_rms(0.9) < 40.0
+
+
+def test_correlated_read_noise_leaves_a_single_read_alone():
+    """It redistributes noise within a ramp; it must not remove any.
+
+    The first read of a ramp carries the full read-noise RMS whatever the
+    correlated fraction is -- there is nothing yet for it to be correlated
+    against. Only a *difference* of two reads sees the cancellation.
+    """
+
+    def single_read_rms(fraction: float) -> float:
+        camera = Camera(_cds_test_config(read_noise_correlated_fraction=fraction), seed=4)
+        frames = np.stack(
+            [
+                np.asarray(
+                    next(
+                        iter(
+                            camera.nondestructive_series(
+                                0.0, 1e-3, 1, 1, 20.0, seed=index, include_truth=False
+                            )
+                        )
+                    ).data,
+                    dtype=np.float64,
+                )
+                for index in range(128)
+            ]
+        )
+        return float(np.median(frames.std(axis=0, ddof=1)))
+
+    assert single_read_rms(0.8) == pytest.approx(single_read_rms(0.0), rel=0.06)
+
+
+def test_read_noise_correlated_fraction_is_validated():
+    for invalid in (-0.1, 1.0, 1.5):
+        with pytest.raises(ValueError, match="read_noise_correlated_fraction"):
+            _cds_test_config(read_noise_correlated_fraction=invalid)
+
+
+def test_cred_one_preset_matches_its_acceptance_report():
+    """The vendor measured this serial number in the mode we simulate."""
+    from dataclasses import replace
+
+    from getframes import load_preset
+
+    preset = load_preset("first_light_imaging_cred_one")
+    # Report s4.4/s4.5: 0.87 e- input-referred at gain x50, CDS, 1720 fps.
+    config = replace(preset, em_gain=51.36, resolution=(128, 128))
+    camera = Camera(config, seed=7)
+    frames = np.stack(
+        [
+            np.asarray(
+                camera.correlated_double_sample(
+                    0.0, 1.0 / 3500.0, -188.55, seed=index, include_truth=False
+                ).data,
+                dtype=np.float64,
+            )
+            for index in range(96)
+        ]
+    )
+    input_referred_e = float(np.median(frames.std(axis=0, ddof=1))) * config.gain_e_per_adu / 51.36
+    assert input_referred_e == pytest.approx(0.87, rel=0.08)
+
+    # And the clean unity-gain local cubes: 28.86 ADU per pixel, common mode
+    # removed, at 3.5 kHz. cred1data subtracts each frame's own median level.
+    unity = Camera(replace(preset, em_gain=1.0, resolution=(128, 128)), seed=8)
+    darks = np.stack(
+        [
+            np.asarray(
+                unity.dark_frame(1.0 / 3500.0, -188.55, seed=index).data,
+                dtype=np.float64,
+            )
+            for index in range(96)
+        ]
+    )
+    darks -= np.median(darks, axis=(1, 2), keepdims=True)
+    assert float(np.median(darks.std(axis=0, ddof=1))) == pytest.approx(28.86, rel=0.06)
