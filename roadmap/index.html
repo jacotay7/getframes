@@ -1,0 +1,1923 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Realistic synthetic camera frames for scientific imaging pipelines">
+      
+      
+      
+        <link rel="canonical" href="https://jacotay7.github.io/getframes/roadmap/">
+      
+      
+        <link rel="prev" href="../stability/">
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Roadmap - getframes</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#roadmap-from-a-frame-to-an-observation-towards-20" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="getframes" class="md-header__button md-logo" aria-label="getframes" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            getframes
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Roadmap
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/jacotay7/getframes" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jacotay7/getframes
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="getframes" class="md-nav__button md-logo" aria-label="getframes" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    getframes
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/jacotay7/getframes" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jacotay7/getframes
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/noise-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The noise model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/calibration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Calibration & ground truth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/scenes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observing scenes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/time-series/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Time series & observations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/spectral/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spectral mode
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/radiometry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Radiometry & the infrared
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scale & datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU detector execution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Camera presets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/characterization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detector characterisation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../guides/validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../stability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-where-10-left-us" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Where 1.0 left us
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-the-gap-what-a-real-user-still-cant-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. The gap — what a real user still can't do
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-20-thesis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The 2.0 thesis
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-target-architecture-additions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Target architecture additions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-phased-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Phased plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-phase-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Phase detail
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Phase detail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-close-the-loop-highest-leverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 — Close the loop (highest leverage) ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-add-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 — Add time ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-enrich-scenes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 — Enrich scenes ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-detector-depth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4 — Detector depth ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-radiometry-ir" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5 — Radiometry &amp; IR ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-scale-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.6 — Scale &amp; datasets ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#20-stability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.0 — Stability ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-20-gpu-detector-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post-2.0 — GPU detector execution ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-20-reusable-detector-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post-2.0 — Reusable detector execution ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-worked-examples-target-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Worked examples (target API)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Worked examples (target API)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-close-the-validation-loop-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A — Close the validation loop (1.1)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-transit-photometry-as-a-time-series-12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B — Transit photometry as a time series (1.2)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-crowded-field-from-a-catalog-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C — Crowded field from a catalog (1.3)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-generate-an-ml-training-set-16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D — Generate an ML training set (1.6)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-validation-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Validation strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-non-goals-scope-guardrails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Non-goals (scope guardrails)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-where-10-left-us" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Where 1.0 left us
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-the-gap-what-a-real-user-still-cant-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. The gap — what a real user still can't do
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-the-20-thesis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. The 2.0 thesis
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-target-architecture-additions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Target architecture additions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-phased-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Phased plan
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-phase-detail" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Phase detail
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Phase detail">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-close-the-loop-highest-leverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 — Close the loop (highest leverage) ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-add-time" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 — Add time ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-enrich-scenes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 — Enrich scenes ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-detector-depth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4 — Detector depth ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-radiometry-ir" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5 — Radiometry &amp; IR ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-scale-datasets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.6 — Scale &amp; datasets ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#20-stability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.0 — Stability ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-20-gpu-detector-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post-2.0 — GPU detector execution ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#post-20-reusable-detector-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Post-2.0 — Reusable detector execution ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-worked-examples-target-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Worked examples (target API)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Worked examples (target API)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#a-close-the-validation-loop-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A — Close the validation loop (1.1)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#b-transit-photometry-as-a-time-series-12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        B — Transit photometry as a time series (1.2)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#c-crowded-field-from-a-catalog-13" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        C — Crowded field from a catalog (1.3)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#d-generate-an-ml-training-set-16" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        D — Generate an ML training set (1.6)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-validation-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Validation strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Decisions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-non-goals-scope-guardrails" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Non-goals (scope guardrails)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="roadmap-from-a-frame-to-an-observation-towards-20">Roadmap: from a frame to an observation (towards 2.0)<a class="headerlink" href="#roadmap-from-a-frame-to-an-observation-towards-20" title="Permanent link">&para;</a></h1>
+<p><code>getframes</code> 1.0 does one thing very well: it turns a <em>photon-rate map</em> into a
+single physically realistic <strong>frame</strong>, with auditable noise physics and a clean,
+frozen API. This roadmap plans the 1.x → 2.0 arc, whose theme is the next noun up:
+the <strong>observation</strong>. Real users don't take one frame — they take <em>sequences</em>, of
+<em>structured scenes</em>, and then <em>reduce them against ground truth</em>. 2.0 makes those
+three things first-class.</p>
+<p>The plan is grounded in a critical, user's-eye audit of what 1.0 can and cannot do
+(below), and it keeps every commitment from 1.0: one-way data flow
+(<code>scene → camera → detector → frame</code>), pure seeded physics functions, units in
+every name, <code>mypy --strict</code>, and SemVer (additive in 1.x; breaking changes are
+deprecated through 1.x and only land at 2.0).</p>
+<hr />
+<h2 id="1-where-10-left-us">1. Where 1.0 left us<a class="headerlink" href="#1-where-10-left-us" title="Permanent link">&para;</a></h2>
+<p>The <strong>detector layer</strong> is strong: dark/bias/flat/<code>expose</code>, the photon→electron→ADU
+chain, PRNU/DSNU, hot pixels, shot noise, CIC, a unified stochastic gain stage
+(EMCCD + eAPD, exact excess-noise factor), simple nonlinearity, single-pixel
+cosmic rays, sCMOS per-pixel read noise, temperature-scaled dark current, and
+<code>Frame.truth</code> ground truth.</p>
+<p>The <strong>scene layer</strong> exists but is thin: <code>PointSource</code> (by magnitude or photon
+rate), a uniform <code>Sky</code>, <code>GaussianPSF</code>/<code>MoffatPSF</code>, a <code>Telescope</code> (aperture,
+throughput, plate scale, obstruction), band-integrated Johnson UBVRI zero points,
+opt-in spectral mode (<code>QE(λ)</code>/<code>SED</code>/effective QE), and TAN <code>WCSInfo</code> <em>tagging</em>.</p>
+<p>The <strong>analysis layer</strong> is deliberately minimal: <code>aperture_sum</code>, <code>centroid</code>, and a
+<code>photon_transfer_curve</code> that recovers gain/read-noise/full-well.</p>
+<h2 id="2-the-gap-what-a-real-user-still-cant-do">2. The gap — what a real user still can't do<a class="headerlink" href="#2-the-gap-what-a-real-user-still-cant-do" title="Permanent link">&para;</a></h2>
+<p>Reading the four driving use cases back against the shipped API, the same three
+holes appear:</p>
+<p><strong>The pipeline-validation loop is only half-built.</strong> The promise is "measure your
+pipeline against ground truth." But the library only emits <em>raw</em> frames + truth;
+it offers no master-frame builders and no calibration step. A user must hand-roll
+bias/dark/flat reduction to close the loop. <code>dark_series</code> exists, but there is no
+<code>expose_series</code>/<code>observe_series</code> — the API is asymmetric. There is no way to round
+-trip raw → reduced → compare-to-truth, which is the single most common thing this
+library should make trivial.</p>
+<p><strong>Time is not a first-class dimension.</strong> Cases #3 (AO wavefront sensing) and #4
+(transit photometry) are fundamentally <em>time series</em>, yet a scene is static and
+you rebuild it by hand each frame. There is no temporal variability (a transit
+injection), no pointing jitter / drift / dither, no atmospheric tip-tilt or image
+motion, and no persistence/latent images (explicitly deferred in 1.0 for "needing
+cross-frame state"). The AO and transit examples work only because they manually
+loop and re-instantiate a <code>Scene</code> per frame.</p>
+<p><strong>Scenes are too simple for real astronomy.</strong> Only point sources and a flat sky.
+No extended sources (galaxies/nebulae), no <code>Catalog</code> to place many stars, no
+sky-coordinate placement (WCS <em>tags</em> but does not project RA/Dec → pixels), no
+<code>AiryPSF</code>/<code>ArrayPSF</code>, no elliptical or field-dependent PSF, no vignetting or
+distortion. Crowded fields, resolved sources, and "load my Gaia catalog" are out
+of reach.</p>
+<p>Three further gaps limit credibility and reach:</p>
+<ul>
+<li><strong>Detector fidelity has depth limits.</strong> No CTI, blooming, IPC, kTC/reset noise,
+  multi-amplifier readout, defect/bad-column maps, rolling-shutter timing, or
+  cosmic-ray <em>tracks</em> (hits are single-pixel). Bias is a flat pedestal. These are
+  exactly the artifacts a calibration pipeline is supposed to handle.</li>
+<li><strong>Radiometry is shallow.</strong> Vega/Johnson only (no AB, ugriz, Gaia, 2MASS), no
+  real filter/QE/atmosphere transmission products, no extinction, and no IR
+  thermal background — which <em>dominates</em> for the eAPD/IR detectors we ship.</li>
+<li><strong>No scale story.</strong> Everything is float64, full-array, single-threaded,
+  in-memory, with Python-side per-source loops. Large detectors and
+  generating thousands of raw+truth pairs (e.g. ML training data) are painful.</li>
+</ul>
+<h2 id="3-the-20-thesis">3. The 2.0 thesis<a class="headerlink" href="#3-the-20-thesis" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p>1.0 modelled a <strong>frame</strong>. 2.0 models an <strong>observation</strong>: a reproducible
+<em>sequence</em> of frames of a <em>structured, possibly time-varying scene</em>, that you
+can <em>reduce against ground truth</em> — on detectors faithful enough that the
+artifacts your pipeline must survive are actually present.</p>
+</blockquote>
+<p>Four threads carry this, each independently shippable:</p>
+<table>
+<thead>
+<tr>
+<th>Thread</th>
+<th>Why it matters</th>
+<th>Serves</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Close the loop</strong></td>
+<td>round-trip raw → reduced → truth</td>
+<td>all 4 cases, the core promise</td>
+</tr>
+<tr>
+<td><strong>Add time</strong></td>
+<td>sequences, variability, jitter, persistence</td>
+<td>#3 AO, #4 transit</td>
+</tr>
+<tr>
+<td><strong>Enrich scenes</strong></td>
+<td>extended sources, catalogs, sky coords, more PSFs</td>
+<td>#2 astronomy</td>
+</tr>
+<tr>
+<td><strong>Deepen fidelity &amp; reach</strong></td>
+<td>CTI/IPC/amps/tracks, real radiometry, scale</td>
+<td>accuracy, IR, ML</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="4-target-architecture-additions">4. Target architecture additions<a class="headerlink" href="#4-target-architecture-additions" title="Permanent link">&para;</a></h2>
+<p>Additive modules; existing ones grow backwards-compatibly until the 2.0 cut.</p>
+<div class="highlight"><pre><span></span><code>src/getframes/
+  observation.py      # NEW: Observation / time-series driver, jitter, dither
+  calibrate.py        # NEW: master frames + reduction (bias/dark/flat) round-trip
+  io.py               # NEW: richer FITS (cubes, std keywords, read), config save/load
+  detector/
+    sequence.py       # NEW: cross-frame state (persistence/latent images)
+    transfer.py       # NEW: CTI, blooming/bleed, IPC kernel
+    readout.py        # GROW: kTC/reset noise, multi-amplifier, rolling shutter, structured bias
+    defects.py        # GROW: cosmic-ray tracks, bad-column/defect maps, traps
+  scene/
+    sources.py        # GROW: ExtendedSource (Sersic/array), UniformIllumination
+    catalog.py        # NEW: Catalog.from_table, RA/Dec -&gt; pixel via WCS
+    psf.py            # GROW: AiryPSF, ArrayPSF, elliptical / field-varying PSF
+    optics.py         # GROW: vignetting, distortion, field-dependent plate scale
+    photometry.py     # GROW: AB system, ugriz/Gaia/2MASS, transmission products, extinction
+    thermal.py        # NEW: IR thermal background + detector glow
+  dataset.py          # NEW: scalable raw+truth dataset generation (float32, chunked)
+  cli.py              # NEW: `getframes` command (generate from a config file)
+</code></pre></div>
+<hr />
+<h2 id="5-phased-plan">5. Phased plan<a class="headerlink" href="#5-phased-plan" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>✓</th>
+<th>Version</th>
+<th>Theme</th>
+<th>Ships</th>
+<th>Unblocks</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>✅</td>
+<td><strong>1.1</strong></td>
+<td>Close the loop</td>
+<td>master bias/dark/flat builders, <code>calibrate()</code>, <code>expose_series</code>/<code>observe_series</code>, richer FITS I/O + config save/load</td>
+<td>the validation workflow for <strong>all 4</strong></td>
+</tr>
+<tr>
+<td>✅</td>
+<td><strong>1.2</strong></td>
+<td>Add time</td>
+<td><code>Observation</code> time-series driver, time-varying source brightness, pointing jitter / drift / dither, image motion; <strong>persistence/latent images</strong></td>
+<td><strong>#3, #4</strong></td>
+</tr>
+<tr>
+<td>✅</td>
+<td><strong>1.3</strong></td>
+<td>Enrich scenes</td>
+<td><code>ExtendedSource</code> (Sersic/array), <code>UniformIllumination</code>, <code>Catalog.from_table</code> with RA/Dec→pixel, <code>AiryPSF</code>/<code>ArrayPSF</code>, elliptical PSF</td>
+<td><strong>#2</strong></td>
+</tr>
+<tr>
+<td>✅</td>
+<td><strong>1.4</strong></td>
+<td>Detector depth</td>
+<td>CTI, blooming/bleed, IPC, kTC/reset noise, multi-amplifier readout, cosmic-ray tracks, defect/bad-column maps, structured bias, polynomial nonlinearity</td>
+<td>accuracy</td>
+</tr>
+<tr>
+<td>✅</td>
+<td><strong>1.5</strong></td>
+<td>Radiometry &amp; IR</td>
+<td>AB system, ugriz/Gaia/2MASS bands, transmission-product loading, extinction, true spectral flux integration, <strong>IR thermal background + glow</strong></td>
+<td>quantitative photometry, honest IR</td>
+</tr>
+<tr>
+<td>✅</td>
+<td><strong>1.6</strong></td>
+<td>Scale &amp; datasets</td>
+<td>float32 path, chunked/vectorised rendering, <code>dataset</code> generator for raw+truth pairs at scale, a <code>getframes</code> CLI, benchmarks</td>
+<td>ML training data, large detectors</td>
+</tr>
+<tr>
+<td>✅</td>
+<td><strong>2.0</strong></td>
+<td>Stability</td>
+<td>promote new APIs to stable, <code>astropy</code> as a core dep, validation suite vs. published characterisations, full docs (JOSS paper + citation deferred post-release)</td>
+<td>—</td>
+</tr>
+<tr>
+<td>✅</td>
+<td><strong>post-2.0</strong></td>
+<td>GPU detector execution</td>
+<td>optional CuPy photon → electron → ADU chain, device RNG/truth/fixed structure, CPU/GPU statistical parity, synchronized benchmarks</td>
+<td>end-to-end GPU AO simulation</td>
+</tr>
+<tr>
+<td>✅</td>
+<td><strong>post-2.0</strong></td>
+<td>Reusable detector execution</td>
+<td>lifetime-safe ROI/signal scratch and caller-owned ADU output for sequential high-rate loops</td>
+<td>lower allocation pressure and direct pipeline destinations</td>
+</tr>
+</tbody>
+</table>
+<p>Persistence (1.2) is the one item explicitly deferred from the 1.0 series; it lands
+once 1.2 introduces cross-frame state via <code>Observation</code>.</p>
+<hr />
+<h2 id="6-phase-detail">6. Phase detail<a class="headerlink" href="#6-phase-detail" title="Permanent link">&para;</a></h2>
+<h3 id="11-close-the-loop-highest-leverage">1.1 — Close the loop (highest leverage) ✅<a class="headerlink" href="#11-close-the-loop-highest-leverage" title="Permanent link">&para;</a></h3>
+<p>The fastest way to make <code>getframes</code> more useful is to finish the workflow it
+already half-supports.</p>
+<ul>
+<li>[x] <strong>Master frames.</strong> <code>analysis.combine(frames, method="sigma_clip")</code> and
+  <code>Camera.master_dark/bias/flat(...)</code> returning a <code>Frame</code>. Sigma-clipped mean /
+  median stacking.</li>
+<li>[x] <strong>Reduction.</strong> <code>calibrate(raw, *, bias=None, dark=None, flat=None)</code> → a reduced
+  <code>Frame</code>, so a user can do <code>truth ≈ calibrate(raw, ...)</code> and quantify residuals.
+  This <em>is</em> the ground-truth-validation promise, made one call.</li>
+<li>[x] <strong>API symmetry.</strong> <code>expose_series</code> / <code>observe_series</code> mirroring <code>dark_series</code>
+  (independent-but-reproducible derived seeds; per-frame metadata).</li>
+<li>[x] <strong>I/O.</strong> Standard FITS keywords (<code>EXPTIME</code>, <code>GAIN</code>, <code>CCD-TEMP</code>, …), data-cube and
+  multi-extension writers, <code>Frame.from_fits</code>, and <code>CameraConfig.to_toml/from_toml</code>
+  so an experiment is a file you can share.</li>
+</ul>
+<h3 id="12-add-time">1.2 — Add time ✅<a class="headerlink" href="#12-add-time" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] <strong><code>Observation</code>.</strong> A driver that produces a reproducible <em>stack</em> from a scene
+  plus a time model: <code>cam.observe_series(scene, exposure, n_frames, cadence=...)</code>
+  now returns an iterable <code>Observation</code> (frames + timestamps + realised pointing
+  offsets + truth). Variability is <strong>owned by the source</strong> — each <code>PointSource</code> may
+  carry an optional <code>brightness(t)</code> (<code>LightCurve</code>) that <code>observe_series</code> samples per
+  frame — and the observation returns a per-frame truth (a true light curve).</li>
+<li>[x] <strong>Pointing.</strong> A <code>Pointing</code> model: jitter (per-frame Gaussian offset), slow
+  drift, and programmed dither; jitter doubles as atmospheric tip-tilt / image
+  motion for AO sub-apertures. The <code>jitter_arcsec=</code> shortcut covers the common case.</li>
+<li>[x] <strong>Persistence / latent images.</strong> Cross-frame charge memory for IR arrays
+  (<code>persistence_fraction</code> / <code>persistence_decay</code>), carried on the <code>Observation</code>
+  driver — the deferred 1.0 item.</li>
+</ul>
+<h3 id="13-enrich-scenes">1.3 — Enrich scenes ✅<a class="headerlink" href="#13-enrich-scenes" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] <strong>Sources.</strong> <code>ExtendedSource</code> (Sersic profile + arbitrary image/array),
+  <code>UniformIllumination</code> (clean flats for PTC).</li>
+<li>[x] <strong>Catalogs.</strong> <code>Catalog.from_table(table, ...)</code> placing many sources; with a
+  scene <code>WCSInfo</code>, accept RA/Dec and project to pixels (the WCS finally <em>does</em>
+  something, not just tags).</li>
+<li>[x] <strong>PSFs.</strong> <code>AiryPSF</code> (diffraction-limited, space/AO), <code>ArrayPSF</code> (user kernel,
+  e.g. straight from an AO simulation), elliptical/position-angle PSFs
+  (<code>EllipticalGaussianPSF</code>).</li>
+<li>[x] <strong>Optics.</strong> Vignetting / illumination falloff and a simple radial distortion.</li>
+</ul>
+<h3 id="14-detector-depth">1.4 — Detector depth ✅<a class="headerlink" href="#14-detector-depth" title="Permanent link">&para;</a></h3>
+<p>The artifacts a calibration pipeline must survive:</p>
+<ul>
+<li>[x] <strong>CTI</strong> (CCD charge-transfer inefficiency).</li>
+<li>[x] <strong>Blooming/bleed</strong> along saturated columns.</li>
+<li>[x] <strong>IPC</strong> (inter-pixel capacitance kernel).</li>
+<li>[x] <strong>kTC/reset noise.</strong></li>
+<li>[x] <strong>Multi-amplifier</strong> readout (per-amp gain/offset/quadrants + seams).</li>
+<li>[x] <strong>Cosmic-ray tracks</strong> (morphology, not single pixels).</li>
+<li>[x] <strong>Defect/bad-column maps</strong> and traps, and <strong>structured bias</strong>.</li>
+<li>[x] Nonlinearity generalises to a polynomial / lookup.</li>
+</ul>
+<h3 id="15-radiometry-ir">1.5 — Radiometry &amp; IR ✅<a class="headerlink" href="#15-radiometry-ir" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] <strong>AB</strong> alongside Vega.</li>
+<li>[x] <strong>SDSS ugriz, Gaia, 2MASS</strong> bands.</li>
+<li>[x] Loading real filter × QE × atmosphere <strong>transmission products</strong>.</li>
+<li>[x] Interstellar <strong>extinction</strong>.</li>
+<li>[x] True spectral <strong>flux integration</strong> (an <code>SED</code> can set the integrated rate, not
+  only the effective QE).</li>
+<li>[x] For IR/eAPD honesty: a <strong>thermal background + detector glow</strong> model (resolving
+  1.0 open decision #4).</li>
+<li>[x] Optional <code>astropy.units</code> interop.</li>
+</ul>
+<h3 id="16-scale-datasets">1.6 — Scale &amp; datasets ✅<a class="headerlink" href="#16-scale-datasets" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] A <strong>float32</strong> fast path, including precision-native persistent detector maps.</li>
+<li>[x] <strong>Chunked/tiled</strong> rendering and <strong>vectorised</strong> multi-source PSF evaluation (a
+  10⁵-star catalog should not loop in Python).</li>
+<li>[x] An optional <strong><code>dataset</code></strong> generator yielding raw+truth pairs at scale for ML
+  training (denoising, deconvolution, calibration).</li>
+<li>[x] A <strong><code>getframes</code> CLI</strong> to generate frames from a config file.</li>
+<li>[x] A <strong>benchmark</strong> suite to keep throughput honest.</li>
+</ul>
+<h3 id="20-stability">2.0 — Stability ✅<a class="headerlink" href="#20-stability" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] <strong>Promote the enlarged surface to stable</strong> under SemVer (2.x), with no
+  breaking removals (nothing was deprecated during 1.x, so nothing to land).</li>
+<li>[x] <strong><code>astropy</code> as a core dependency</strong> (decision #2) — FITS I/O, WCS projection,
+  and catalogs; still imported lazily so <code>import getframes</code> stays fast.</li>
+<li>[x] <strong>Validation suite vs. published/analytic characterisations</strong>
+  (<code>tests/test_validation.py</code>) plus a <a href="../guides/validation/">validation guide</a>.</li>
+<li>[x] <strong>Full docs</strong>: guides for every shipped capability, worked examples 11–13.</li>
+<li>[ ] <strong>JOSS paper + citation</strong> — <em>deferred to a post-2.0 follow-up.</em></li>
+</ul>
+<h3 id="post-20-gpu-detector-execution">Post-2.0 — GPU detector execution ✅<a class="headerlink" href="#post-20-gpu-detector-execution" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] Add optional <code>Camera(..., device="gpu")</code> execution without making CuPy a
+  core dependency or changing the default NumPy behavior.</li>
+<li>[x] Keep incident rate maps, electron expectations, stochastic samples,
+  detector artifacts, spectral truth, and digitised ADU arrays on device.</li>
+<li>[x] Cache fixed detector maps on the persistent camera and retain seeded
+  reproducibility within each backend.</li>
+<li>[x] Validate all detector families and the full artifact chain on CUDA, with
+  CPU/GPU statistical parity rather than pixel-identical random streams.</li>
+<li>[x] Add explicit host conversion, user documentation, and synchronized CPU/GPU
+  benchmark modes.</li>
+</ul>
+<h3 id="post-20-reusable-detector-execution">Post-2.0 — Reusable detector execution ✅<a class="headerlink" href="#post-20-reusable-detector-execution" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] Add a lazy shape/precision/device-bound workspace for full-detector ROI
+  expansion and private detector intermediates.</li>
+<li>[x] Add explicit caller-owned <code>out=</code> destinations to scalar and spectral
+  exposure while keeping default frame/truth lifetimes alias-safe.</li>
+<li>[x] Validate seeded feature parity, concurrent-use rejection, CPU/GPU behavior,
+  stable warm storage, and physical OCAM2K ROI performance.</li>
+</ul>
+<hr />
+<h2 id="7-worked-examples-target-api">7. Worked examples (target API)<a class="headerlink" href="#7-worked-examples-target-api" title="Permanent link">&para;</a></h2>
+<p>Written against the <strong>post-implementation</strong> API; each doubles as an acceptance
+test, mirroring the 1.0 roadmap's style.</p>
+<h3 id="a-close-the-validation-loop-11">A — Close the validation loop (1.1)<a class="headerlink" href="#a-close-the-validation-loop-11" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">getframes</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">gf</span>
+
+<span class="n">cam</span> <span class="o">=</span> <span class="n">gf</span><span class="o">.</span><span class="n">Camera</span><span class="o">.</span><span class="n">from_preset</span><span class="p">(</span><span class="s2">"generic_cmos"</span><span class="p">,</span> <span class="n">default_temperature_c</span><span class="o">=-</span><span class="mf">10.0</span><span class="p">)</span>
+
+<span class="c1"># Build calibration masters from synthetic series (fluxes kept in the linear regime).</span>
+<span class="n">master_bias</span> <span class="o">=</span> <span class="n">cam</span><span class="o">.</span><span class="n">master_bias</span><span class="p">(</span><span class="n">n_frames</span><span class="o">=</span><span class="mi">50</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">master_dark</span> <span class="o">=</span> <span class="n">cam</span><span class="o">.</span><span class="n">master_dark</span><span class="p">(</span><span class="n">exposure</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span> <span class="n">n_frames</span><span class="o">=</span><span class="mi">25</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>  <span class="c1"># exposure-matched</span>
+<span class="n">master_flat</span> <span class="o">=</span> <span class="n">cam</span><span class="o">.</span><span class="n">master_flat</span><span class="p">(</span>
+    <span class="n">photon_rate</span><span class="o">=</span><span class="mf">2_000.0</span><span class="p">,</span> <span class="n">exposure</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">n_frames</span><span class="o">=</span><span class="mi">25</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span> <span class="n">bias</span><span class="o">=</span><span class="n">master_bias</span>
+<span class="p">)</span>  <span class="c1"># pedestal-free</span>
+
+<span class="c1"># A science frame that carries its own ground truth.</span>
+<span class="n">sci</span> <span class="o">=</span> <span class="n">cam</span><span class="o">.</span><span class="n">expose</span><span class="p">(</span><span class="n">photon_rate</span><span class="o">=</span><span class="mf">40.0</span><span class="p">,</span> <span class="n">exposure</span><span class="o">=</span><span class="mf">30.0</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">3</span><span class="p">)</span>
+
+<span class="c1"># Reduce it (subtract the matched dark, divide the normalised flat) and check truth.</span>
+<span class="n">reduced</span> <span class="o">=</span> <span class="n">gf</span><span class="o">.</span><span class="n">calibrate</span><span class="p">(</span><span class="n">sci</span><span class="p">,</span> <span class="n">dark</span><span class="o">=</span><span class="n">master_dark</span><span class="p">,</span> <span class="n">flat</span><span class="o">=</span><span class="n">master_flat</span><span class="p">)</span>
+<span class="n">residual</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">reduced</span><span class="p">)</span> <span class="o">-</span> <span class="n">sci</span><span class="o">.</span><span class="n">truth</span><span class="o">.</span><span class="n">mean_photoelectrons</span> <span class="o">/</span> <span class="n">cam</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">gain_e_per_adu</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"calibration residual RMS: </span><span class="si">{</span><span class="n">residual</span><span class="o">.</span><span class="n">std</span><span class="p">()</span><span class="si">:</span><span class="s2">.3f</span><span class="si">}</span><span class="s2"> ADU"</span><span class="p">)</span>  <span class="c1"># ~ read/shot floor</span>
+</code></pre></div>
+<h3 id="b-transit-photometry-as-a-time-series-12">B — Transit photometry as a time series (1.2)<a class="headerlink" href="#b-transit-photometry-as-a-time-series-12" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">getframes</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">gf</span>
+
+<span class="n">scope</span> <span class="o">=</span> <span class="n">gf</span><span class="o">.</span><span class="n">Telescope</span><span class="p">(</span>
+    <span class="n">aperture_diameter_m</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>
+    <span class="n">throughput</span><span class="o">=</span><span class="mf">0.5</span><span class="p">,</span>
+    <span class="n">plate_scale_arcsec_per_pixel</span><span class="o">=</span><span class="mf">5.0</span><span class="p">,</span>
+    <span class="n">band</span><span class="o">=</span><span class="n">gf</span><span class="o">.</span><span class="n">Bandpass</span><span class="o">.</span><span class="n">johnson</span><span class="p">(</span><span class="s2">"R"</span><span class="p">),</span>
+<span class="p">)</span>
+
+<span class="c1"># Variability is owned by the source: a 1% box transit between t=2000s and 4000s.</span>
+<span class="n">transit</span> <span class="o">=</span> <span class="n">gf</span><span class="o">.</span><span class="n">LightCurve</span><span class="o">.</span><span class="n">box</span><span class="p">(</span><span class="n">depth</span><span class="o">=</span><span class="mf">0.01</span><span class="p">,</span> <span class="n">t0</span><span class="o">=</span><span class="mi">2000</span><span class="p">,</span> <span class="n">t1</span><span class="o">=</span><span class="mi">4000</span><span class="p">)</span>
+<span class="n">scene</span> <span class="o">=</span> <span class="n">gf</span><span class="o">.</span><span class="n">Scene</span><span class="p">(</span>
+    <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span>
+    <span class="n">optics</span><span class="o">=</span><span class="n">scope</span><span class="p">,</span>
+    <span class="n">psf</span><span class="o">=</span><span class="n">gf</span><span class="o">.</span><span class="n">GaussianPSF</span><span class="p">(</span><span class="n">fwhm_arcsec</span><span class="o">=</span><span class="mf">8.0</span><span class="p">),</span>
+    <span class="n">sources</span><span class="o">=</span><span class="p">[</span>
+        <span class="n">gf</span><span class="o">.</span><span class="n">PointSource</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="n">magnitude</span><span class="o">=</span><span class="mf">12.0</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"target"</span><span class="p">,</span> <span class="n">brightness</span><span class="o">=</span><span class="n">transit</span><span class="p">),</span>
+        <span class="n">gf</span><span class="o">.</span><span class="n">PointSource</span><span class="p">(</span><span class="n">x</span><span class="o">=</span><span class="mi">180</span><span class="p">,</span> <span class="n">y</span><span class="o">=</span><span class="mi">180</span><span class="p">,</span> <span class="n">magnitude</span><span class="o">=</span><span class="mf">11.5</span><span class="p">,</span> <span class="n">name</span><span class="o">=</span><span class="s2">"ref"</span><span class="p">),</span>
+    <span class="p">],</span>
+    <span class="n">sky</span><span class="o">=</span><span class="n">gf</span><span class="o">.</span><span class="n">Sky</span><span class="p">(</span><span class="n">surface_brightness_mag_arcsec2</span><span class="o">=</span><span class="mf">20.0</span><span class="p">),</span>
+<span class="p">)</span>
+
+<span class="n">obs</span> <span class="o">=</span> <span class="n">cam</span><span class="o">.</span><span class="n">observe_series</span><span class="p">(</span><span class="n">scene</span><span class="p">,</span> <span class="n">exposure</span><span class="o">=</span><span class="mf">20.0</span><span class="p">,</span> <span class="n">n_frames</span><span class="o">=</span><span class="mi">300</span><span class="p">,</span> <span class="n">jitter_arcsec</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="n">lc</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">gf</span><span class="o">.</span><span class="n">analysis</span><span class="o">.</span><span class="n">aperture_sum</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="p">(</span><span class="mi">64</span><span class="p">,</span> <span class="mi">64</span><span class="p">),</span> <span class="n">r</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span> <span class="o">/</span> <span class="n">gf</span><span class="o">.</span><span class="n">analysis</span><span class="o">.</span><span class="n">aperture_sum</span><span class="p">(</span><span class="n">f</span><span class="p">,</span> <span class="p">(</span><span class="mi">180</span><span class="p">,</span> <span class="mi">180</span><span class="p">),</span> <span class="n">r</span><span class="o">=</span><span class="mi">12</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">obs</span><span class="o">.</span><span class="n">frames</span>
+<span class="p">]</span>
+<span class="c1"># obs.truth.light_curve["target"] holds the injected signal to validate against.</span>
+</code></pre></div>
+<h3 id="c-crowded-field-from-a-catalog-13">C — Crowded field from a catalog (1.3)<a class="headerlink" href="#c-crowded-field-from-a-catalog-13" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">getframes</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">gf</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">astropy.table</span><span class="w"> </span><span class="kn">import</span> <span class="n">Table</span>
+
+<span class="n">scene</span> <span class="o">=</span> <span class="n">gf</span><span class="o">.</span><span class="n">Scene</span><span class="p">(</span>
+    <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">2048</span><span class="p">,</span> <span class="mi">2048</span><span class="p">),</span>
+    <span class="n">optics</span><span class="o">=</span><span class="n">gf</span><span class="o">.</span><span class="n">Telescope</span><span class="p">(</span>
+        <span class="n">aperture_diameter_m</span><span class="o">=</span><span class="mf">4.0</span><span class="p">,</span>
+        <span class="n">throughput</span><span class="o">=</span><span class="mf">0.4</span><span class="p">,</span>
+        <span class="n">plate_scale_arcsec_per_pixel</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>
+        <span class="n">band</span><span class="o">=</span><span class="n">gf</span><span class="o">.</span><span class="n">Bandpass</span><span class="o">.</span><span class="n">ab</span><span class="p">(</span><span class="s2">"g"</span><span class="p">),</span>
+    <span class="p">),</span>
+    <span class="n">psf</span><span class="o">=</span><span class="n">gf</span><span class="o">.</span><span class="n">MoffatPSF</span><span class="p">(</span><span class="n">fwhm_arcsec</span><span class="o">=</span><span class="mf">0.8</span><span class="p">,</span> <span class="n">beta</span><span class="o">=</span><span class="mf">3.0</span><span class="p">),</span>
+    <span class="n">wcs</span><span class="o">=</span><span class="n">gf</span><span class="o">.</span><span class="n">WCSInfo</span><span class="o">.</span><span class="n">tan</span><span class="p">(</span><span class="n">ra</span><span class="o">=</span><span class="mf">150.1</span><span class="p">,</span> <span class="n">dec</span><span class="o">=</span><span class="mf">2.2</span><span class="p">,</span> <span class="n">plate_scale_arcsec_per_pixel</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">2048</span><span class="p">,</span> <span class="mi">2048</span><span class="p">)),</span>
+<span class="p">)</span>
+<span class="n">scene</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">gf</span><span class="o">.</span><span class="n">Catalog</span><span class="o">.</span><span class="n">from_table</span><span class="p">(</span><span class="n">Table</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="s2">"gaia.fits"</span><span class="p">),</span> <span class="n">ra</span><span class="o">=</span><span class="s2">"ra"</span><span class="p">,</span> <span class="n">dec</span><span class="o">=</span><span class="s2">"dec"</span><span class="p">,</span> <span class="n">magnitude</span><span class="o">=</span><span class="s2">"phot_g"</span><span class="p">))</span>
+<span class="n">scene</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">gf</span><span class="o">.</span><span class="n">ExtendedSource</span><span class="o">.</span><span class="n">sersic</span><span class="p">(</span><span class="n">ra</span><span class="o">=</span><span class="mf">150.10</span><span class="p">,</span> <span class="n">dec</span><span class="o">=</span><span class="mf">2.20</span><span class="p">,</span> <span class="n">magnitude</span><span class="o">=</span><span class="mf">16.0</span><span class="p">,</span> <span class="n">n</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span> <span class="n">r_eff_arcsec</span><span class="o">=</span><span class="mf">2.5</span><span class="p">))</span>
+<span class="n">frame</span> <span class="o">=</span> <span class="n">cam</span><span class="o">.</span><span class="n">observe</span><span class="p">(</span><span class="n">scene</span><span class="p">,</span> <span class="n">exposure</span><span class="o">=</span><span class="mf">300.0</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="d-generate-an-ml-training-set-16">D — Generate an ML training set (1.6)<a class="headerlink" href="#d-generate-an-ml-training-set-16" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">getframes</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">gf</span>
+
+<span class="c1"># Raw + noise-free-truth pairs streamed to disk, float32, chunked.</span>
+<span class="n">ds</span> <span class="o">=</span> <span class="n">gf</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">pairs</span><span class="p">(</span>
+    <span class="n">camera</span><span class="o">=</span><span class="n">gf</span><span class="o">.</span><span class="n">Camera</span><span class="o">.</span><span class="n">from_preset</span><span class="p">(</span><span class="s2">"zwo_asi2600mm"</span><span class="p">),</span>
+    <span class="n">scenes</span><span class="o">=</span><span class="n">gf</span><span class="o">.</span><span class="n">dataset</span><span class="o">.</span><span class="n">random_star_fields</span><span class="p">(</span><span class="n">n</span><span class="o">=</span><span class="mi">10_000</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">512</span><span class="p">,</span> <span class="mi">512</span><span class="p">)),</span>
+    <span class="n">exposure</span><span class="o">=</span><span class="mf">60.0</span><span class="p">,</span>
+    <span class="n">dtype</span><span class="o">=</span><span class="s2">"float32"</span><span class="p">,</span>
+    <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">ds</span><span class="o">.</span><span class="n">to_npz</span><span class="p">(</span><span class="s2">"train/"</span><span class="p">)</span>  <span class="c1"># each item: {"raw": ADU, "truth": e-} for a denoiser</span>
+</code></pre></div>
+<hr />
+<h2 id="8-validation-strategy">8. Validation strategy<a class="headerlink" href="#8-validation-strategy" title="Permanent link">&para;</a></h2>
+<p>The library's promise is accuracy, so 2.0 adds a <strong>benchmark</strong> suite that asserts
+physics against published behaviour, not just internal consistency:</p>
+<ul>
+<li>A synthetic PTC recovers the configured gain/read-noise/full-well (have).</li>
+<li>The gain stage reproduces the requested excess-noise factor <code>F</code> (have); the
+  EMCCD output-electron distribution matches the analytic Gamma form.</li>
+<li>A reduced frame (1.1) recovers <code>Frame.truth</code> to the shot/read floor.</li>
+<li>Aperture/PSF photometry recovers injected fluxes to within shot noise; PSF
+  kernels conserve flux (have for Gaussian/Moffat; extend to Airy/Array).</li>
+<li>Radiometry: magnitude→photon-rate against hand-checked AB/Vega zero points.</li>
+<li>CTI/IPC/blooming move signal by the documented amount and conserve charge.</li>
+<li>Determinism across every new path (seeded reproducibility).</li>
+</ul>
+<p>A short "validation" doc reproduces one or two <strong>real</strong> detector characterisations
+(e.g. a measured EMCCD ENF curve) to build trust for quantitative use.</p>
+<h2 id="9-decisions">9. Decisions<a class="headerlink" href="#9-decisions" title="Permanent link">&para;</a></h2>
+<p>These were open during planning and are now settled (they shape the phases above):</p>
+<ol>
+<li><strong>Time-model ownership → the source.</strong> Variability lives on the source as an
+   optional <code>brightness(t)</code> (a <code>LightCurve</code>), not on the <code>Observation</code>. Sources
+   carry their own time behaviour; <code>observe_series</code> just samples them at each
+   frame's timestamp. (Sources gain two optional fields — <code>brightness</code> and a
+   <code>name</code> to key the truth light curve — and stay otherwise immutable.)</li>
+<li><strong><code>astropy</code> is a core dependency.</strong> Catalogs, WCS projection (RA/Dec→pixel),
+   and units lean on it; rather than maintain NumPy fallbacks it becomes core
+   (joining <code>numpy</code>/<code>scipy</code>). FITS I/O therefore no longer needs the <code>examples</code>
+   extra. <em>(Lands with the phase that first needs it; folded into core deps at the
+   2.0 cut.)</em></li>
+<li><strong>Not a spectrograph simulator.</strong> Spectral work is capped at broadband
+   synthetic photometry. No dispersed IFU/slit/grism frames — see non-goals.</li>
+<li><strong>GPU was out of scope for 2.0 and landed post-2.0.</strong> The 1.6 scale work
+   remains the CPU reference; the later optional CuPy backend preserves the same
+   detector equations and uses statistical cross-backend parity.</li>
+</ol>
+<h2 id="10-non-goals-scope-guardrails">10. Non-goals (scope guardrails)<a class="headerlink" href="#10-non-goals-scope-guardrails" title="Permanent link">&para;</a></h2>
+<p>To keep the API "clean, small, well-documented," 2.0 will <em>not</em> attempt: full
+optical ray-tracing / Zemax-class modelling; dispersed spectrograph / IFU /
+slit frames; full radiative-transfer SED synthesis; real-time/streaming
+acquisition; or replacing <code>photutils</code>/<code>astropy.wcs</code> (we interoperate, not
+reimplement). The detector and the observation are the product; everything else
+stays a thin, optional convenience.</p>
+<hr />
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<p>The single highest-leverage step is <strong>1.1: close the loop</strong> — master frames plus a
+one-call <code>calibrate</code>, finishing the ground-truth-validation workflow the library
+was built to enable. <strong>1.2</strong> makes time first-class (and finally lands
+persistence), unblocking the AO and transit cases properly. <strong>1.3</strong> enriches scenes
+for real astronomy, <strong>1.4–1.5</strong> deepen detector and radiometric fidelity, and
+<strong>1.6</strong> unlocks scale and ML datasets. <strong>2.0</strong> freezes the enlarged surface with a
+validation suite and a citable paper. Everything is additive within 1.x; breaking
+changes are deprecated first and land only at the 2.0 cut.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
