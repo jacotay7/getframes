@@ -11,7 +11,7 @@
 **Realistic synthetic camera frames for scientific imaging pipelines.**
 
 <p align="center">
-  <img src="examples/detector_showcase.webp" width="503" alt="Animated detector showcase: one incident photon field exposed on a CCD, EMCCD, sCMOS and eAPD, with live throughput.">
+  <img src="examples/detector_showcase.webp" width="503" alt="Animated detector showcase: a CCD, EMCCD, sCMOS and C-RED One eAPD each simulated in the regime it is built for — deep-sky, AO wavefront sensing, wide-field, and near-infrared CDS — with live throughput.">
 </p>
 
 `getframes` generates the frames a real detector would have produced: the full

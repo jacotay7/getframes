@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-08-24
+
 ### Added
 
 - **`CameraConfig.read_noise_correlated_fraction`.** The part of read noise that
@@ -183,6 +185,38 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `docs/guides/validation.md` documents how to validate a preset against a real dark
   stack: measuring conversion gain from darks alone (no flats needed), and the
   split-half test for repeatable per-pixel read noise.
+- **`examples/16_detector_showcase.py` now shows each detector in the regime it is
+  built for** rather than putting all four on one shared V-band field at a shared
+  200 ms exposure. The old framing was a tidy controlled comparison but an unfair
+  showcase: once `leonardo_saphira` carried a realistic near-infrared
+  dark-plus-background ceiling, its panel was dark-noise dominated in a visible
+  200 ms exposure (star/noise 0.93 against 7.4-22.6 for the other three), and no
+  exposure time fixes that, because amplified dark noise grows as `sqrt(t)` while
+  the star signal grows as `t`. The panels are now a 5 s deep-sky CCD field, a
+  500 Hz EMCCD wavefront sensor, 100 ms wide-field sCMOS, and the C-RED One eAPD
+  doing H-band AO in correlated double sampling at its 1750 Hz maximum frame
+  rate — which the clip measures at ~1,789 frames/s on an RTX 5090. The clip is
+  the README header image and exercises this release's CDS path, C-RED One preset,
+  and Vega H band.
+
+### Fixed
+
+- **The detector showcase no longer scales a panel to its own hot pixels.** The
+  clip took its per-panel display maximum at a hardcoded 99.95th percentile, which
+  is exactly the `hot_pixel_fraction` that `leonardo_saphira` declares, so the
+  display range was pinned to a defect population sitting near 20,000 ADU behind
+  the avalanche gain stage and every physical feature crushed to black. The
+  percentile is now taken from below the preset's declared defect fraction.
+- **The detector showcase subtracts a measured dark pedestal rather than the bias
+  offset alone.** Bias is not the zero point once a detector carries real dark
+  current through a gain stage — 80 e-/s at 50x avalanche gain is ~400 ADU per
+  200 ms frame — and a CDS frame sits on its own exposure-dependent bias-rate
+  pedestal rather than on the bias offset at all.
+- Declared the license as a PEP 639 SPDX expression (`license = "MIT"` plus
+  `license-files`) instead of the deprecated `license = { text = "MIT" }` table,
+  and dropped the now-redundant `License ::` classifier. The built distribution
+  carries `License-Expression: MIT` and `License-File: LICENSE`. No change to the
+  license itself.
 
 ## [2.1.1] - 2026-07-26
 
@@ -524,7 +558,8 @@ together in 1.0.
 - Documentation, runnable examples, and CI (lint, type-check, test matrix, PyPI
   release via Trusted Publishing).
 
-[Unreleased]: https://github.com/jacotay7/getframes/compare/2.1.1...HEAD
+[Unreleased]: https://github.com/jacotay7/getframes/compare/2.2.0...HEAD
+[2.2.0]: https://github.com/jacotay7/getframes/compare/2.1.1...2.2.0
 [2.1.1]: https://github.com/jacotay7/getframes/compare/2.1.0...2.1.1
 [2.1.0]: https://github.com/jacotay7/getframes/compare/2.0.0...2.1.0
 [2.0.0]: https://github.com/jacotay7/getframes/compare/1.0.0...2.0.0

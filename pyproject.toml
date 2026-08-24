@@ -7,7 +7,8 @@ name = "getframes"
 description = "Generate physically realistic synthetic camera frames (CCD/CMOS/EMCCD/eAPD/sCMOS) — dark, bias, flat, and rendered star fields — with auditable noise physics for scientific imaging pipelines."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Jacob Taylor", email = "jacobataylor7@gmail.com" }]
 keywords = [
     "astronomy",
@@ -23,7 +24,6 @@ keywords = [
 classifiers = [
     "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",

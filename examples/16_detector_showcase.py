@@ -1,26 +1,46 @@
-"""16 — Detector showcase: one photon field, four detectors, live throughput.
+"""16 — Detector showcase: four detectors, each in its own regime, live throughput.
 
-Renders an animated clip of the *same* incident photon field landing on four
-detector technologies, so the difference in the frames is the detector physics
-and nothing else:
+Renders an animated clip of four detector technologies, each simulated in the
+observing regime it is actually used in — its own scene, band, telescope,
+exposure and readout mode:
 
-  1. CCD    (``andor_ikon_m934``)        -- deep-cooled scientific CCD; a clean
-                                            frame whose faint end is set by the
-                                            output-amplifier read noise
-  2. EMCCD  (``andor_ocam2k``)           -- stochastic electron multiplication
-                                            at x600: single photons become
-                                            visible, at the cost of
-                                            excess-noise speckle
-  3. sCMOS  (``andor_marana_4_2b_11``)   -- per-pixel read noise, so the noise
-                                            floor itself has fixed structure
-                                            that repeats frame to frame
-  4. eAPD   (``leonardo_saphira``)       -- HgCdTe avalanche array, the fast
-                                            low-noise AO wavefront-sensing path
+  1. CCD    (``andor_ikon_m934``)                 -- deep-cooled scientific CCD
+                                                     on a 5 s deep-sky field:
+                                                     effectively zero dark, so
+                                                     the faint end is set by the
+                                                     output-amplifier read noise
+  2. EMCCD  (``andor_ocam2k``)                     -- stochastic electron
+                                                     multiplication at x600
+                                                     running as a 500 Hz AO
+                                                     wavefront sensor: single
+                                                     photons become visible, at
+                                                     the cost of excess-noise
+                                                     speckle
+  3. sCMOS  (``andor_marana_4_2b_11``)             -- 100 ms wide-field imaging,
+                                                     where the per-pixel read
+                                                     noise gives the noise floor
+                                                     itself a fixed structure
+                                                     that repeats frame to frame
+  4. eAPD   (``first_light_imaging_cred_one``)     -- C-RED One HgCdTe avalanche
+                                                     array doing near-infrared
+                                                     AO in H band, read in
+                                                     correlated double sampling
+                                                     at its 1750 Hz maximum
+                                                     frame rate (1/3500 s of
+                                                     integration: the other half
+                                                     of the frame period is the
+                                                     reset and pedestal read)
 
-``Scene.photon_rate_map`` produces the incident rate *before* quantum
-efficiency, so all four cameras see one physical photon field and each applies
-its own QE, gain stage, and noise. A seeded random walk in ``offset_xy`` adds
-telescope pointing jitter, so the field visibly moves while the noise re-draws.
+An earlier version of this clip put all four detectors on one shared V-band
+field at a shared 200 ms exposure. That is a tidier controlled comparison, but
+it is not a fair showcase: a near-infrared avalanche array carrying a realistic
+dark-plus-background ceiling is dark-noise dominated in a 200 ms visible
+exposure, and no exposure time fixes it, because amplified dark noise grows as
+``sqrt(t)`` while the star signal grows as ``t``. Each panel therefore gets the
+scene its detector is built for, and the panel captions state what changed.
+
+A seeded random walk in ``offset_xy`` adds telescope pointing jitter, so each
+field visibly moves while the noise re-draws.
 
 Each panel is overlaid with the frame rate that camera sustained on this machine
 (warm persistent camera, device-resident rate and output, CUDA synchronized),
@@ -39,28 +59,80 @@ from __future__ import annotations
 import argparse
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 
 import numpy as np
 
 import getframes as gf
 
-# --- the scene: one faint star field, shared by every panel ------------------
 SHAPE = (256, 256)
-# A short exposure is the point: it keeps the EMCCD's x600 gain stage below its
-# full well while leaving the unamplified CCD read-noise limited, which is
-# exactly the regime where the four technologies stop looking alike.
-EXPOSURE_S = 0.2  # s
 SEED = 3
 N_STARS = 35
-MAG_RANGE = (15.5, 19.0)  # bright enough to see structure, faint enough to see noise
-SKY_MAG = 20.5  # mag/arcsec^2
 JITTER_RMS_PX = 1.2  # telescope pointing jitter (random walk)
 
-PANELS = (
-    ("CCD", "andor_ikon_m934"),
-    ("EMCCD", "andor_ocam2k"),
-    ("sCMOS", "andor_marana_4_2b_11"),
-    ("eAPD", "leonardo_saphira"),
+
+@dataclass(frozen=True)
+class PanelSpec:
+    """One detector, and the observing regime it is shown in."""
+
+    label: str
+    preset: str
+    regime: str  # caption line: what this panel is doing
+    band: str  # Vega-system Johnson band
+    aperture_m: float
+    exposure_s: float
+    mag_range: tuple[float, float]
+    sky_mag: float  # mag/arcsec^2 in `band`
+    readout: str  # "expose" or "cds"
+
+
+PANELS: tuple[PanelSpec, ...] = (
+    PanelSpec(
+        label="CCD",
+        preset="andor_ikon_m934",
+        regime="deep-sky · 5 s · V · 2.5 m",
+        band="V",
+        aperture_m=2.5,
+        exposure_s=5.0,
+        mag_range=(18.0, 21.5),
+        sky_mag=21.5,
+        readout="expose",
+    ),
+    PanelSpec(
+        label="EMCCD",
+        preset="andor_ocam2k",
+        regime="AO wavefront sensor · 500 Hz · V · 2.5 m",
+        band="V",
+        aperture_m=2.5,
+        exposure_s=0.002,
+        mag_range=(11.0, 15.0),
+        sky_mag=20.5,
+        readout="expose",
+    ),
+    PanelSpec(
+        label="sCMOS",
+        preset="andor_marana_4_2b_11",
+        regime="wide-field · 100 ms · V · 2.5 m",
+        band="V",
+        aperture_m=2.5,
+        exposure_s=0.1,
+        mag_range=(15.0, 19.0),
+        sky_mag=20.5,
+        readout="expose",
+    ),
+    PanelSpec(
+        label="eAPD",
+        preset="first_light_imaging_cred_one",
+        # 1/3500 s of integration is a 1750 Hz CDS frame: the other half of the
+        # frame period is the reset and the pedestal read.
+        regime="near-IR AO · CDS 1750 Hz · H · 8 m",
+        band="H",
+        aperture_m=8.0,
+        exposure_s=1.0 / 3500.0,
+        mag_range=(8.0, 12.0),
+        sky_mag=13.5,  # H-band sky is far brighter than V
+        readout="cds",
+    ),
 )
 
 # --- the movie ---------------------------------------------------------------
@@ -68,6 +140,7 @@ N_FRAMES = 120
 PLAYBACK_FPS = 25
 BENCH_WARMUP = 10  # untimed frames before the throughput measurement
 BENCH_SECONDS = 1.5  # timed window per panel
+DISPLAY_PERCENTILE = 99.95
 
 
 def _resolve_device(requested: str) -> str:
@@ -106,28 +179,28 @@ def _make_sync(device: str) -> Callable[[], None]:
     return cp.cuda.Stream.null.synchronize
 
 
-def build_scene() -> gf.Scene:
-    """A faint star field seen through a 2.5 m telescope in V."""
+def build_scene(spec: PanelSpec) -> gf.Scene:
+    """The star field this detector is shown observing."""
     rng = np.random.default_rng(SEED)
     sources = [
         gf.PointSource(
             x=float(rng.uniform(12, SHAPE[1] - 12)),
             y=float(rng.uniform(12, SHAPE[0] - 12)),
-            magnitude=float(rng.uniform(*MAG_RANGE)),
+            magnitude=float(rng.uniform(*spec.mag_range)),
         )
         for _ in range(N_STARS)
     ]
     return gf.Scene(
         shape=SHAPE,
         optics=gf.Telescope(
-            aperture_diameter_m=2.5,
+            aperture_diameter_m=spec.aperture_m,
             throughput=0.3,
             plate_scale_arcsec_per_pixel=0.4,
-            band=gf.Bandpass.johnson("V"),
+            band=gf.Bandpass.johnson(spec.band),
         ),
         psf=gf.MoffatPSF(fwhm_arcsec=1.4, beta=3.0),
         sources=sources,
-        sky=gf.Sky(surface_brightness_mag_arcsec2=SKY_MAG),
+        sky=gf.Sky(surface_brightness_mag_arcsec2=spec.sky_mag),
     )
 
 
@@ -139,49 +212,76 @@ def jitter_track(n_frames: int) -> np.ndarray:
     return track - track.mean(axis=0)
 
 
-def render_rate_maps(scene: gf.Scene, n_frames: int, device: str) -> list:
-    """Per-frame incident photon-rate maps, on the compute device.
+class Panel:
+    """One detector technology observing the field it is built for."""
+
+    def __init__(self, spec: PanelSpec, device: str):
+        self.spec = spec
+        self.label = spec.label
+        self.preset = spec.preset
+        self.device = device
+        self.fps: float | None = None
+
+        config = gf.load_preset(spec.preset)
+        self.sensor = config.sensor_type.value
+        self.config = config.replace(resolution=SHAPE)
+        self.scene = build_scene(spec)
+        self.pedestal_adu = self.measure_pedestal()
+
+    def build_camera(self) -> gf.Camera:
+        return gf.Camera(self.config, seed=SEED, precision="float32", device=self.device)
+
+    def read(self, camera: gf.Camera, rate, seed: int | None = None) -> gf.Frame:
+        """One frame in this panel's readout mode."""
+        if self.spec.readout == "cds":
+            return camera.correlated_double_sample(rate, self.spec.exposure_s, seed=seed)
+        return camera.expose(rate, self.spec.exposure_s, seed=seed)
+
+    def measure_pedestal(self) -> float:
+        """The flat offset a dark subtraction removes, in ADU.
+
+        Bias alone is not the zero point once a detector carries real dark
+        current through a gain stage, and a CDS frame sits on its own
+        exposure-dependent bias-rate pedestal rather than on the bias offset at
+        all. Measuring it as the median of a dark frame taken in this panel's
+        own readout mode keeps the physics in the library rather than restating
+        it here, and subtracting only the *median* removes the flat pedestal
+        while leaving per-pixel dark structure and hot pixels visible, which is
+        detector behaviour the clip is meant to show.
+        """
+        camera = self.build_camera()
+        if self.spec.readout == "cds":
+            dark = camera.correlated_double_sample(0.0, self.spec.exposure_s, seed=SEED)
+        else:
+            dark = camera.dark_frame(self.spec.exposure_s, seed=SEED)
+        return float(np.median(gf.to_numpy(dark.data)))
+
+
+def render_rate_maps(panel: Panel, n_frames: int) -> list:
+    """Per-frame incident photon-rate maps for this panel, on the compute device.
 
     Rendered once, outside every timed region: the clip is about detector
     throughput, not about how fast a scene rasterises.
     """
-    backend = gf.get_backend(device)
-    sky = scene.sky_photon_rate()
+    backend = gf.get_backend(panel.device)
+    sky = panel.scene.sky_photon_rate()
     maps = []
     for dx, dy in jitter_track(n_frames):
-        rate = scene.photon_rate_map(offset_xy=(float(dx), float(dy)), dtype=np.float32)
+        rate = panel.scene.photon_rate_map(offset_xy=(float(dx), float(dy)), dtype=np.float32)
         maps.append(backend.asarray(rate + sky, dtype=backend.xp.float32))
     return maps
-
-
-class Panel:
-    """One detector technology exposed to the shared photon field."""
-
-    def __init__(self, label: str, preset: str, device: str):
-        self.label = label
-        self.preset = preset
-        self.device = device
-        self.fps: float | None = None
-
-        config = gf.load_preset(preset)
-        self.sensor = config.sensor_type.value
-        self.config = config.replace(resolution=SHAPE)
-        self.bias_adu = float(self.config.bias_offset_adu)
-
-    def build_camera(self) -> gf.Camera:
-        return gf.Camera(self.config, seed=SEED, precision="float32", device=self.device)
 
 
 def benchmark_panel(panel: Panel, rate, sync: Callable[[], None]) -> float:
     """Warm frames/s for this camera, on a fixed device-resident rate map."""
     camera = panel.build_camera()
     for _ in range(BENCH_WARMUP):
-        camera.expose(rate, EXPOSURE_S)
+        panel.read(camera, rate)
     sync()
     frames = 0
     start = time.perf_counter()
     while True:
-        camera.expose(rate, EXPOSURE_S)
+        panel.read(camera, rate)
         frames += 1
         if time.perf_counter() - start >= BENCH_SECONDS:
             break
@@ -190,13 +290,30 @@ def benchmark_panel(panel: Panel, rate, sync: Callable[[], None]) -> float:
 
 
 def collect_frames(panel: Panel, rates) -> np.ndarray:
-    """``(n_frames, *SHAPE)`` of signal above bias, on the host."""
+    """``(n_frames, *SHAPE)`` of dark-subtracted signal, on the host."""
     camera = panel.build_camera()
     out = np.empty((len(rates), *SHAPE), dtype=np.float32)
     for index, rate in enumerate(rates):
-        frame = camera.expose(rate, EXPOSURE_S, seed=index)
+        frame = panel.read(camera, rate, seed=index)
         out[index] = gf.to_numpy(frame.data).astype(np.float32)
-    return np.clip(out - panel.bias_adu, 0.0, None)
+    return np.clip(out - panel.pedestal_adu, 0.0, None)
+
+
+def display_vmax(stack: np.ndarray, config: gf.CameraConfig) -> float:
+    """Upper display limit for one panel, set by the scene and not by defects.
+
+    A detector's hot pixels sit at ``hot_pixel_factor`` times its dark rate, and
+    behind an avalanche gain stage that puts them orders of magnitude above any
+    star in the field. A fixed high percentile is not safe against that, because
+    a preset's declared ``hot_pixel_fraction`` can *be* the percentile —
+    ``leonardo_saphira``'s 0.05% is exactly the 99.95th — at which point the
+    panel is scaled to its own hot pixels and everything physical crushes to
+    black. Take the percentile from below the declared defect population
+    instead, keeping a 4x margin for its spread.
+    """
+    defect_fraction = float(config.hot_pixel_fraction or 0.0)
+    upper = min(DISPLAY_PERCENTILE, 100.0 - 400.0 * defect_fraction)
+    return float(np.percentile(stack, upper)) or 1.0
 
 
 def render_animation(panels, frames, device_label, out_path, playback_fps):
@@ -218,15 +335,15 @@ def render_animation(panels, frames, device_label, out_path, playback_fps):
 
     fig, axes = plt.subplots(2, 2, figsize=(7.4, 8.8), dpi=68)
     fig.patch.set_facecolor(bg)
-    fig.subplots_adjust(left=0.015, right=0.985, top=0.80, bottom=0.115, wspace=0.03, hspace=0.22)
+    fig.subplots_adjust(left=0.015, right=0.985, top=0.795, bottom=0.115, wspace=0.03, hspace=0.26)
 
     images = []
     for ax, panel, stack in zip(axes.flat, panels, frames):
         ax.set_facecolor(bg)
-        # Per-panel scale on signal above bias: the four detectors differ in QE,
-        # gain and bias pedestal, so one shared ADU range would say more about
-        # their gain settings than about their noise.
-        vmax = float(np.percentile(stack, 99.95)) or 1.0
+        # Per-panel scale on dark-subtracted signal: the four detectors differ in
+        # QE, gain and bias pedestal, and now in scene and exposure too, so one
+        # shared ADU range would say almost nothing about their noise.
+        vmax = display_vmax(stack, panel.config)
         im = ax.imshow(
             stack[0],
             cmap="magma",
@@ -240,7 +357,17 @@ def render_animation(panels, frames, device_label, out_path, playback_fps):
         ax.set_yticks([])
         for spine in ax.spines.values():
             spine.set_color("#233040")
-        ax.set_title(panel.label, color=ink, fontsize=13, fontweight="bold", pad=16)
+        ax.set_title(panel.label, color=ink, fontsize=13, fontweight="bold", pad=22)
+        ax.text(
+            0.5,
+            1.012,
+            panel.spec.regime,
+            transform=ax.transAxes,
+            color=sub,
+            fontsize=8.5,
+            ha="center",
+            va="bottom",
+        )
         rate = f"{panel.fps:,.0f} frames/s" if panel.fps else ""
         ax.text(
             0.045,
@@ -281,8 +408,8 @@ def render_animation(panels, frames, device_label, out_path, playback_fps):
     fig.text(
         0.5,
         0.925,
-        f"one incident photon field · {SHAPE[0]}² · {EXPOSURE_S * 1e3:.0f} ms · "
-        f"V band · sky {SKY_MAG:g} mag/arcsec² · {device_label}",
+        f"four detector technologies · {SHAPE[0]}² · each in the regime it is "
+        f"built for · {device_label}",
         color=sub,
         fontsize=10.5,
         ha="center",
@@ -291,7 +418,7 @@ def render_animation(panels, frames, device_label, out_path, playback_fps):
     fig.text(
         0.5,
         0.895,
-        "same photons in, four detector technologies out (photon → electron → ADU)",
+        "own scene, band, telescope, exposure and readout (photon → electron → ADU)",
         color=sub,
         fontsize=10,
         ha="center",
@@ -313,7 +440,11 @@ def render_animation(panels, frames, device_label, out_path, playback_fps):
 
     cax = fig.add_axes([0.30, 0.048, 0.40, 0.016])
     cb = fig.colorbar(images[0], cax=cax, orientation="horizontal")
-    cb.set_label("signal above bias [ADU] (per-panel scale)", color=sub, fontsize=9)
+    cb.set_label(
+        f"dark-subtracted signal [ADU] — {panels[0].label} scale (each panel scaled independently)",
+        color=sub,
+        fontsize=8,
+    )
     cb.outline.set_edgecolor("#233040")
     cax.tick_params(colors=sub, labelsize=8)
 
@@ -362,19 +493,18 @@ def main() -> None:
     sync = _make_sync(device)
     print(f"device: {device}  ({label})")
 
-    scene = build_scene()
-    print(f"rendering {args.frames} jittered photon-rate maps ...")
-    rates = render_rate_maps(scene, args.frames, device)
+    panels = [Panel(spec, device) for spec in PANELS]
 
-    panels = [Panel(name, preset, device) for name, preset in PANELS]
+    print(f"rendering {args.frames} jittered photon-rate maps x {len(panels)} panels ...")
+    rates = [render_rate_maps(panel, args.frames) for panel in panels]
 
     print("benchmarking throughput per panel ...")
-    for panel in panels:
-        panel.fps = benchmark_panel(panel, rates[0], sync)
-        print(f"  {panel.label:6s} {panel.preset:26s} {panel.fps:9,.0f} frames/s")
+    for panel, panel_rates in zip(panels, rates):
+        panel.fps = benchmark_panel(panel, panel_rates[0], sync)
+        print(f"  {panel.label:6s} {panel.preset:30s} {panel.fps:9,.0f} frames/s")
 
     print(f"exposing {args.frames} frames x {len(panels)} panels ...")
-    frames = [collect_frames(panel, rates) for panel in panels]
+    frames = [collect_frames(panel, panel_rates) for panel, panel_rates in zip(panels, rates)]
 
     out = render_animation(panels, frames, label, args.out, PLAYBACK_FPS)
     print(f"wrote {out}")
