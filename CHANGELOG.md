@@ -37,6 +37,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The CLI's `[camera]` table takes a `device` key.
 - **Conformance tests** for the device and precision vocabulary, including that
   each precision name selects the same dtype as in aocore.
+- **Edge-flux conformance for every PSF model.** `tests/test_conformance.py`
+  now uses aocore 0.1.3's image-builder checks (`check_point_source_centring`,
+  `check_point_source_flux`) instead of feeding analytic PSFs through the
+  OPD-driven checks with a dummy OPD, and adds `check_edge_flux_loss` for
+  Gaussian, Moffat, elliptical Gaussian, Airy and array PSFs, guarding the
+  2.3.0 fix. The `dev` extra pins `aocore>=0.1.3,<0.2`; the runtime
+  requirement is unchanged.
 
 ### Changed
 

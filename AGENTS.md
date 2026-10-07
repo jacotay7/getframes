@@ -109,9 +109,13 @@ indices and takes a background/threshold/window — a different contract from
 offset-centred `_radial_grid` in `analysis/apertures.py`, and `backend.py` (see
 the Architecture table). A bug in an aocore primitive is fixed in aocore, never
 worked around here. `tests/test_conformance.py` runs the `aocore.conformance`
-checks that apply to a detector package (image-plane centring, unit flux); the
-OPD-driven ones (tilt, slopes, wind, Zernikes, RMS) do not apply because
-getframes PSFs are analytic, not images of an OPD map. It also pins the section 8
+image-builder checks that apply to a detector package, for every PSF model:
+`check_point_source_centring` (also on the vignetting map),
+`check_point_source_flux`, and `check_edge_flux_loss` (light off a detector edge
+is lost, not renormalized). They need `aocore>=0.1.3`, pinned in the `dev`
+extra only; the runtime pin stays `>=0.1.2`. The OPD-driven checks (tilt,
+slopes, wind, Zernikes, RMS) do not apply because getframes PSFs are analytic,
+not images of an OPD map. It also pins the section 8
 software vocabulary: every `device=` takes `"cpu"`/`"gpu"`/`"gpu:N"`/`"auto"`
 and every working-precision argument takes `precision="single"|"double"`
 (`Camera`, `Scene.photon_rate_map`/`photoelectron_rate_map`, and the `noise`

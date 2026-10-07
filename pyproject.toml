@@ -45,6 +45,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    # The test suite runs aocore's image-builder conformance checks (0.1.3+).
+    "aocore>=0.1.3,<0.2",
     "pytest>=7.0",
     "pytest-cov>=4.0",
     "ruff>=0.6",
