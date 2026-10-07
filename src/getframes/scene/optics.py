@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
+from aocore import coordinate_grid
 from numpy.typing import NDArray
 
 from .photometry import Bandpass
@@ -41,8 +42,8 @@ class Vignetting:
         """Relative illumination in ``[0, 1]`` for a frame of ``(height, width)``."""
         height, width = shape
         cy, cx = (height - 1) / 2.0, (width - 1) / 2.0
-        yy, xx = np.mgrid[0:height, 0:width]
-        r = np.hypot(xx - cx, yy - cy)
+        yy, xx = coordinate_grid((height, width))
+        r = np.hypot(xx, yy)
         r_corner = math.hypot(max(cx, width - 1 - cx), max(cy, height - 1 - cy))
         if r_corner == 0:
             return np.ones(shape, dtype=np.float64)

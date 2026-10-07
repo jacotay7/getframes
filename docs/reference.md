@@ -109,3 +109,8 @@
 ## Noise models
 
 ::: getframes.noise
+
+`noise.block_sum` is [`aocore.block_sum`](https://github.com/jacotay7/aocore),
+re-exported so existing imports keep working:
+
+::: aocore.sampling.block_sum

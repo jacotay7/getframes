@@ -14,6 +14,7 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
+from aocore import ARCSEC_TO_RAD
 from numpy.typing import NDArray
 from scipy.ndimage import shift as _ndimage_shift
 from scipy.special import erf, j1
@@ -293,7 +294,7 @@ class AiryPSF(PSF):
             raise ValueError("AiryPSF obstruction must be in [0, 1).")
 
         # Radians per pixel, then the argument scale x = pi D theta / lambda.
-        rad_per_pixel = plate_scale_arcsec_per_pixel * (math.pi / 180.0 / 3600.0)
+        rad_per_pixel = plate_scale_arcsec_per_pixel * ARCSEC_TO_RAD
         arg_per_pixel = math.pi * self.aperture_diameter_m / self.wavelength_m * rad_per_pixel
         # First null at 1.22 lambda / D; size the stamp to a few Airy rings.
         first_null_pix = 1.22 / (arg_per_pixel / math.pi) if arg_per_pixel > 0 else 1.0

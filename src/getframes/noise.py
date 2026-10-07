@@ -37,6 +37,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any, NamedTuple
 
 import numpy as np
+from aocore import block_sum
 
 from .backend import ArrayBackend, get_backend
 
@@ -1211,17 +1212,6 @@ def frame_electrons(
         electrons *= gain_multiplier
 
     return electrons
-
-
-def block_sum(array: Any, factor: int) -> Any:
-    """Sum an array into ``factor x factor`` super-pixel blocks (both dims divisible)."""
-    if factor == 1:
-        return array
-    height, width = array.shape
-    binned: NDArray[Any] = array.reshape(height // factor, factor, width // factor, factor).sum(
-        axis=(1, 3)
-    )
-    return binned
 
 
 def simulate_frame(

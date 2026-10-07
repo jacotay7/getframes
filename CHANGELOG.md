@@ -6,6 +6,27 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Generic primitives now come from `aocore`.** getframes is part of an
+  adaptive-optics stack whose shared conventions and primitives live in
+  [`aocore`](https://github.com/jacotay7/aocore), now a core dependency
+  (`aocore>=0.1.2,<0.2`). `noise.block_sum` is `aocore.block_sum`, re-exported
+  so existing imports keep working; it accepts everything it did before and now
+  also takes a `(fy, fx)` factor and leading batch axes, and raises a clear
+  `ValueError` for a factor below 1 or a shape that does not divide (previously
+  a bare reshape error, or a `ZeroDivisionError` for a factor of 0).
+  `Frame.binned` sums through it. `AiryPSF` and `Thermal` take their radians per
+  arcsecond from `aocore.ARCSEC_TO_RAD`, and `Vignetting` its centred grid from
+  `aocore.coordinate_grid`. Every output is bit-for-bit unchanged.
+
+### Added
+
+- **Conformance tests** (`tests/test_conformance.py`) run the
+  `aocore.conformance` checks that apply to a detector package: every PSF model
+  deposits unit flux, a source at `(n - 1) / 2` and the vignetting pattern are
+  centred on the optical axis for odd and even windows.
+
 ## [2.2.0] - 2026-08-24
 
 ### Added

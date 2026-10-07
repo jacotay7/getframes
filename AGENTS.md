@@ -35,7 +35,7 @@ removals. A JOSS paper + citation remain a post-2.0 follow-up.
 | --- | --- |
 | `config.py` | `CameraConfig` (frozen dataclass of detector params) and `SensorType` enum. Pure data + validation + temperature scaling. No randomness. |
 | `noise.py` | The physics. Pure functions: `CameraConfig` + exposure + temperature + seeded `Generator` → electrons/ADU. This is where noise models and the opt-in reusable `DetectorWorkspace` live. |
-| `backend.py` | Optional NumPy/CuPy array and RNG boundary, explicit host conversion, and backend convolution. NumPy is the reference/default. |
+| `backend.py` | Optional NumPy/CuPy array and RNG boundary, explicit host conversion, and backend convolution. NumPy is the reference/default. Kept local rather than `aocore.Backend`: getframes draws per-frame noise from a device-native (cuRAND) stream, which `aocore.Backend.random` (host-side `Generator`) does not provide. |
 | `frame.py` | `Frame` container: a NumPy array (ADU) plus metadata; array-like; optional FITS export. |
 | `camera.py` | `Camera`, the main user-facing object. Orchestrates config + scene + noise into `Frame`s. Holds the RNG and high-level methods (`dark_frame`, `dark_series`, reset-correlated `nondestructive_series`, `correlated_double_sample`, `expose`, `observe`, `*_series`, `master_*`). Reset-correlated readout has one core, the private `_ramp_reads`, which walks a ramp on an arbitrary per-read interval pattern; `nondestructive_series` drives it uniformly and `correlated_double_sample` drives it as pedestal-then-signal. Put new ramp-readout modes there rather than in a second loop — the interval-scaled bias/settling/avalanche terms are easy to get subtly wrong twice. |
 | `calibrate.py` | Master-frame builders (`combine`) and `calibrate` reduction — the raw → reduced → truth loop (phase 1.1). |
@@ -86,6 +86,32 @@ detector-sized float64 coefficients. Keep `config`, `noise`, `scene`, and
    `_c`, `_s`, `_e_per_s`, `_e_per_adu`). Keep this convention.
 6. **Typed and validated.** Full type hints (`mypy --strict` passes). Validate
    inputs in `CameraConfig.__post_init__` and raise informative `ValueError`s.
+
+## Shared core (`aocore`)
+
+getframes is one package of an adaptive-optics stack whose shared contract is
+aocore's `CONVENTIONS.md` (index order `[y, x]`, pixel centres at
+`(i - (n - 1) / 2) * pitch`, SI units, ownership). getframes **owns detectors** —
+QE, noise, gain, saturation, presets, source radiometry — and imports generic
+primitives from `aocore` instead of re-implementing them:
+
+- `aocore.ARCSEC_TO_RAD` for every arcsecond → radian conversion (`AiryPSF`,
+  `Thermal`); never write a local `pi / 648000` literal.
+- `aocore.block_sum` for super-pixel summation. `noise.block_sum` *is*
+  `aocore.block_sum` (re-exported for backward compatibility), and
+  `Frame.binned` sums through it.
+- `aocore.coordinate_grid` for grids centred on the optical axis
+  (`Vignetting.illumination_map`).
+
+Deliberately local: `analysis.centroid` (returns `(x, y)` in absolute pixel
+indices and takes a background/threshold/window — a different contract from
+`aocore.centroid`'s plain `(y, x)` moment about the window centre), the
+offset-centred `_radial_grid` in `analysis/apertures.py`, and `backend.py` (see
+the Architecture table). A bug in an aocore primitive is fixed in aocore, never
+worked around here. `tests/test_conformance.py` runs the `aocore.conformance`
+checks that apply to a detector package (image-plane centring, unit flux); the
+OPD-driven ones (tilt, slopes, wind, Zernikes, RMS) do not apply because
+getframes PSFs are analytic, not images of an OPD map.
 
 ## Adding a camera preset
 
@@ -177,9 +203,10 @@ verified, say so plainly; when a step was skipped or a test fails, say *that*.
 
 ## Things to avoid
 
-- Don't add heavy core runtime dependencies. Core runtime deps are `numpy`, `scipy`, and
-  `astropy` (+ `tomli` backport on <3.11). `astropy` became core at the 2.0 cut
-  (FITS I/O, WCS pixel↔world projection, catalogs); still import it *lazily* inside
+- Don't add heavy core runtime dependencies. Core runtime deps are `numpy`, `scipy`,
+  `astropy`, and the lightweight shared core `aocore` (pinned `>=0.1.2,<0.2`; imported
+  at module top level, ~10 ms beyond NumPy), plus the `tomli` backport on <3.11.
+  `astropy` became core at the 2.0 cut (FITS I/O, WCS pixel↔world projection, catalogs); still import it *lazily* inside
   the functions that use it (it is slow to import) — never at module top level, so
   `import getframes` stays fast. Keep `matplotlib` in the optional `examples` extra.
   CuPy belongs only to the optional `gpu` extra and must be imported lazily.
