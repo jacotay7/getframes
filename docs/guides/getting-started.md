@@ -8,8 +8,9 @@ This guide walks you from install to your first reproducible dark frame.
 pip install getframes
 ```
 
-The core install depends on NumPy, SciPy, and astropy (used for FITS I/O, WCS
-projection, and catalogs). For the plotting examples, add the `examples` extra,
+The core install depends on NumPy, SciPy, astropy (used for FITS I/O, WCS
+projection, and catalogs), and `aocore`, the small shared core of the
+adaptive-optics stack getframes belongs to (unit constants and pixel binning). For the plotting examples, add the `examples` extra,
 which pulls in `matplotlib`:
 
 ```bash

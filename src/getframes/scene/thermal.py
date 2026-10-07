@@ -14,11 +14,11 @@ Pure NumPy, no randomness.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import numpy as np
+from aocore import ARCSEC_TO_RAD
 from numpy.typing import NDArray
 
 from ..spectral import SED
@@ -33,9 +33,6 @@ _trapezoid = getattr(np, "trapezoid", None) or getattr(np, "trapz")  # noqa: B00
 _H_PLANCK = 6.62607015e-34  # J s
 _C_LIGHT = 2.99792458e8  # m / s
 _K_BOLTZMANN = 1.380649e-23  # J / K
-
-# Arcseconds to radians, for the per-pixel solid angle.
-_ARCSEC_TO_RAD = math.pi / (180.0 * 3600.0)
 
 
 def _photon_radiance(
@@ -96,7 +93,7 @@ class Thermal:
         wl_m = resp.wavelength_nm * 1e-9
         integrand = _photon_radiance(wl_m, self.temperature_k) * resp.value
         radiance = float(_trapezoid(integrand, wl_m))  # photons/s/m^2/sr
-        omega_sr = (optics.plate_scale_arcsec_per_pixel * _ARCSEC_TO_RAD) ** 2
+        omega_sr = (optics.plate_scale_arcsec_per_pixel * ARCSEC_TO_RAD) ** 2
         return self.emissivity * radiance * optics.collecting_area_m2 * omega_sr
 
     def photon_sed(

@@ -27,7 +27,7 @@ switches to CUDA (via CuPy) with a single argument.
 ## Install
 
 ```bash
-pip install getframes            # CPU (NumPy + SciPy + astropy)
+pip install getframes            # CPU (NumPy + SciPy + astropy + aocore)
 pip install 'getframes[gpu]'     # + CuPy for CUDA 12.x
 pip install -e '.[dev]'          # from a clone, for development
 ```

@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from aocore import block_sum
 
 from .backend import get_array_module, to_numpy
 
@@ -128,8 +129,9 @@ class Frame:
         if factor == 1:
             binned = data.copy()
         else:
-            blocks = data.reshape(height // factor, factor, width // factor, factor)
-            binned = blocks.sum(axis=(1, 3)) if method == "sum" else blocks.mean(axis=(1, 3))
+            binned = block_sum(data, factor)
+            if method == "mean":
+                binned = binned / (factor * factor)
         metadata = dict(self.metadata)
         metadata["binning"] = int(metadata.get("binning", 1)) * factor
         return Frame(data=binned, metadata=metadata, truth=None)
