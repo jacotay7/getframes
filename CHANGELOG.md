@@ -6,6 +6,17 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`MoffatPSF`, `EllipticalGaussianPSF` and `AiryPSF` no longer put light that
+  falls off the frame back onto it.** They normalised their stamp *after*
+  clipping it to the frame, so a source on the edge column deposited its full
+  flux instead of the part that lands on the detector (a Moffat star centred on
+  column 0 kept 100% of its light, where `GaussianPSF` correctly keeps about
+  half). The stamp is now normalised before clipping, which follows the AO stack
+  convention that light lost at a detector edge is lost, not renormalised
+  (aocore CONVENTIONS 3.3). Sources wholly inside the frame are unchanged.
+
 ### Changed
 
 - **Generic primitives now come from `aocore`.** getframes is part of an

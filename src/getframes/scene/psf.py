@@ -11,6 +11,7 @@ sampled on a stamp and normalised.
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -36,6 +37,33 @@ def _stamp_bounds(
     x0, x1 = max(0, ix - radius), min(width, ix + radius + 1)
     y0, y1 = max(0, iy - radius), min(height, iy + radius + 1)
     return x0, x1, y0, y1
+
+
+def _deposit_sampled(
+    image: NDArray[np.float64],
+    x: float,
+    y: float,
+    radius: int,
+    flux: float,
+    profile_at: Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]],
+) -> None:
+    """Add a sampled, normalised stamp, losing whatever falls off the frame.
+
+    ``profile_at(dx, dy)`` evaluates the PSF at column/row offsets from the source.
+    The profile is normalised over the *whole* stamp before it is clipped to the
+    frame, so light off the edge is lost rather than renormalised back in.
+    """
+    x0, x1, y0, y1 = _stamp_bounds(x, y, radius, image.shape)
+    if x0 >= x1 or y0 >= y1:
+        return  # source falls entirely off the frame
+    ix, iy = round(x), round(y)
+    offsets = np.arange(-radius, radius + 1, dtype=np.float64)
+    profile = profile_at(offsets[None, :] + (ix - x), offsets[:, None] + (iy - y))
+    total = profile.sum()
+    if total > 0:
+        sx, sy = x0 - (ix - radius), y0 - (iy - radius)
+        stamp = profile[sy : sy + (y1 - y0), sx : sx + (x1 - x0)]
+        image[y0:y1, x0:x1] += flux * stamp / total
 
 
 class PSF:
@@ -194,17 +222,12 @@ class MoffatPSF(PSF):
         alpha = fwhm_pix / (2.0 * np.sqrt(2.0 ** (1.0 / self.beta) - 1.0))
 
         radius = int(np.ceil(6.0 * alpha)) + 1
-        x0, x1, y0, y1 = _stamp_bounds(x, y, radius, image.shape)
-        if x0 >= x1 or y0 >= y1:
-            return
+        beta = self.beta
 
-        xs = np.arange(x0, x1) - x
-        ys = np.arange(y0, y1) - y
-        rr = xs[None, :] ** 2 + ys[:, None] ** 2
-        profile = (1.0 + rr / alpha**2) ** (-self.beta)
-        total = profile.sum()
-        if total > 0:
-            image[y0:y1, x0:x1] += flux * profile / total
+        def profile(dx: NDArray[np.float64], dy: NDArray[np.float64]) -> NDArray[np.float64]:
+            return np.asarray((1.0 + (dx**2 + dy**2) / alpha**2) ** (-beta))
+
+        _deposit_sampled(image, x, y, radius, flux, profile)
 
 
 @dataclass(frozen=True)
@@ -239,20 +262,15 @@ class EllipticalGaussianPSF(PSF):
             raise ValueError("PSF FWHM and plate scale must be positive.")
 
         radius = int(np.ceil(5.0 * sigma_major)) + 1
-        x0, x1, y0, y1 = _stamp_bounds(x, y, radius, image.shape)
-        if x0 >= x1 or y0 >= y1:
-            return
-
-        xs = np.arange(x0, x1) - x
-        ys = np.arange(y0, y1) - y
         theta = math.radians(self.position_angle_deg)
         cos_t, sin_t = math.cos(theta), math.sin(theta)
-        u = xs[None, :] * cos_t + ys[:, None] * sin_t
-        v = -xs[None, :] * sin_t + ys[:, None] * cos_t
-        profile = np.exp(-0.5 * ((u / sigma_major) ** 2 + (v / sigma_minor) ** 2))
-        total = profile.sum()
-        if total > 0:
-            image[y0:y1, x0:x1] += flux * profile / total
+
+        def profile(dx: NDArray[np.float64], dy: NDArray[np.float64]) -> NDArray[np.float64]:
+            u = dx * cos_t + dy * sin_t
+            v = -dx * sin_t + dy * cos_t
+            return np.exp(-0.5 * ((u / sigma_major) ** 2 + (v / sigma_minor) ** 2))
+
+        _deposit_sampled(image, x, y, radius, flux, profile)
 
 
 @dataclass(frozen=True)
@@ -299,18 +317,12 @@ class AiryPSF(PSF):
         # First null at 1.22 lambda / D; size the stamp to a few Airy rings.
         first_null_pix = 1.22 / (arg_per_pixel / math.pi) if arg_per_pixel > 0 else 1.0
         radius = int(np.ceil(5.0 * first_null_pix)) + 1
-        x0, x1, y0, y1 = _stamp_bounds(x, y, radius, image.shape)
-        if x0 >= x1 or y0 >= y1:
-            return
+        obstruction = self.obstruction
 
-        xs = np.arange(x0, x1) - x
-        ys = np.arange(y0, y1) - y
-        rr = np.sqrt(xs[None, :] ** 2 + ys[:, None] ** 2)
-        arg = arg_per_pixel * rr
-        profile = _airy_intensity(arg, self.obstruction)
-        total = profile.sum()
-        if total > 0:
-            image[y0:y1, x0:x1] += flux * profile / total
+        def profile(dx: NDArray[np.float64], dy: NDArray[np.float64]) -> NDArray[np.float64]:
+            return _airy_intensity(arg_per_pixel * np.hypot(dx, dy), obstruction)
+
+        _deposit_sampled(image, x, y, radius, flux, profile)
 
 
 def _airy_intensity(arg: NDArray[np.float64], obstruction: float) -> NDArray[np.float64]:

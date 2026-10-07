@@ -62,8 +62,9 @@ the camera a `qe_curve`.
 - [`MoffatPSF(fwhm_arcsec, beta)`][getframes.scene.psf.MoffatPSF] --- a better match
   to seeing-limited stars; smaller `beta` means broader wings.
 
-Both place a flux-conserving stamp at the source's sub-pixel position. Custom PSFs
-can subclass [`PSF`][getframes.scene.psf.PSF] and implement `add_source`.
+Both place a flux-conserving stamp at the source's sub-pixel position. Light that
+falls beyond the frame edge is lost, as it would be on a real detector; it is
+never renormalised back onto the pixels that remain. Custom PSFs can subclass [`PSF`][getframes.scene.psf.PSF] and implement `add_source`.
 
 ## Working with the photon map directly
 
