@@ -1,4 +1,4 @@
 # SPDX-License-Identifier: MIT
 """Single source of truth for the package version."""
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
