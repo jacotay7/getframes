@@ -122,6 +122,45 @@ and [raw JSON](https://github.com/jacotay7/getframes/blob/main/benchmarks/device
 An Arm data point (Ampere Neoverse-N1, 16 pinned cores, RTX 4060 and RTX A400)
 is in [device-results-neoverse-n1.md](https://github.com/jacotay7/getframes/blob/main/benchmarks/device-results-neoverse-n1.md).
 
+### Small frames: fused kernels
+
+A wavefront-sensor frame (80x80 to 240x240 pixels) is limited by the host
+issuing kernels, not by the GPU running them: on a slow host core each CuPy call
+costs 10–20 µs, and the 2.4.0 chain issued about twenty per frame, three of them
+uploads of a scalar input. Since 2.5.0 the GPU path:
+
+- computes the photo and total expectations in one kernel, and the whole
+  readout (full-well clip, defects, reset/avalanche/read noise, gain, bias
+  pedestal and structure, common mode, rounding, ADC saturation and the
+  `uint32` conversion) in another;
+- keeps scalar inputs (`background`, `extra_electrons`, the EM-gain scale, the
+  CIC rate) on the host instead of uploading them every frame;
+- samples Poisson counts directly in the working precision, and reuses the
+  chain's `photo + dark + extra` sum as the truth instead of adding it again.
+
+The noise is still drawn by the same CuPy calls in the same order, and the fused
+kernels perform the same floating-point operations in the same order and
+precision with FMA contraction disabled, so seeded frames are bit-identical to
+2.4.0 (`tests/test_gpu.py` checks this against the separate operations).
+Measured on an Ampere Neoverse-N1 host (12 pinned cores), median of three
+interleaved `bench_devices.py` runs per cell, frames/s:
+
+| Workflow | Native shape | RTX 4060 2.4.0 | RTX 4060 2.5.0 | RTX A400 2.4.0 | RTX A400 2.5.0 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Pyramid WFS CMOS | 80x80 | 2,422 | 6,418 (2.65x) | 2,403 | 6,315 (2.63x) |
+| Shack-Hartmann WFS CMOS | 160x160 | 2,424 | 6,340 (2.62x) | 1,698 | 1,794 (1.06x) |
+| OCAM2K EMCCD | 240x240 | 1,650 | 2,733 (1.66x) | 517 | 531 (1.03x) |
+| SAPHIRA eAPD | 256x320 | 1,809 | 2,072 (1.15x) | 384 | 393 (1.02x) |
+| Large science CMOS | 1024x1024 | 240 | 247 (1.03x) | 42 | 45 (1.06x) |
+
+Once the host overhead is gone a frame is bound by CuPy's Poisson and Gamma
+samplers, which work in double precision: consumer GPUs run that at a small
+fraction of their single-precision rate (1/64 on the RTX 4060), so larger frames
+and the A400 gain little. The NumPy path is bound the same way by NumPy's
+Poisson sampler (about 80% of a 1024x1024 frame); its draws come from one
+sequential stream, so they cannot be split across threads without changing
+seeded output.
+
 An additional owner-isolation benchmark covers structured-detector digitization.
 On this repository's Quadro P620, native float32 amplifier and bias maps reduced
 the 2048x2048 digitization median from 9.196 ms to 6.654 ms (1.382x); the local

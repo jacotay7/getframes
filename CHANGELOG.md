@@ -12,6 +12,36 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   device table on an Ampere Neoverse-N1 host (16 pinned cores) with an RTX
   4060 and an RTX A400.
 
+### Performance
+
+- **Small GPU frames run up to 2.6x faster, with bit-identical seeded output.**
+  WFS-sized frames were launch-bound: the host spent longer issuing about twenty
+  small CuPy kernels per frame than the GPU spent running them. The GPU path now
+  computes the photo and total expectations in one fused kernel and the whole
+  readout (full-well clip, defects, reset/avalanche/read noise, gain, bias
+  pedestal and structure, common mode, rounding, ADC saturation, `uint32`
+  conversion) in another; keeps scalar inputs (`background`, `extra_electrons`,
+  the EM-gain scale, the CIC rate) on the host instead of uploading them every
+  frame; samples Poisson counts directly in the working precision; and reuses
+  the chain's `photo + dark + extra` sum as `FrameTruth.mean_electrons`. The
+  noise is drawn by the same calls in the same order and the fused kernels
+  repeat the same floating-point operations (FMA contraction off), so every
+  seeded GPU frame and truth array is unchanged; a new GPU test compares them
+  bit for bit against the separate operations. `bench_devices.py` on an Ampere
+  Neoverse-N1 host (12 pinned cores), frames/s, 2.4.0 → now, median of three
+  interleaved runs: RTX 4060 — Pyramid 80x80 2,422 → 6,418 (2.65x),
+  Shack-Hartmann 160x160 2,424 → 6,340 (2.62x), OCAM2K 240x240 1,650 → 2,733
+  (1.66x), SAPHIRA 256x320 1,809 → 2,072 (1.15x), 1024x1024 240 → 247 (1.03x);
+  RTX A400 — Pyramid 2,403 → 6,315 (2.63x), the larger frames 1.02–1.06x.
+  Larger frames are bound by CuPy's double-precision Poisson and Gamma
+  samplers. See the [GPU guide](docs/guides/gpu.md#small-frames-fused-kernels).
+- The NumPy path skips whole-frame identity arithmetic (adding a zero offset,
+  dividing by a unit gain, multiplying by a unit avalanche-gain map) and reuses
+  the expectation sum as the truth: 1–5% faster (1024x1024: 13.4 → 14.1 frames/s
+  on the same host), with identical seeded output. It remains bound by NumPy's
+  Poisson sampler (about 80% of a 1024x1024 frame), whose single sequential
+  stream cannot be threaded without changing seeded frames.
+
 ### Fixed
 
 - `benchmarks/bench_devices.py` reported the CPU of Arm hosts as `aarch64`;

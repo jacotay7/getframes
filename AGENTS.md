@@ -36,6 +36,7 @@ removals. A JOSS paper + citation remain a post-2.0 follow-up.
 | `config.py` | `CameraConfig` (frozen dataclass of detector params) and `SensorType` enum. Pure data + validation + temperature scaling. No randomness. |
 | `noise.py` | The physics. Pure functions: `CameraConfig` + exposure + temperature + seeded `Generator` → electrons/ADU. This is where noise models and the opt-in reusable `DetectorWorkspace` live. |
 | `backend.py` | Optional NumPy/CuPy array and RNG boundary, explicit host conversion, and backend convolution. NumPy is the reference/default. Owns the stack's `device` vocabulary (`"cpu"`, `"gpu"`, `"gpu:N"`, `"auto"`; parsed by `_parse_device`, resolved by `get_backend`) and `precision` vocabulary (`resolve_precision`: `"single"`/`"double"`, aliases `"float32"`/`"float64"`). A GPU `ArrayBackend` carries a `device_id`; `activate()` makes it current. Kept local rather than `aocore.Backend`: getframes draws per-frame noise from a device-native (cuRAND) stream, which `aocore.Backend.random` (host-side `Generator`) does not provide. |
+| `_cuda.py` | Private fused CuPy `ElementwiseKernel`s for the launch-bound GPU hot path: the photo + total expectation (`fused_expectation`, called from `simulate_frame`) and the whole readout (`fused_readout`, called from `digitize`). Each mirrors the separate CuPy operations it replaces op for op (same order, working precision, Python scalars rounded to it, `--fmad=false`), so seeded GPU frames are bit-identical to the unfused path, which remains the fallback for any operand it cannot take exactly. Imported only on the GPU backend; CuPy is imported lazily. |
 | `frame.py` | `Frame` container: a NumPy array (ADU) plus metadata; array-like; optional FITS export. |
 | `camera.py` | `Camera`, the main user-facing object. Orchestrates config + scene + noise into `Frame`s. Holds the RNG and high-level methods (`dark_frame`, `dark_series`, reset-correlated `nondestructive_series`, `correlated_double_sample`, `expose`, `observe`, `*_series`, `master_*`). Reset-correlated readout has one core, the private `_ramp_reads`, which walks a ramp on an arbitrary per-read interval pattern; `nondestructive_series` drives it uniformly and `correlated_double_sample` drives it as pedestal-then-signal. Put new ramp-readout modes there rather than in a second loop — the interval-scaled bias/settling/avalanche terms are easy to get subtly wrong twice. Every public method that touches device arrays is decorated with `backend._on_device`, which runs it (each step, for generator methods) with the camera's CUDA device current; decorate new ones too, or `device="gpu:N"` silently allocates on the wrong card. |
 | `calibrate.py` | Master-frame builders (`combine`) and `calibrate` reduction — the raw → reduced → truth loop (phase 1.1). |
@@ -209,6 +210,29 @@ Rules of thumb: prefer additive changes that keep the frozen 1.0 API working;
 make the smallest change that fits the existing patterns; and if a change spans
 layers, respect the one-way data flow. When something is genuinely done and
 verified, say so plainly; when a step was skipped or a test fails, say *that*.
+
+## Performance notes (GPU hot path)
+
+- Small GPU frames are launch-bound (each CuPy call costs 10–20 µs of host time on a
+  slow core), so per-frame work counts CuPy calls, not FLOPs. Large frames, and the
+  CPU path, are bound by the Poisson/Gamma samplers; their draws come from one
+  sequential stream, so they cannot be threaded or reordered without changing
+  seeded output.
+- **Change the arithmetic in two places.** `photo_signal_map`, the
+  `photo + dark + extra` total in `simulate_frame`, and `digitize`'s readout each
+  have a fused twin in `_cuda.py`. Changing the order, precision, or terms of one
+  without the other silently changes seeded GPU frames;
+  `tests/test_gpu.py::test_gpu_fused_kernels_are_bit_identical_to_separate_operations`
+  catches it on a CUDA machine (ordinary CI has no GPU). A new readout term goes
+  into both paths.
+- Keep per-frame scalars on the host: use `noise._working_operand` rather than
+  `backend.asarray` for a value that may be a scalar, and pass scalar distribution
+  parameters through the `_CuPyGenerator` wrapper (it reuses a cached device copy),
+  so a GPU frame does not upload a fresh 0-d array per call.
+- Identity arithmetic on a whole frame (`+ 0`, `/ 1`, `* 1` by a *Python* scalar) is
+  skipped via `noise._is_scalar_value`; it cannot change any ADU (at most the sign
+  of a zero, which rounding erases). Keep the test to Python scalars: reading a 0-d
+  device array to compare it would synchronise the GPU every frame.
 
 ## Things to avoid
 
