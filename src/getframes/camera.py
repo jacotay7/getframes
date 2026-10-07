@@ -903,6 +903,9 @@ class Camera:
                 self.sensor_resolution[1] // binning,
             )
             detector_out = workspace._buffer("full_adu", self._backend, detector_shape, np.uint32)
+        # Without a workspace or ROI the chain's own ``photo + dark + extra`` sum is
+        # exactly the truth total, so it is reused rather than recomputed.
+        mean_total: list[Any] = []
         result = noise.simulate_frame(
             self.config,
             self._full_detector_input(photon_rate, "photon_rate", workspace=workspace),
@@ -928,6 +931,7 @@ class Camera:
             _preserve_truth=include_truth,
             _output_slices=output_slices,
             _out_validated=out is not None or direct_roi_output,
+            _mean_total_out=mean_total if include_truth and self.roi is None else None,
         )
         cropped_adu = result.adu if direct_roi_output else self._crop_to_roi(result.adu, binning)
         if self.roi is not None and out is not None:
@@ -945,7 +949,9 @@ class Camera:
         )
         truth = (
             FrameTruth(
-                mean_electrons=result.mean_photoelectrons
+                mean_electrons=mean_total[0]
+                if mean_total
+                else result.mean_photoelectrons
                 + result.mean_dark_electrons
                 + self._binned_extra(extra_electrons, binning),
                 mean_photoelectrons=result.mean_photoelectrons,

@@ -50,13 +50,52 @@ def _cupy_seed(seed: Any) -> int | None:
 class _CuPyGenerator:
     """Expose the NumPy Generator spellings over a fast CuPy RandomState."""
 
+    # Bound on cached device copies of scalar distribution parameters. A camera
+    # uses a handful (EM-gain scale, CIC rate); the bound only matters for a
+    # caller sweeping a parameter through one generator.
+    _MAX_DEVICE_SCALARS = 64
+
     def __init__(self, generator: Any, xp: Any, float_dtype: Any) -> None:
         self._generator = generator
         self._xp = xp
         self._float_dtype = float_dtype
+        self._device_scalars: dict[tuple[int, type, Any], Any] = {}
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._generator, name)
+
+    def _device_parameter(self, value: Any) -> Any:
+        """Return a host scalar parameter as the cached 0-d device array CuPy would build.
+
+        CuPy's ``poisson`` and ``gamma`` call ``cupy.asarray`` on their
+        parameters, which uploads a Python scalar to a new device array on every
+        draw. Passing the identical device array (same value, same dtype) leaves
+        the samples unchanged; ``cupy.asarray`` returns an existing device array
+        as is.
+        """
+        if not isinstance(value, (int, float)) or isinstance(value, bool):
+            return value
+        key = (int(self._xp.cuda.runtime.getDevice()), type(value), value)
+        cached = self._device_scalars.get(key)
+        if cached is None:
+            if len(self._device_scalars) >= self._MAX_DEVICE_SCALARS:
+                self._device_scalars.clear()
+            cached = self._xp.asarray(value)
+            self._device_scalars[key] = cached
+        return cached
+
+    def poisson(self, lam: Any = 1.0, size: Any = None) -> Any:
+        """Draw Poisson counts (``int64``) without re-uploading a scalar rate."""
+        return self._generator.poisson(lam=self._device_parameter(lam), size=size)
+
+    def _poisson_as(self, lam: Any) -> Any:
+        """Poisson counts for an array rate, stored directly in the rate's float dtype.
+
+        CuPy's sampler converts each ``int64`` count to the output dtype in the
+        same kernel, which is exactly ``poisson(lam).astype(lam.dtype)`` without
+        the ``int64`` intermediate or a second kernel.
+        """
+        return self._generator.poisson(lam=lam, dtype=lam.dtype)
 
     def normal(self, loc: Any = 0.0, scale: Any = 1.0, size: Any = None) -> Any:
         """Draw a scaled normal variate directly in the working precision."""
@@ -73,7 +112,12 @@ class _CuPyGenerator:
 
     def gamma(self, shape: Any, scale: Any = 1.0, size: Any = None) -> Any:
         """Draw Gamma variates directly in the detector working precision."""
-        return self._generator.gamma(shape=shape, scale=scale, size=size, dtype=self._float_dtype)
+        return self._generator.gamma(
+            shape=self._device_parameter(shape),
+            scale=self._device_parameter(scale),
+            size=size,
+            dtype=self._float_dtype,
+        )
 
     def integers(self, low: Any, high: Any = None, size: Any = None) -> Any:
         """NumPy-Generator spelling for CuPy RandomState's ``randint``."""

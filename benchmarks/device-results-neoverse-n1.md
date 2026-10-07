@@ -31,3 +31,9 @@ Reading this:
   1.1x the RTX A400 at 80x80, 3.3x on the OCAM2K and 5.6x at 1024x1024.
 - **16 Neoverse-N1 cores reach a steady 0.40–0.44x a 16-core Ryzen 9
   9950X3D** across every workflow.
+
+These are getframes 2.4.0 numbers. From 2.5.0 the GPU fuses the per-frame
+chain into far fewer kernels, which lifts the launch-bound Pyramid 80x80
+frame on this host to about 6,300–6,400 frames/s on either card, and
+Shack-Hartmann 160x160 to about 6,300 on the RTX 4060 (2.6x); see
+[Small frames: fused kernels](../docs/guides/gpu.md#small-frames-fused-kernels).
