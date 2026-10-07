@@ -8,15 +8,17 @@ unchanged and remains the default.
 
 ## The float32 fast path
 
-Pass `precision="float32"` when you build a `Camera` to run the whole signal chain
+Pass `precision="single"` when you build a `Camera` to run the whole signal chain
 — and each frame's ground truth — in single precision. That halves the memory of
 the per-pixel arrays, which matters for large detectors and when you are generating
-thousands of frames:
+thousands of frames. `"single"`/`"double"` is the vocabulary shared across the AO
+stack; `"float32"`/`"float64"` are accepted aliases, and `cam.precision` reports
+the NumPy dtype name (`"float32"`) whichever spelling you passed:
 
 ```python
 import getframes as gf
 
-cam = gf.Camera.from_preset("zwo_asi2600mm", precision="float32")
+cam = gf.Camera.from_preset("zwo_asi2600mm", precision="single")
 frame = cam.expose(photon_rate=200.0, exposure=30.0, seed=0)
 
 frame.dtype  # uint32 — the digitised ADU stay exact integers
@@ -28,12 +30,19 @@ way. Persistent PRNU/DSNU, amplifier gain/offset, structured-bias, and per-pixel
 read-noise maps use the selected precision too, so a `float32` camera does not keep
 hidden double-precision detector-sized coefficients. The result matches the
 `float64` path statistically and to single-precision tolerance for deterministic
-maps. If you call the scene or noise layers directly, the same control is a `dtype`
-/ `float_dtype` argument:
+maps. If you call the scene or noise layers directly, the same control is a
+`precision` keyword, or the older `dtype` / `float_dtype` argument (give one, or
+both only when they agree):
 
 ```python
-rate_map = scene.photon_rate_map(dtype="float32")  # f32 photons/s/pixel map
+rate_map = scene.photon_rate_map(precision="single")  # f32 photons/s/pixel map
+rate_map = scene.photon_rate_map(dtype="float32")  # the same map
 ```
+
+The `dtype` of [`pairs`][getframes.dataset.pairs] is different: it is the
+*storage* type the finished `raw`/`truth` arrays are cast to on the host, not a
+working precision, so it stays a NumPy dtype (the camera's `precision` sets how
+they are computed).
 
 ## Vectorised catalog rendering
 
@@ -73,7 +82,7 @@ re-iterable source of random fields:
 ```python
 import getframes as gf
 
-cam = gf.Camera.from_preset("zwo_asi2600mm", precision="float32")
+cam = gf.Camera.from_preset("zwo_asi2600mm", precision="single")
 scenes = gf.dataset.random_star_fields(n=10_000, shape=cam.resolution, seed=0)
 
 ds = gf.dataset.pairs(camera=cam, scenes=scenes, exposure=60.0, dtype="float32", seed=1)
@@ -102,7 +111,8 @@ A `generate` config names a preset (or an inline camera) and a frame spec:
 [camera]
 preset = "andor_ikon_m934"
 default_temperature_c = -60.0
-precision = "float32"
+precision = "single"   # or "double"; "float32"/"float64" also accepted
+device = "auto"        # cpu | gpu | gpu:N | auto (GPU when CuPy sees one)
 
 [frame]
 type = "dark"        # dark | bias | flat | light
@@ -117,7 +127,7 @@ requested `shape`:
 ```toml
 [camera]
 preset = "zwo_asi2600mm"
-precision = "float32"
+precision = "single"
 
 [dataset]
 n = 1000

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from numpy.typing import NDArray
 
+from ..backend import _working_dtype
 from .optics import Telescope
 from .psf import PSF
 from .sources import RenderContext, Sky, Source
@@ -116,7 +117,9 @@ class Scene:
         self,
         time_s: float | None = None,
         offset_xy: tuple[float, float] = (0.0, 0.0),
-        dtype: DTypeLike = np.float64,
+        dtype: DTypeLike | None = None,
+        *,
+        precision: str | None = None,
     ) -> NDArray[np.float64]:
         """Render the sources through the PSF into a photons/s/pixel map.
 
@@ -135,8 +138,13 @@ class Scene:
         dtype:
             Output (and working) floating-point dtype. ``float64`` is the exact
             default; ``float32`` halves the map's memory for the fast path.
+        precision:
+            The same choice by name: ``"double"`` or ``"single"`` (aliases
+            ``"float64"``/``"float32"``). Give either this or ``dtype``, or both
+            only when they agree.
         """
-        return self._render(lambda _sed: 1.0, time_s, offset_xy, dtype)
+        working = _working_dtype(dtype, precision)
+        return self._render(lambda _sed: 1.0, time_s, offset_xy, working)
 
     def sky_photon_rate(self) -> float:
         """Uniform sky background in photons/s/pixel (``0`` if no sky is set)."""
@@ -160,7 +168,9 @@ class Scene:
         qe_curve: QE,
         time_s: float | None = None,
         offset_xy: tuple[float, float] = (0.0, 0.0),
-        dtype: DTypeLike = np.float64,
+        dtype: DTypeLike | None = None,
+        *,
+        precision: str | None = None,
     ) -> NDArray[np.float64]:
         """Render sources to a *photoelectron*-rate map (e-/s/pixel) in spectral mode.
 
@@ -169,14 +179,18 @@ class Scene:
         detector ``qe_curve`` with the band's spectral response). The result is
         already in photoelectrons, so the camera applies a unit QE downstream.
 
-        ``time_s`` and ``offset_xy`` behave as in :meth:`photon_rate_map`.
+        ``time_s``, ``offset_xy``, ``dtype`` and ``precision`` behave as in
+        :meth:`photon_rate_map`.
 
         Requires a band with a spectral response (see :attr:`is_spectral_capable`).
         """
         band = self.optics.band
         if band is None or band.response is None:
             raise ValueError("photoelectron_rate_map requires a band with a spectral response.")
-        return self._render(lambda sed: band.effective_qe(qe_curve, sed), time_s, offset_xy, dtype)
+        working = _working_dtype(dtype, precision)
+        return self._render(
+            lambda sed: band.effective_qe(qe_curve, sed), time_s, offset_xy, working
+        )
 
     def sky_electron_rate(self, qe_curve: QE) -> float:
         """Uniform sky background in photoelectrons/s/pixel for spectral mode."""

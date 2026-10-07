@@ -14,7 +14,7 @@ import getframes as gf
 camera = gf.Camera.from_preset(
     "andor_ocam2k",
     device="gpu",
-    precision="float32",
+    precision="single",
 )
 photon_rate = cp.full(camera.resolution, 2.0e6, dtype=cp.float32)
 frame = camera.expose(photon_rate, exposure=1.0e-3, seed=0)
@@ -32,6 +32,48 @@ binning, truth, and ADU digitisation. Wavelength-resolved
 `Camera.expose_spectral` likewise preserves its incident cube and integrated
 truth on device. Static fixed-pattern maps are constructed in the camera's working
 precision and cached once, so reuse the same `Camera` in a frame loop.
+
+## Choosing a device
+
+`device` takes the words shared across the AO stack:
+
+| `device` | Runs on |
+| --- | --- |
+| `"cpu"` (default) | NumPy, the reference implementation |
+| `"gpu"` | CuPy on the CUDA device current when the camera is built |
+| `"gpu:N"` | CuPy on CUDA device `N` |
+| `"auto"` | the current CUDA device when CuPy is installed and sees one, else the CPU |
+
+Matching is case-insensitive, and the older spellings still work: `"numpy"` for
+`"cpu"`, `"cuda"`/`"cupy"` for `"gpu"` (also `"cuda:N"`). An unknown word, or a
+`"gpu:N"` beyond the devices CuPy sees, raises `ValueError` naming the device
+count; `"gpu"` without CuPy raises `ImportError`. `"auto"` never raises for a
+missing GPU, so one script runs on a laptop and a CUDA workstation alike:
+
+```python
+camera = gf.Camera.from_preset("andor_ocam2k", device="auto", precision="single")
+camera.device  # "gpu" or "cpu"
+camera.device_id  # CUDA device number, or None on the CPU
+```
+
+A GPU camera is pinned to one card. Its fixed-pattern maps and its cuRAND
+streams are created on that device, and every camera method runs with it
+current, so `device="gpu:1"` works whichever device is current when you call
+it; `Camera.with_config` keeps the same card. The low-level
+[`getframes.noise`](../reference.md) functions run on the current device; to use
+them on another card, enter the backend's device context:
+
+```python
+backend = gf.get_backend("gpu:1")
+with backend.activate():
+    ...  # noise.simulate_frame(..., backend=backend)
+```
+
+`precision` is `"single"` (float32) or `"double"` (float64, the default), with
+`"float32"`/`"float64"` accepted as aliases; see
+[Scale & datasets](datasets.md#the-float32-fast-path).
+
+## Host transfers
 
 `frame.data` is the zero-copy device interface. `np.asarray(frame)`,
 `Frame.stats()`, and `Frame.to_fits()` are explicit host-facing operations and

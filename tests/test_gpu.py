@@ -220,5 +220,62 @@ def test_gpu_spectral_exposure_preserves_device_cube_truth() -> None:
 
 
 def test_unknown_device_is_actionable() -> None:
-    with pytest.raises(ValueError, match="expected 'cpu' or 'gpu'"):
+    with pytest.raises(ValueError, match="expected 'cpu', 'gpu', 'gpu:N'"):
         gf.Camera.from_preset("generic_cmos", device="tpu")
+
+
+def test_gpu_number_selects_that_device_for_maps_rng_and_frames() -> None:
+    cupy = _cupy()
+    camera = gf.Camera.from_preset("generic_cmos", device="gpu:0", precision="single").with_config(
+        resolution=(32, 32), prnu=0.01
+    )
+    rate = cupy.full(camera.resolution, 1_000.0, dtype=cupy.float32)
+
+    first = camera.expose(rate, 0.01, seed=17)
+    second = camera.expose(rate, 0.01, seed=17)
+    series = list(camera.dark_series(0.01, 2, seed=3))
+
+    assert camera.device == "gpu"
+    assert camera.device_id == 0
+    assert camera.with_config(resolution=(16, 16)).device_id == 0
+    assert "device='gpu:0'" in repr(camera)
+    assert camera._fixed_patterns.prnu_multiplier.device.id == 0
+    assert first.data.device.id == 0
+    assert first.truth.mean_electrons.dtype == cupy.float32
+    assert cupy.array_equal(first.data, second.data)
+    assert all(frame.data.device.id == 0 for frame in series)
+    assert first.binned(2).data.device.id == 0
+
+
+def test_gpu_rng_is_built_on_the_selected_device(monkeypatch: pytest.MonkeyPatch) -> None:
+    cupy = _cupy()
+    devices: list[int] = []
+    original = cupy.random.RandomState
+
+    def recording_state(*args: object, **kwargs: object) -> object:
+        devices.append(int(cupy.cuda.runtime.getDevice()))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(cupy.random, "RandomState", recording_state)
+    gf.Camera.from_preset("generic_cmos", device="gpu:0").with_config(resolution=(8, 8))
+
+    assert devices and set(devices) == {0}
+
+
+def test_auto_selects_the_gpu_when_one_is_usable() -> None:
+    cupy = _cupy()
+    camera = gf.Camera.from_preset("generic_cmos", device="auto", precision="single").with_config(
+        resolution=(16, 16)
+    )
+    frame = camera.expose(cupy.full(camera.resolution, 100.0, dtype=cupy.float32), 0.01, seed=1)
+
+    assert camera.device == "gpu"
+    assert camera.device_id == int(cupy.cuda.runtime.getDevice())
+    assert isinstance(frame.data, cupy.ndarray)
+
+
+def test_gpu_number_beyond_the_device_count_is_rejected() -> None:
+    cupy = _cupy()
+    count = cupy.cuda.runtime.getDeviceCount()
+    with pytest.raises(ValueError, match=f"CuPy sees {count} device"):
+        gf.Camera.from_preset("generic_cmos", device=f"gpu:{count}")

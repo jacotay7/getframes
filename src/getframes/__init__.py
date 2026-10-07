@@ -21,7 +21,7 @@ from .analysis import (
     nondestructive_stack_statistics,
     ramp_photon_transfer,
 )
-from .backend import ArrayBackend, get_array_module, get_backend, to_numpy
+from .backend import ArrayBackend, get_array_module, get_backend, resolve_precision, to_numpy
 from .calibrate import calibrate, combine
 from .camera import Camera
 from .config import CameraConfig, SensorType
@@ -108,5 +108,6 @@ __all__ = [
     "load_preset",
     "nondestructive_stack_statistics",
     "ramp_photon_transfer",
+    "resolve_precision",
     "to_numpy",
 ]
