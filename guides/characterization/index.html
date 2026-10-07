@@ -1,0 +1,1331 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Realistic synthetic camera frames for scientific imaging pipelines">
+      
+      
+      
+        <link rel="canonical" href="https://jacotay7.github.io/getframes/guides/characterization/">
+      
+      
+        <link rel="prev" href="../presets/">
+      
+      
+        <link rel="next" href="../validation/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Detector characterisation - getframes</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#detector-characterisation" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="getframes" class="md-header__button md-logo" aria-label="getframes" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            getframes
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Detector characterisation
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/jacotay7/getframes" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jacotay7/getframes
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="getframes" class="md-nav__button md-logo" aria-label="getframes" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    getframes
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/jacotay7/getframes" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jacotay7/getframes
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../noise-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The noise model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../calibration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Calibration & ground truth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scenes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observing scenes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../time-series/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Time series & observations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../spectral/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spectral mode
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../radiometry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Radiometry & the infrared
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scale & datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU detector execution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Camera presets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detector characterisation
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detector characterisation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#nondestructive-read-stacks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nondestructive-read stacks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-1-reduce-each-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1 — reduce each stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-2-characterise-from-darks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2 — characterise from darks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Step 2 — characterise from darks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-darks-are-enough-to-measure-gain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why darks are enough to measure gain
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-3-rebuild-the-detector-as-a-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3 — rebuild the detector as a config
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#is-your-per-pixel-noise-real-or-sampling-scatter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Is your per-pixel noise real, or sampling scatter?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-flats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding flats
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#accuracy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Accuracy
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../stability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#nondestructive-read-stacks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Nondestructive-read stacks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-1-reduce-each-stack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1 — reduce each stack
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-2-characterise-from-darks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2 — characterise from darks
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Step 2 — characterise from darks">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-darks-are-enough-to-measure-gain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why darks are enough to measure gain
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#step-3-rebuild-the-detector-as-a-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3 — rebuild the detector as a config
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#is-your-per-pixel-noise-real-or-sampling-scatter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Is your per-pixel noise real, or sampling scatter?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#adding-flats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding flats
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#accuracy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Accuracy
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="detector-characterisation">Detector characterisation<a class="headerlink" href="#detector-characterisation" title="Permanent link">&para;</a></h1>
+<p><code>getframes.analysis.characterize</code> runs the standard bench measurements on stacks
+of frames. It takes plain arrays, so it works equally on <strong>frames from a real
+detector</strong> and on frames from a simulated <a class="autorefs autorefs-internal" title="getframes.camera.Camera" href="../../reference/#getframes.camera.Camera"><code>Camera</code></a> —
+and the result carries a <code>to_config()</code>, so a real camera can be measured, turned
+into a <a class="autorefs autorefs-internal" title="getframes.config.CameraConfig
+
+
+  
+      dataclass
+  " href="../../reference/#getframes.config.CameraConfig"><code>CameraConfig</code></a>, and then simulated.</p>
+<div class="highlight"><pre><span></span><code>frames  -&gt;  stack_statistics    per-pixel temporal mean and variance
+        -&gt;  characterize_dark   gain, read noise, dark current, bias, DSNU
+        -&gt;  to_config           a CameraConfig
+        -&gt;  Camera              synthetic frames matching your detector
+</code></pre></div>
+<p>This is the complement to
+<a class="autorefs autorefs-internal" title="photon_transfer_curve(camera, levels, exposure=1.0, *, temperature=None, seed=0)" href="../../reference/#getframes.analysis.ptc.photon_transfer_curve"><code>photon_transfer_curve</code></a>, which
+drives a <em>simulated</em> camera to characterise it. Here the frames come first.</p>
+<h2 id="nondestructive-read-stacks">Nondestructive-read stacks<a class="headerlink" href="#nondestructive-read-stacks" title="Permanent link">&para;</a></h2>
+<p>A global-reset NDR cube is not a stack of independent exposures: accumulated
+charge and reset noise are shared within each ramp. Reduce it with the dedicated
+helpers so those correlations are retained:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">getframes.analysis</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">nondestructive_stack_statistics</span><span class="p">,</span>
+    <span class="n">ramp_photon_transfer</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="n">stats</span> <span class="o">=</span> <span class="n">nondestructive_stack_statistics</span><span class="p">(</span>
+    <span class="n">cube</span><span class="p">,</span>
+    <span class="n">channel_count</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span>
+    <span class="n">channel_axis</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span>
+    <span class="n">saturation_adu</span><span class="o">=</span><span class="mi">65535</span><span class="p">,</span>
+<span class="p">)</span>
+<span class="n">stats</span><span class="o">.</span><span class="n">inferred_reads_per_reset</span>
+<span class="n">stats</span><span class="o">.</span><span class="n">ramp_slope_adu_per_read</span>
+<span class="n">stats</span><span class="o">.</span><span class="n">common_mode_noise_adu</span>
+<span class="n">stats</span><span class="o">.</span><span class="n">temporal_noise_adu</span>
+<span class="n">stats</span><span class="o">.</span><span class="n">cds_noise_adu</span>
+
+<span class="n">ptc</span> <span class="o">=</span> <span class="n">ramp_photon_transfer</span><span class="p">(</span><span class="n">cube</span><span class="p">,</span> <span class="n">reset_after_indices</span><span class="o">=</span><span class="n">stats</span><span class="o">.</span><span class="n">reset_after_indices</span><span class="p">)</span>
+<span class="n">ptc</span><span class="o">.</span><span class="n">conversion_gain_e_per_adu</span>
+<span class="n">ptc</span><span class="o">.</span><span class="n">response_nonuniformity</span>
+<span class="n">ptc</span><span class="o">.</span><span class="n">response_repeatability</span>
+</code></pre></div>
+<p><code>nondestructive_stack_statistics</code> removes frame-wide levels before measuring
+pixel noise, detects only strong reset drops, and reports interleaved-channel and
+edge statistics. <code>ramp_photon_transfer</code> compares the same read index between
+repeated ramps. Its signal axis is accumulated ADU relative to the first fitted
+read, so the fitted variance intercept is the variance at that read rather than
+an extrapolation to zero raw pedestal.</p>
+<p>The response-nonuniformity estimate high-pass filters each ramp's slope map and
+uses covariance between alternating ramp halves. Uncorrelated slope-fit noise
+therefore does not inflate the result; <code>response_repeatability</code> shows whether the
+same pixel structure was recovered in both halves. With a nonuniform warm cap,
+interpret this as detector response plus any stable small-scale illumination.</p>
+<p>A runnable end-to-end version of everything below is
+<a href="https://github.com/jacotay7/getframes/blob/main/examples/15_detector_characterization.py"><code>examples/15_detector_characterization.py</code></a>.</p>
+<h2 id="step-1-reduce-each-stack">Step 1 — reduce each stack<a class="headerlink" href="#step-1-reduce-each-stack" title="Permanent link">&para;</a></h2>
+<p>Everything is built from one quantity: for each pixel, its mean and variance
+<em>through a stack</em>. <code>stack_statistics</code> computes both in a single streaming pass,
+so an iterator over a stack far larger than memory is fine.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">getframes.analysis</span><span class="w"> </span><span class="kn">import</span> <span class="n">stack_statistics</span>
+
+<span class="n">stats</span> <span class="o">=</span> <span class="n">stack_statistics</span><span class="p">(</span><span class="n">frames</span><span class="p">,</span> <span class="n">exposure_s</span><span class="o">=</span><span class="mf">2.0</span><span class="p">,</span> <span class="n">split</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">stats</span><span class="o">.</span><span class="n">mean_adu</span>  <span class="c1"># (h, w) per-pixel temporal mean, ADU</span>
+<span class="n">stats</span><span class="o">.</span><span class="n">variance_adu2</span>  <span class="c1"># (h, w) per-pixel temporal variance, ADU^2</span>
+</code></pre></div>
+<p><code>frames</code> is any iterable of 2-D frames: NumPy arrays, <code>Frame</code> objects, a 3-D
+cube, a <code>Camera.dark_series(...)</code> generator, or your own reader:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">read_raw</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="n">shape</span><span class="o">=</span><span class="p">(</span><span class="mi">1200</span><span class="p">,</span> <span class="mi">1200</span><span class="p">)):</span>
+<span class="w">    </span><span class="sd">"""Stream a flat little-endian uint16 file, one frame at a time."""</span>
+    <span class="n">n_bytes</span> <span class="o">=</span> <span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="mi">2</span>
+    <span class="k">with</span> <span class="nb">open</span><span class="p">(</span><span class="n">path</span><span class="p">,</span> <span class="s2">"rb"</span><span class="p">)</span> <span class="k">as</span> <span class="n">handle</span><span class="p">:</span>
+        <span class="k">while</span> <span class="n">chunk</span> <span class="o">:=</span> <span class="n">handle</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">n_bytes</span><span class="p">):</span>
+            <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">chunk</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">n_bytes</span><span class="p">:</span>
+                <span class="k">return</span>
+            <span class="k">yield</span> <span class="n">np</span><span class="o">.</span><span class="n">frombuffer</span><span class="p">(</span><span class="n">chunk</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">"&lt;u2"</span><span class="p">)</span><span class="o">.</span><span class="n">reshape</span><span class="p">(</span><span class="n">shape</span><span class="p">)</span>
+
+
+<span class="n">stacks</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="n">exposure</span><span class="p">:</span> <span class="n">stack_statistics</span><span class="p">(</span><span class="n">read_raw</span><span class="p">(</span><span class="n">path</span><span class="p">),</span> <span class="n">exposure_s</span><span class="o">=</span><span class="n">exposure</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">exposure</span><span class="p">,</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">my_files</span><span class="o">.</span><span class="n">items</span><span class="p">()</span>
+<span class="p">}</span>
+</code></pre></div>
+<h2 id="step-2-characterise-from-darks">Step 2 — characterise from darks<a class="headerlink" href="#step-2-characterise-from-darks" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">getframes.analysis</span><span class="w"> </span><span class="kn">import</span> <span class="n">characterize_dark</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="n">characterize_dark</span><span class="p">(</span><span class="n">stacks</span><span class="p">)</span>  <span class="c1"># {exposure_s: StackStats}</span>
+
+<span class="n">result</span><span class="o">.</span><span class="n">gain_e_per_adu</span>  <span class="c1"># conversion gain</span>
+<span class="n">result</span><span class="o">.</span><span class="n">read_noise_e</span>  <span class="c1"># median per-pixel read noise</span>
+<span class="n">result</span><span class="o">.</span><span class="n">dark_current_e_per_s</span>  <span class="c1"># median dark current</span>
+<span class="n">result</span><span class="o">.</span><span class="n">bias_offset_adu</span>
+<span class="n">result</span><span class="o">.</span><span class="n">dark_current_nonuniformity</span>  <span class="c1"># DSNU</span>
+<span class="n">result</span><span class="o">.</span><span class="n">read_noise_nonuniformity</span>  <span class="c1"># log-normal width of the read-noise spread</span>
+<span class="n">result</span><span class="o">.</span><span class="n">read_noise_rts_fraction</span>  <span class="c1"># pixels above 3x the median (the RTS tail)</span>
+<span class="n">result</span><span class="o">.</span><span class="n">read_noise_map_e</span>  <span class="c1"># (h, w) -- the per-pixel maps behind the scalars</span>
+</code></pre></div>
+<p>Use at least three exposures, and make the longest accumulate enough dark charge
+to stand clearly above the read noise. Make the shortest as short as the camera
+allows: the read noise is measured there.</p>
+<h3 id="why-darks-are-enough-to-measure-gain">Why darks are enough to measure gain<a class="headerlink" href="#why-darks-are-enough-to-measure-gain" title="Permanent link">&para;</a></h3>
+<p>You do not need a flat field. Dark current is itself a Poisson process, so
+thermally generated charge is a perfectly good charge source for a photon
+transfer curve. For a dark frame,</p>
+<p>$$\text{mean}<em>\text{ADU}(t) = \text{bias} + \frac{Dt}{g}, \qquad
+  \text{var}</em>\text{ADU}(t) = \text{RN}_\text{ADU}^2 + \frac{Dt}{g^2}$$</p>
+<p>so $\mathrm{d}\,\text{var}/\mathrm{d}\,\text{mean} = 1/g$ and the dark rate $D$
+cancels completely.</p>
+<p>The mean on its own is degenerate — it only ever tells you $D/g$, and doubling
+both leaves every frame identical. What breaks the degeneracy is that Poisson
+statistics fix the mean–variance relation <em>in electrons</em> with no free parameter,
+$\text{var}_e = \text{mean}_e$. Shot noise is an absolute ruler: $\text{SNR} =
+\text{mean}/\sqrt{\text{var}} = \sqrt{N}$ is dimensionless and invariant under
+rescaling, so it counts discrete charges whatever units you record them in.</p>
+<p><code>characterize_dark</code> fits this <strong>per pixel</strong>, which makes it immune to DSNU (each
+pixel is its own regression), and fits a <em>slope</em> across exposures, which absorbs
+the bias pedestal and the read noise into the two intercepts.</p>
+<div class="admonition warning">
+<p class="admonition-title">Check the Fano factor</p>
+<p>The whole method assumes the dark charge is Poisson. <code>result.fano_factor</code>
+reports $\text{var}_e/\text{mean}_e$ for the accumulated charge, which should
+come out at 1. If it does not, the gain is not trustworthy — suspect a
+non-Poisson noise source, a bias step between acquisition sessions, or
+saturation.</p>
+</div>
+<h2 id="step-3-rebuild-the-detector-as-a-config">Step 3 — rebuild the detector as a config<a class="headerlink" href="#step-3-rebuild-the-detector-as-a-config" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="n">config</span> <span class="o">=</span> <span class="n">result</span><span class="o">.</span><span class="n">to_config</span><span class="p">(</span>
+    <span class="s2">"my camera"</span><span class="p">,</span>
+    <span class="n">pixel_size_um</span><span class="o">=</span><span class="mf">11.0</span><span class="p">,</span>  <span class="c1"># things darks cannot see: supply them</span>
+    <span class="n">full_well_e</span><span class="o">=</span><span class="mf">80_000.0</span><span class="p">,</span>
+    <span class="n">bit_depth</span><span class="o">=</span><span class="mi">16</span><span class="p">,</span>
+    <span class="n">dark_current_ref_temp_c</span><span class="o">=-</span><span class="mf">20.0</span><span class="p">,</span>  <span class="c1"># the temperature the darks were taken at</span>
+<span class="p">)</span>
+<span class="n">twin</span> <span class="o">=</span> <span class="n">gf</span><span class="o">.</span><span class="n">Camera</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+</code></pre></div>
+<p>Everything darks can measure is filled in; the rest takes documented placeholders
+you should override. <code>dark_current_ref_temp_c</code> matters most — stacks carry no
+temperature, so without it the config's temperature scaling will be wrong.</p>
+<h2 id="is-your-per-pixel-noise-real-or-sampling-scatter">Is your per-pixel noise real, or sampling scatter?<a class="headerlink" href="#is-your-per-pixel-noise-real-or-sampling-scatter" title="Permanent link">&para;</a></h2>
+<p>A variance map always looks structured, because estimating a variance from $n$
+frames has its own $\chi^2$ scatter. <code>split=True</code> gives you the test that tells
+them apart: split the stack in half, compute each half's per-pixel variance, and
+correlate.</p>
+<div class="highlight"><pre><span></span><code><span class="n">stats</span> <span class="o">=</span> <span class="n">stack_statistics</span><span class="p">(</span><span class="n">frames</span><span class="p">,</span> <span class="n">split</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="n">stats</span><span class="o">.</span><span class="n">temporal_repeatability</span>  <span class="c1"># split-half correlation, 0 to 1</span>
+<span class="n">stats</span><span class="o">.</span><span class="n">fixed_variance_fraction</span>  <span class="c1"># fraction of the map's spread that is real</span>
+</code></pre></div>
+<p>A detector whose pixels genuinely differ — every sCMOS — gives a high
+correlation, because the <em>same</em> pixels are noisy in both halves. Uniform noise
+gives ~0. Real back-illuminated sCMOS measures <strong>0.89–0.94</strong>.</p>
+<p>The most extreme 1% of pixels are excluded before correlating, and on real data
+that matters a great deal. A cosmic ray lands in one half only and inflates that
+pixel's variance by orders of magnitude, so a handful of them dominate the
+covariance: real 60 s Marana darks score <strong>0.006</strong> unclipped against <strong>0.96</strong>
+clipped. Use <code>stats.repeatability(clip_percentile=100.0)</code> if you want the plain
+Pearson correlation.</p>
+<p>Note this responds to any fixed per-pixel variance structure, not only read
+noise: at long exposures DSNU shows up here too, because a pixel with more dark
+current also carries more shot noise.</p>
+<h2 id="adding-flats">Adding flats<a class="headerlink" href="#adding-flats" title="Permanent link">&para;</a></h2>
+<p>Flats measure what darks cannot: full well, PRNU and linearity.</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">getframes.analysis</span><span class="w"> </span><span class="kn">import</span> <span class="n">characterize_flat</span>
+
+<span class="n">flat</span> <span class="o">=</span> <span class="n">characterize_flat</span><span class="p">(</span><span class="n">flat_stacks</span><span class="p">,</span> <span class="n">bias_adu</span><span class="o">=</span><span class="n">result</span><span class="o">.</span><span class="n">bias_offset_adu</span><span class="p">)</span>
+<span class="n">flat</span><span class="o">.</span><span class="n">gain_e_per_adu</span>
+<span class="n">flat</span><span class="o">.</span><span class="n">full_well_e</span>  <span class="c1"># None if the curve never rolls over</span>
+<span class="n">flat</span><span class="o">.</span><span class="n">prnu</span>
+<span class="n">flat</span><span class="o">.</span><span class="n">nonlinearity</span>
+</code></pre></div>
+<p>Sample from near zero up past saturation, and sample densely near the knee.
+<code>full_well_e</code> comes from the variance peak, which marks the <em>onset</em> of
+saturation and reads low by roughly the PRNU: the earliest-saturating pixels
+start clipping before the array as a whole reaches its ceiling.</p>
+<p>Because these are stacks, the variance used is the per-pixel temporal variance,
+which is already free of fixed-pattern noise — the usual trick of differencing
+flat pairs is unnecessary. PRNU is then measured separately, from the spatial
+spread of the time-averaged flat with its shot-noise contribution removed.</p>
+<h2 id="accuracy">Accuracy<a class="headerlink" href="#accuracy" title="Permanent link">&para;</a></h2>
+<p>Against a simulated camera with known parameters (72×72, six exposures, 250
+frames each — see <code>tests/test_characterize.py</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Recovered to</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Conversion gain</td>
+<td>3%</td>
+</tr>
+<tr>
+<td>Bias offset</td>
+<td>0.1 ADU</td>
+</tr>
+<tr>
+<td>Dark current</td>
+<td>5%</td>
+</tr>
+<tr>
+<td>Read noise (median)</td>
+<td>5%</td>
+</tr>
+<tr>
+<td>DSNU</td>
+<td>15%</td>
+</tr>
+<tr>
+<td>Read-noise non-uniformity</td>
+<td>15%</td>
+</tr>
+<tr>
+<td>PRNU (from flats)</td>
+<td>15%</td>
+</tr>
+</tbody>
+</table>
+<p>Accuracy improves with frame count as $1/\sqrt{n}$; the distribution widths need
+the most frames, because each pixel's own noise estimate has to be precise
+before its spread across pixels is meaningful.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
