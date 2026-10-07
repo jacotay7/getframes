@@ -52,7 +52,7 @@ missing GPU, so one script runs on a laptop and a CUDA workstation alike:
 
 ```python
 camera = gf.Camera.from_preset("andor_ocam2k", device="auto", precision="single")
-camera.device     # "gpu" or "cpu"
+camera.device  # "gpu" or "cpu"
 camera.device_id  # CUDA device number, or None on the CPU
 ```
 
