@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-10-07
+
 ### Added
 
 - **Arm benchmark data point** (`benchmarks/device-results-neoverse-n1.*`): the
@@ -688,7 +690,8 @@ together in 1.0.
 - Documentation, runnable examples, and CI (lint, type-check, test matrix, PyPI
   release via Trusted Publishing).
 
-[Unreleased]: https://github.com/jacotay7/getframes/compare/2.4.0...HEAD
+[Unreleased]: https://github.com/jacotay7/getframes/compare/2.5.0...HEAD
+[2.5.0]: https://github.com/jacotay7/getframes/compare/2.4.0...2.5.0
 [2.4.0]: https://github.com/jacotay7/getframes/compare/2.3.0...2.4.0
 [2.3.0]: https://github.com/jacotay7/getframes/compare/2.2.0...2.3.0
 [2.2.0]: https://github.com/jacotay7/getframes/compare/2.1.1...2.2.0
