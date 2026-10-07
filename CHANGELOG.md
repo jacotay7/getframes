@@ -6,6 +6,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-10-07
+
 ### Fixed
 
 - **`MoffatPSF`, `EllipticalGaussianPSF` and `AiryPSF` no longer put light that
@@ -590,7 +592,8 @@ together in 1.0.
 - Documentation, runnable examples, and CI (lint, type-check, test matrix, PyPI
   release via Trusted Publishing).
 
-[Unreleased]: https://github.com/jacotay7/getframes/compare/2.2.0...HEAD
+[Unreleased]: https://github.com/jacotay7/getframes/compare/2.3.0...HEAD
+[2.3.0]: https://github.com/jacotay7/getframes/compare/2.2.0...2.3.0
 [2.2.0]: https://github.com/jacotay7/getframes/compare/2.1.1...2.2.0
 [2.1.1]: https://github.com/jacotay7/getframes/compare/2.1.0...2.1.1
 [2.1.0]: https://github.com/jacotay7/getframes/compare/2.0.0...2.1.0
