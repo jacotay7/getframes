@@ -1,0 +1,221 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-10-07T07:14:14.461693+00:00",
+  "command": "/home/jtaylor/miniforge3/envs/aosim-bench/bin/python benchmarks/bench_devices.py --seconds 2 --warmup 10 --device both --output /home/jtaylor/aosim-bench-logs/artifacts/getframes-device-rtx4060.json",
+  "revision": "7b01daf765d432ab141176548f2b11cf0e7fc11c",
+  "source_dirty": true,
+  "python": "3.13.15 | packaged by conda-forge | (main, Sep  2 2026, 22:02:03) [GCC 15.3.0]",
+  "platform": "Linux-6.17.9-76061709-generic-aarch64-with-glibc2.39",
+  "processor": "aarch64",
+  "cpu": "Neoverse-N1",
+  "gpu": "NVIDIA GeForce RTX 4060",
+  "dependencies": {
+    "getframes": "2.4.0",
+    "numpy": "2.5.3",
+    "scipy": "1.18.1",
+    "cupy": "14.2.0"
+  },
+  "methodology": {
+    "seconds_per_cell": 2.0,
+    "warmup_frames": 10,
+    "persistent_camera": true,
+    "device_resident_rate_and_output": true,
+    "include_truth": true,
+    "rng": "one generator seeded at camera construction and advanced per frame",
+    "cuda_synchronization": "before and after each timed region",
+    "construction_included": false,
+    "host_transfers_included": false
+  },
+  "results": [
+    {
+      "workflow": "pyramid_cmos_80",
+      "label": "Pyramid WFS CMOS",
+      "preset": "generic_cmos",
+      "sensor": "CMOS",
+      "shape": [
+        80,
+        80
+      ],
+      "precision": "float32",
+      "exposure_s": 0.001,
+      "photon_rate_per_s": 2000000.0,
+      "device": "cpu",
+      "frames": 4295,
+      "elapsed_s": 2.0004646239976864,
+      "frame_s": 0.000465765919440672,
+      "frames_per_s": 2147.001225853703,
+      "megapixels_per_s": 13.740807845463701
+    },
+    {
+      "workflow": "pyramid_cmos_80",
+      "label": "Pyramid WFS CMOS",
+      "preset": "generic_cmos",
+      "sensor": "CMOS",
+      "shape": [
+        80,
+        80
+      ],
+      "precision": "float32",
+      "exposure_s": 0.001,
+      "photon_rate_per_s": 2000000.0,
+      "device": "gpu",
+      "frames": 5011,
+      "elapsed_s": 2.0001363799965475,
+      "frame_s": 0.0003991491478739867,
+      "frames_per_s": 2505.329161608795,
+      "megapixels_per_s": 16.034106634296286
+    },
+    {
+      "workflow": "shack_hartmann_cmos_160",
+      "label": "Shack-Hartmann WFS CMOS",
+      "preset": "generic_cmos",
+      "sensor": "CMOS",
+      "shape": [
+        160,
+        160
+      ],
+      "precision": "float32",
+      "exposure_s": 0.001,
+      "photon_rate_per_s": 2000000.0,
+      "device": "cpu",
+      "frames": 1149,
+      "elapsed_s": 2.001656759006437,
+      "frame_s": 0.001742085952137891,
+      "frames_per_s": 574.0244898782395,
+      "megapixels_per_s": 14.69502694088293
+    },
+    {
+      "workflow": "shack_hartmann_cmos_160",
+      "label": "Shack-Hartmann WFS CMOS",
+      "preset": "generic_cmos",
+      "sensor": "CMOS",
+      "shape": [
+        160,
+        160
+      ],
+      "precision": "float32",
+      "exposure_s": 0.001,
+      "photon_rate_per_s": 2000000.0,
+      "device": "gpu",
+      "frames": 5026,
+      "elapsed_s": 2.000239181012148,
+      "frame_s": 0.0003979783487887282,
+      "frames_per_s": 2512.699504994586,
+      "megapixels_per_s": 64.3251073278614
+    },
+    {
+      "workflow": "ocam2k_emccd_240",
+      "label": "OCAM2K EMCCD",
+      "preset": "andor_ocam2k",
+      "sensor": "EMCCD",
+      "shape": [
+        240,
+        240
+      ],
+      "precision": "float32",
+      "exposure_s": 0.001,
+      "photon_rate_per_s": 2000000.0,
+      "device": "cpu",
+      "frames": 288,
+      "elapsed_s": 2.003861945006065,
+      "frame_s": 0.006957853975715504,
+      "frames_per_s": 143.72247585106385,
+      "megapixels_per_s": 8.278414609021278
+    },
+    {
+      "workflow": "ocam2k_emccd_240",
+      "label": "OCAM2K EMCCD",
+      "preset": "andor_ocam2k",
+      "sensor": "EMCCD",
+      "shape": [
+        240,
+        240
+      ],
+      "precision": "float32",
+      "exposure_s": 0.001,
+      "photon_rate_per_s": 2000000.0,
+      "device": "gpu",
+      "frames": 3420,
+      "elapsed_s": 2.0004429029941093,
+      "frame_s": 0.000584924825436874,
+      "frames_per_s": 1709.621401781179,
+      "megapixels_per_s": 98.47419274259589
+    },
+    {
+      "workflow": "saphira_eapd_256x320",
+      "label": "SAPHIRA eAPD",
+      "preset": "leonardo_saphira",
+      "sensor": "EAPD",
+      "shape": [
+        256,
+        320
+      ],
+      "precision": "float32",
+      "exposure_s": 0.001,
+      "photon_rate_per_s": 2000000.0,
+      "device": "cpu",
+      "frames": 228,
+      "elapsed_s": 2.0011549520131666,
+      "frame_s": 0.00877699540356652,
+      "frames_per_s": 113.93420572986187,
+      "megapixels_per_s": 9.333490133390285
+    },
+    {
+      "workflow": "saphira_eapd_256x320",
+      "label": "SAPHIRA eAPD",
+      "preset": "leonardo_saphira",
+      "sensor": "EAPD",
+      "shape": [
+        256,
+        320
+      ],
+      "precision": "float32",
+      "exposure_s": 0.001,
+      "photon_rate_per_s": 2000000.0,
+      "device": "gpu",
+      "frames": 3786,
+      "elapsed_s": 2.000311462994432,
+      "frame_s": 0.000528344284995888,
+      "frames_per_s": 1892.7052461782241,
+      "megapixels_per_s": 155.05041376692012
+    },
+    {
+      "workflow": "science_cmos_1024",
+      "label": "Large science CMOS",
+      "preset": "generic_cmos",
+      "sensor": "CMOS",
+      "shape": [
+        1024,
+        1024
+      ],
+      "precision": "float32",
+      "exposure_s": 5.0,
+      "photon_rate_per_s": 200.0,
+      "device": "cpu",
+      "frames": 27,
+      "elapsed_s": 2.000652825983707,
+      "frame_s": 0.07409825281421137,
+      "frames_per_s": 13.495594862504088,
+      "megapixels_per_s": 14.151156878545088
+    },
+    {
+      "workflow": "science_cmos_1024",
+      "label": "Large science CMOS",
+      "preset": "generic_cmos",
+      "sensor": "CMOS",
+      "shape": [
+        1024,
+        1024
+      ],
+      "precision": "float32",
+      "exposure_s": 5.0,
+      "photon_rate_per_s": 200.0,
+      "device": "gpu",
+      "frames": 525,
+      "elapsed_s": 2.2030622210004367,
+      "frame_s": 0.0041963089923817845,
+      "frames_per_s": 238.30466293484497,
+      "megapixels_per_s": 249.880550241568
+    }
+  ]
+}

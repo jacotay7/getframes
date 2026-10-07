@@ -119,6 +119,8 @@ for every cell. The checked-in snapshot was intentionally recorded from the GPU
 development checkout, so it is evidence rather than a release guarantee. See the
 [rendered snapshot](https://github.com/jacotay7/getframes/blob/main/benchmarks/device-results.md)
 and [raw JSON](https://github.com/jacotay7/getframes/blob/main/benchmarks/device-results.json).
+An Arm data point (Ampere Neoverse-N1, 16 pinned cores, RTX 4060 and RTX A400)
+is in [device-results-neoverse-n1.md](https://github.com/jacotay7/getframes/blob/main/benchmarks/device-results-neoverse-n1.md).
 
 An additional owner-isolation benchmark covers structured-detector digitization.
 On this repository's Quadro P620, native float32 amplifier and bias maps reduced
