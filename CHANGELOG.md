@@ -6,6 +6,18 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Arm benchmark data point** (`benchmarks/device-results-neoverse-n1.*`): the
+  device table on an Ampere Neoverse-N1 host (16 pinned cores) with an RTX
+  4060 and an RTX A400.
+
+### Fixed
+
+- `benchmarks/bench_devices.py` reported the CPU of Arm hosts as `aarch64`;
+  it now reads the model from `lscpu` (e.g. `Neoverse-N1`) when
+  `/proc/cpuinfo` has no model name.
+
 ## [2.4.0] - 2026-10-07
 
 ### Added

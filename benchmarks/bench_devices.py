@@ -112,6 +112,15 @@ def _cpu_model() -> str:
                 return line.split(":", 1)[1].strip()
     except OSError:
         pass
+    # Arm /proc/cpuinfo has no "model name"; lscpu decodes the part number
+    # (e.g. "Neoverse-N1").
+    try:
+        output = subprocess.run(["lscpu"], check=True, capture_output=True, text=True).stdout
+    except (OSError, subprocess.CalledProcessError):
+        output = ""
+    for line in output.splitlines():
+        if line.startswith("Model name:"):
+            return line.split(":", 1)[1].strip()
     return platform.processor() or "unknown CPU"
 
 
