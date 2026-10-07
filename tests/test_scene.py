@@ -61,6 +61,29 @@ def test_psf_conserves_flux(psf, optics):
     assert img.sum() == pytest.approx(1000.0, rel=1e-3)
 
 
+@pytest.mark.parametrize(
+    "psf",
+    [
+        gf.GaussianPSF(fwhm_arcsec=1.2),
+        gf.MoffatPSF(fwhm_arcsec=1.2),
+        gf.EllipticalGaussianPSF(fwhm_major_arcsec=1.6, fwhm_minor_arcsec=0.8),
+        # lambda / D = 2 arcsec, five pixels.
+        gf.AiryPSF(aperture_diameter_m=0.1, wavelength_m=1.0e-6),
+    ],
+    ids=lambda psf: type(psf).__name__,
+)
+def test_psf_loses_the_flux_that_falls_off_the_frame(psf):
+    # Light beyond the detector edge is lost, never renormalised back in
+    # (aocore CONVENTIONS 3.3). A source on column 0 of a frame must deposit
+    # exactly the part of a fully captured image that lies at x >= 0.
+    full = np.zeros((128, 128))
+    psf.add_source(full, x=64.3, y=64.0, flux=1000.0, plate_scale_arcsec_per_pixel=0.4)
+    edge = np.zeros((128, 64))
+    psf.add_source(edge, x=0.3, y=64.0, flux=1000.0, plate_scale_arcsec_per_pixel=0.4)
+    assert edge.sum() == pytest.approx(full[:, 64:].sum(), rel=1e-9)
+    assert edge.sum() < 0.75 * full.sum()
+
+
 def test_psf_peaks_at_source_position(optics):
     img = np.zeros((64, 64))
     gf.GaussianPSF(1.0).add_source(
