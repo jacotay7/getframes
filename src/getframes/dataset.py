@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
+from .backend import to_numpy
 from .scene import Bandpass, GaussianPSF, PointSource, Scene, Sky, Telescope
 
 if TYPE_CHECKING:
@@ -217,8 +218,8 @@ class PairDataset:
             )
             assert frame.truth is not None  # include_truth=True
             yield {
-                "raw": np.asarray(frame.data, dtype=self.dtype),
-                "truth": np.asarray(frame.truth.mean_electrons, dtype=self.dtype),
+                "raw": np.asarray(to_numpy(frame.data), dtype=self.dtype),
+                "truth": np.asarray(to_numpy(frame.truth.mean_electrons), dtype=self.dtype),
             }
 
     def to_npz(self, directory: str, *, prefix: str = "pair", compress: bool = False) -> list[str]:

@@ -60,7 +60,7 @@ frame = cam.with_config(resolution=(256, 256)).observe(scene, exposure=300.0, se
 
 import cupy as cp  # and the same path on a GPU
 
-cam = gf.Camera.from_preset("andor_ocam2k", device="gpu", precision="float32")
+cam = gf.Camera.from_preset("andor_ocam2k", device="gpu", precision="single")
 rate = cp.full(cam.resolution, 2.0e6, dtype=cp.float32)  # photons/s/pixel
 frame = cam.expose(rate, exposure=1.0e-3, seed=0)  # CuPy ADU, no host copy
 ```
@@ -140,8 +140,8 @@ for the methodology.
 - **Scale & datasets** — a float32 fast path, vectorised multi-source rendering,
   a streaming raw+truth `dataset` generator and a `getframes` CLI; see
   **[Scale & datasets](https://jacotay7.github.io/getframes/guides/datasets/)**.
-- **GPU-optional** — every camera takes `device="gpu"` (CuPy) and keeps the
-  detector path and truth arrays device-resident. CPU and GPU have independent
+- **GPU-optional** — every camera takes `device="gpu"`, `"gpu:N"` or `"auto"`
+  (CuPy) and keeps the detector path and truth arrays device-resident. CPU and GPU have independent
   RNG streams, so a `seed` repeats exactly on a fixed backend while parity across
   backends means matching statistics, not identical pixels.
 - **Reproducible and typed** — all randomness flows through a camera-owned seeded

@@ -35,9 +35,9 @@ removals. A JOSS paper + citation remain a post-2.0 follow-up.
 | --- | --- |
 | `config.py` | `CameraConfig` (frozen dataclass of detector params) and `SensorType` enum. Pure data + validation + temperature scaling. No randomness. |
 | `noise.py` | The physics. Pure functions: `CameraConfig` + exposure + temperature + seeded `Generator` → electrons/ADU. This is where noise models and the opt-in reusable `DetectorWorkspace` live. |
-| `backend.py` | Optional NumPy/CuPy array and RNG boundary, explicit host conversion, and backend convolution. NumPy is the reference/default. Kept local rather than `aocore.Backend`: getframes draws per-frame noise from a device-native (cuRAND) stream, which `aocore.Backend.random` (host-side `Generator`) does not provide. |
+| `backend.py` | Optional NumPy/CuPy array and RNG boundary, explicit host conversion, and backend convolution. NumPy is the reference/default. Owns the stack's `device` vocabulary (`"cpu"`, `"gpu"`, `"gpu:N"`, `"auto"`; parsed by `_parse_device`, resolved by `get_backend`) and `precision` vocabulary (`resolve_precision`: `"single"`/`"double"`, aliases `"float32"`/`"float64"`). A GPU `ArrayBackend` carries a `device_id`; `activate()` makes it current. Kept local rather than `aocore.Backend`: getframes draws per-frame noise from a device-native (cuRAND) stream, which `aocore.Backend.random` (host-side `Generator`) does not provide. |
 | `frame.py` | `Frame` container: a NumPy array (ADU) plus metadata; array-like; optional FITS export. |
-| `camera.py` | `Camera`, the main user-facing object. Orchestrates config + scene + noise into `Frame`s. Holds the RNG and high-level methods (`dark_frame`, `dark_series`, reset-correlated `nondestructive_series`, `correlated_double_sample`, `expose`, `observe`, `*_series`, `master_*`). Reset-correlated readout has one core, the private `_ramp_reads`, which walks a ramp on an arbitrary per-read interval pattern; `nondestructive_series` drives it uniformly and `correlated_double_sample` drives it as pedestal-then-signal. Put new ramp-readout modes there rather than in a second loop — the interval-scaled bias/settling/avalanche terms are easy to get subtly wrong twice. |
+| `camera.py` | `Camera`, the main user-facing object. Orchestrates config + scene + noise into `Frame`s. Holds the RNG and high-level methods (`dark_frame`, `dark_series`, reset-correlated `nondestructive_series`, `correlated_double_sample`, `expose`, `observe`, `*_series`, `master_*`). Reset-correlated readout has one core, the private `_ramp_reads`, which walks a ramp on an arbitrary per-read interval pattern; `nondestructive_series` drives it uniformly and `correlated_double_sample` drives it as pedestal-then-signal. Put new ramp-readout modes there rather than in a second loop — the interval-scaled bias/settling/avalanche terms are easy to get subtly wrong twice. Every public method that touches device arrays is decorated with `backend._on_device`, which runs it (each step, for generator methods) with the camera's CUDA device current; decorate new ones too, or `device="gpu:N"` silently allocates on the wrong card. |
 | `calibrate.py` | Master-frame builders (`combine`) and `calibrate` reduction — the raw → reduced → truth loop (phase 1.1). |
 | `observation.py` | `Observation` / `ObservationTruth` / `Pointing`: the time-series driver, jitter/drift/dither, per-frame truth (phase 1.2). |
 | `spectral.py` | Opt-in spectral mode: `QE`, `SED` (relative or absolute via `from_flux_density`), `Spectrum`, `SpectralBandpass`, effective-QE folding, transmission-product helpers (`product`, `from_file`/`from_product`), optional `astropy.units` coercion. |
@@ -111,7 +111,12 @@ the Architecture table). A bug in an aocore primitive is fixed in aocore, never
 worked around here. `tests/test_conformance.py` runs the `aocore.conformance`
 checks that apply to a detector package (image-plane centring, unit flux); the
 OPD-driven ones (tilt, slopes, wind, Zernikes, RMS) do not apply because
-getframes PSFs are analytic, not images of an OPD map.
+getframes PSFs are analytic, not images of an OPD map. It also pins the section 8
+software vocabulary: every `device=` takes `"cpu"`/`"gpu"`/`"gpu:N"`/`"auto"`
+and every working-precision argument takes `precision="single"|"double"`
+(`Camera`, `Scene.photon_rate_map`/`photoelectron_rate_map`, and the `noise`
+functions with a `float_dtype`). The dataset `dtype` is a host *storage* type,
+not a working precision, so it stays a NumPy dtype.
 
 ## Adding a camera preset
 

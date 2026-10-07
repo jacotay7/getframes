@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 import numpy as np
 from aocore import block_sum
 
-from .backend import ArrayBackend, get_backend
+from .backend import ArrayBackend, _working_dtype, get_backend
 
 if TYPE_CHECKING:
     from numpy.typing import DTypeLike, NDArray
@@ -108,6 +108,8 @@ class DetectorWorkspace:
     def _device_index(backend: ArrayBackend) -> int | None:
         if backend.is_cpu:
             return None
+        if backend.device_id is not None:
+            return backend.device_id
         return int(backend.xp.cuda.runtime.getDevice())
 
     @contextmanager
@@ -302,9 +304,16 @@ def fixed_pattern_maps(
     config: CameraConfig,
     *,
     backend: ArrayBackend | None = None,
-    float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
+    float_dtype: DTypeLike | None = None,
+    precision: str | None = None,
 ) -> FixedPatternMaps:
-    """Build all repeatable per-pixel detector maps once on the selected device."""
+    """Build all repeatable per-pixel detector maps once on the selected device.
+
+    The working precision is ``float_dtype`` or, equivalently, ``precision``
+    (``"single"``/``"double"``, aliases ``"float32"``/``"float64"``); both default
+    to ``float64`` and may be combined only when they agree.
+    """
+    float_dtype = _working_dtype(float_dtype, precision, name="float_dtype")
     resolved = backend or get_backend()
     xp = resolved.xp
     shape = config.resolution
@@ -447,10 +456,11 @@ def dark_signal_map(
     config: CameraConfig,
     exposure_s: float,
     temperature_c: float,
-    float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
+    float_dtype: DTypeLike | None = None,
     *,
     backend: ArrayBackend | None = None,
     fixed_patterns: FixedPatternMaps | None = None,
+    precision: str | None = None,
 ) -> Any:
     """Per-pixel *mean* dark signal in electrons, including fixed-pattern structure.
 
@@ -462,8 +472,10 @@ def dark_signal_map(
     exposure-scaled and dark-removable.
 
     ``float_dtype`` selects the working precision (``float64`` exact default, or
-    ``float32`` for the memory-light fast path).
+    ``float32`` for the memory-light fast path); ``precision`` (``"single"`` /
+    ``"double"``) is the equivalent named spelling.
     """
+    float_dtype = _working_dtype(float_dtype, precision, name="float_dtype")
     resolved = backend or get_backend()
     xp = resolved.xp
     height, width = config.resolution
@@ -504,11 +516,12 @@ def photo_signal_map(
     exposure_s: float,
     background_photon_rate: PhotonRate,
     quantum_efficiency: float | None = None,
-    float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
+    float_dtype: DTypeLike | None = None,
     *,
     backend: ArrayBackend | None = None,
     fixed_patterns: FixedPatternMaps | None = None,
     out: Any | None = None,
+    precision: str | None = None,
 ) -> Any:
     """Per-pixel *mean* photo-generated signal in electrons (noise-free).
 
@@ -524,8 +537,10 @@ def photo_signal_map(
     ``quantum_efficiency`` overrides ``config.quantum_efficiency`` when given. The
     spectral path uses this with a pre-multiplied (already-photoelectron) map and
     ``quantum_efficiency = 1.0``. ``float_dtype`` selects the working precision
-    (``float64`` default, or ``float32`` for the memory-light fast path).
+    (``float64`` default, or ``float32`` for the memory-light fast path);
+    ``precision`` (``"single"`` / ``"double"``) is the equivalent named spelling.
     """
+    float_dtype = _working_dtype(float_dtype, precision, name="float_dtype")
     resolved = backend or get_backend()
     xp = resolved.xp
     height, width = config.resolution
@@ -1227,7 +1242,8 @@ def simulate_frame(
     binning_mode: str = "digital",
     rng: Any | None = None,
     seed: int | None = None,
-    float_dtype: DTypeLike = DEFAULT_FLOAT_DTYPE,
+    float_dtype: DTypeLike | None = None,
+    precision: str | None = None,
     backend: ArrayBackend | None = None,
     fixed_patterns: FixedPatternMaps | None = None,
     _dark_signal: Any | None = None,
@@ -1281,6 +1297,10 @@ def simulate_frame(
         exact default) or ``float32`` for the memory-light fast path used for large
         detectors and bulk dataset generation. The digitised ADU stay integer
         regardless; only the floating-point signal chain and the truth arrays change.
+    precision:
+        The same choice by name: ``"double"`` or ``"single"`` (aliases
+        ``"float64"``/``"float32"``). Give either this or ``float_dtype``, or both
+        only when they agree.
     workspace:
         Optional reusable :class:`DetectorWorkspace`. Scratch arrays are private
         and never escape in the returned result. A workspace is sequential-use
@@ -1291,6 +1311,7 @@ def simulate_frame(
         owns its lifetime and must not reuse it while a consumer still needs the
         frame.
     """
+    float_dtype = _working_dtype(float_dtype, precision, name="float_dtype")
     resolved = backend or get_backend()
     if exposure_s < 0:
         raise ValueError("exposure_s must be non-negative.")

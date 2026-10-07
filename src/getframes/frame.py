@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 from aocore import block_sum
 
-from .backend import get_array_module, to_numpy
+from .backend import _array_device, get_array_module, to_numpy
 
 if TYPE_CHECKING:
     from numpy.typing import NDArray
@@ -126,12 +126,13 @@ class Frame:
             raise ValueError(
                 f"frame shape {data.shape} is not divisible by binning factor {factor}."
             )
-        if factor == 1:
-            binned = data.copy()
-        else:
-            binned = block_sum(data, factor)
-            if method == "mean":
-                binned = binned / (factor * factor)
+        with _array_device(data):
+            if factor == 1:
+                binned = data.copy()
+            else:
+                binned = block_sum(data, factor)
+                if method == "mean":
+                    binned = binned / (factor * factor)
         metadata = dict(self.metadata)
         metadata["binning"] = int(metadata.get("binning", 1)) * factor
         return Frame(data=binned, metadata=metadata, truth=None)

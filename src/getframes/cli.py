@@ -23,6 +23,7 @@ from typing import Any
 import numpy as np
 
 from .__about__ import __version__
+from .backend import to_numpy
 from .camera import Camera
 from .config import CameraConfig
 from .frame import Frame
@@ -34,7 +35,7 @@ else:  # pragma: no cover - exercised only on 3.10
     import tomli as tomllib
 
 # CLI-only keys in a [camera] table that are not CameraConfig fields.
-_CAMERA_META_KEYS = ("preset", "default_temperature_c", "precision")
+_CAMERA_META_KEYS = ("preset", "default_temperature_c", "precision", "device")
 
 
 def _load_toml(path: str) -> dict[str, Any]:
@@ -46,8 +47,10 @@ def _camera_from_config(cfg: dict[str, Any]) -> Camera:
     """Build a :class:`Camera` from a config's ``[camera]`` table.
 
     Either ``preset = "<slug>"`` (with optional overrides) or an inline
-    :class:`~getframes.config.CameraConfig` table. ``default_temperature_c`` and
-    ``precision`` are camera-construction options, not config fields.
+    :class:`~getframes.config.CameraConfig` table. ``default_temperature_c``,
+    ``precision`` (``"double"``/``"single"``) and ``device`` (``"cpu"``,
+    ``"gpu"``, ``"gpu:N"`` or ``"auto"``) are camera-construction options, not
+    config fields.
     """
     cam_cfg = dict(cfg.get("camera", {}))
     kwargs: dict[str, Any] = {}
@@ -55,6 +58,8 @@ def _camera_from_config(cfg: dict[str, Any]) -> Camera:
         kwargs["default_temperature_c"] = float(cam_cfg["default_temperature_c"])
     if "precision" in cam_cfg:
         kwargs["precision"] = str(cam_cfg["precision"])
+    if "device" in cam_cfg:
+        kwargs["device"] = str(cam_cfg["device"])
 
     if "preset" in cam_cfg:
         config = load_preset(str(cam_cfg["preset"]))
@@ -72,11 +77,11 @@ def _write_frame(frame: Frame, path: str) -> None:
     if suffix in (".fits", ".fit"):
         frame.to_fits(path, overwrite=True)
     elif suffix == ".npy":
-        np.save(path, np.asarray(frame.data))
+        np.save(path, to_numpy(frame.data))
     elif suffix == ".npz":
-        raw = np.asarray(frame.data)
+        raw = to_numpy(frame.data)
         if frame.truth is not None:
-            np.savez(path, raw=raw, truth=np.asarray(frame.truth.mean_electrons))
+            np.savez(path, raw=raw, truth=to_numpy(frame.truth.mean_electrons))
         else:
             np.savez(path, raw=raw)
     else:
@@ -210,7 +215,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         exit_code: int = args.func(args)
-    except (ValueError, KeyError, FileNotFoundError) as exc:
+    except (ValueError, KeyError, FileNotFoundError, ImportError, RuntimeError) as exc:
         parser.error(str(exc))
     return exit_code
 

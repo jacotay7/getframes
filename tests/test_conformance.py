@@ -7,10 +7,13 @@ slope sign, wind motion, Zernike basis, RMS) do not apply. What does apply is th
 flat-wavefront case: where the optical axis sits in the image plane (rule 1.3) and
 that a normalized point-source image carries unit flux (rule 3.3). The callables
 below take the checks' OPD argument for its shape only.
+
+Section 8 (software) applies in full: the ``device`` and ``precision`` words.
 """
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
 import aocore
@@ -18,6 +21,8 @@ import numpy as np
 import pytest
 from aocore import conformance
 
+import getframes as gf
+from getframes import backend
 from getframes.scene import (
     AiryPSF,
     ArrayPSF,
@@ -81,3 +86,43 @@ def test_arcsecond_constant_is_the_shared_one() -> None:
 
     assert psf.ARCSEC_TO_RAD is aocore.ARCSEC_TO_RAD
     assert thermal.ARCSEC_TO_RAD is aocore.ARCSEC_TO_RAD
+
+
+@pytest.mark.parametrize("precision", ["single", "double", "float32", "float64"])
+def test_precision_vocabulary_is_the_shared_one(precision: str) -> None:
+    # Rule 8.2: "single"/"double", with "float32"/"float64" as aliases, name the
+    # same working dtype here as in aocore.
+    expected = aocore.get_backend("cpu", precision).real_dtype
+    assert gf.resolve_precision(precision) == expected
+    camera = gf.Camera.from_preset("generic_cmos", precision=precision).with_config(
+        resolution=(8, 8)
+    )
+    frame = camera.expose(10.0, 0.1, seed=0)
+    assert frame.truth is not None
+    assert frame.truth.mean_electrons.dtype == expected
+
+
+@pytest.mark.parametrize(
+    ("device", "kind", "index"),
+    [
+        ("cpu", "cpu", None),
+        ("gpu", "gpu", None),
+        ("gpu:0", "gpu", 0),
+        ("gpu:3", "gpu", 3),
+        ("auto", "auto", None),
+    ],
+)
+def test_device_vocabulary_is_the_shared_one(device: str, kind: str, index: int | None) -> None:
+    # Rule 8.1: "cpu", "gpu", "gpu:N" and "auto" are all understood.
+    assert backend._parse_device(device) == (kind, index)
+
+
+def test_auto_device_runs_without_a_gpu_and_to_numpy_is_the_host_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Rule 8.1: "auto" falls back to the CPU when no GPU is usable, and
+    # ``to_numpy`` hands back host storage.
+    monkeypatch.setitem(sys.modules, "cupy", None)
+    camera = gf.Camera.from_preset("generic_cmos", device="auto").with_config(resolution=(8, 8))
+    assert camera.device == "cpu"
+    assert isinstance(gf.to_numpy(camera.expose(10.0, 0.1, seed=0).data), np.ndarray)

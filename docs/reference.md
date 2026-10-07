@@ -24,6 +24,8 @@
 
 ::: getframes.backend.get_backend
 
+::: getframes.backend.resolve_precision
+
 ::: getframes.backend.get_array_module
 
 ::: getframes.backend.to_numpy

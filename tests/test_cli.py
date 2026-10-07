@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: MIT
 """Tests for the phase 1.6 ``getframes`` command-line interface."""
 
+import sys
+
 import numpy as np
 import pytest
 
@@ -91,3 +93,30 @@ def test_bad_output_extension_errors(tmp_path):
     )
     with pytest.raises(SystemExit):
         cli.main(["generate", config, "-o", str(tmp_path / "frame.txt")])
+
+
+def test_camera_table_takes_device_and_precision(tmp_path, monkeypatch):
+    # The [camera] table speaks the shared vocabulary; "auto" runs on the CPU
+    # when CuPy is unavailable (hidden here so the test is machine-independent).
+    monkeypatch.setitem(sys.modules, "cupy", None)
+    config = _write(
+        tmp_path / "f.toml",
+        '[camera]\npreset = "generic_cmos"\nprecision = "single"\ndevice = "auto"\n\n'
+        '[frame]\ntype = "dark"\nexposure_s = 1.0\nseed = 0\n',
+    )
+    camera = cli._camera_from_config(cli._load_toml(config))
+    assert camera.device == "cpu"
+    assert camera.precision == "float32"
+    out = tmp_path / "dark.npz"
+    assert cli.main(["generate", config, "-o", str(out)]) == 0
+    assert np.load(out)["raw"].shape == camera.resolution
+
+
+@pytest.mark.parametrize("device", ["tpu", "gpu:x"])
+def test_camera_table_rejects_unknown_device(tmp_path, device):
+    config = _write(
+        tmp_path / "f.toml",
+        f'[camera]\npreset = "generic_cmos"\ndevice = "{device}"\n\n[frame]\ntype = "dark"\n',
+    )
+    with pytest.raises(SystemExit):
+        cli.main(["generate", config])

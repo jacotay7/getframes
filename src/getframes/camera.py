@@ -4,12 +4,12 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from . import noise
-from .backend import ArrayBackend, get_backend
+from .backend import ArrayBackend, _on_device, get_backend, resolve_precision
 from .config import CameraConfig
 from .frame import Frame, FrameTruth
 from .observation import Observation, ObservationTruth, Pointing
@@ -52,22 +52,24 @@ class Camera:
         Optional seed for this camera's internal random generator, giving
         reproducible output across calls when no per-call seed is supplied.
     precision:
-        Working floating-point precision of the signal chain: ``"float64"`` (the
-        exact default) or ``"float32"`` for the memory-light fast path — half the
+        Working floating-point precision of the signal chain: ``"double"`` (the
+        exact default) or ``"single"`` for the memory-light fast path — half the
         per-pixel memory, useful for large detectors and bulk dataset generation.
-        The digitised ADU stay integer either way; only the floating-point arrays
-        (including each frame's ground truth) change.
+        ``"float64"`` and ``"float32"`` are aliases (case-insensitive). The
+        digitised ADU stay integer either way; only the floating-point arrays
+        (including each frame's ground truth) change. :attr:`precision` reports
+        the NumPy dtype name (``"float64"`` or ``"float32"``) whichever spelling
+        was passed.
     device:
         Execution device for detector arrays and random sampling: ``"cpu"``
-        (NumPy, default) or ``"gpu"`` (optional CuPy). GPU frames keep their ADU
-        and truth arrays on device; CPU and GPU seeds are reproducible within a
-        backend but intentionally do not produce identical random samples.
+        (NumPy, default), ``"gpu"`` (optional CuPy, on the current CUDA device),
+        ``"gpu:N"`` (CUDA device ``N``), or ``"auto"`` (the GPU when CuPy and a
+        CUDA device are usable, else the CPU); see
+        :func:`~getframes.backend.get_backend`. Fixed-pattern maps, the cuRAND
+        streams, and every frame live on the selected device. GPU frames keep
+        their ADU and truth arrays on device; CPU and GPU seeds are reproducible
+        within a backend but intentionally do not produce identical random samples.
     """
-
-    _PRECISIONS: ClassVar[dict[str, type[np.floating[Any]]]] = {
-        "float32": np.float32,
-        "float64": np.float64,
-    }
 
     def __init__(
         self,
@@ -80,18 +82,15 @@ class Camera:
     ) -> None:
         if not isinstance(config, CameraConfig):
             raise TypeError("config must be a CameraConfig instance.")
-        if precision not in self._PRECISIONS:
-            raise ValueError(
-                f"precision must be one of {sorted(self._PRECISIONS)}, got {precision!r}."
-            )
+        float_dtype = resolve_precision(precision)
         self.config = config
         self.default_temperature_c = (
             default_temperature_c
             if default_temperature_c is not None
             else config.dark_current_ref_temp_c
         )
-        self.precision = precision
-        self._float_dtype = self._PRECISIONS[precision]
+        self.precision = float_dtype.name
+        self._float_dtype = float_dtype.type
         self._backend: ArrayBackend = get_backend(device)
         self._rng = self._backend.default_rng(seed, float_dtype=self._float_dtype)
         self._seeded_rng = (
@@ -99,9 +98,10 @@ class Camera:
             if self._backend.is_cpu
             else self._backend.default_rng(0, float_dtype=self._float_dtype)
         )
-        self._fixed_patterns = noise.fixed_pattern_maps(
-            config, backend=self._backend, float_dtype=self._float_dtype
-        )
+        with self._backend.activate():
+            self._fixed_patterns = noise.fixed_pattern_maps(
+                config, backend=self._backend, float_dtype=self._float_dtype
+            )
         self._dark_signal_cache_key: tuple[float, float] | None = None
         self._dark_signal_cache: Any | None = None
 
@@ -146,16 +146,21 @@ class Camera:
 
     @property
     def device(self) -> str:
-        """Execution device (``"cpu"`` or ``"gpu"``)."""
+        """Execution device kind (``"cpu"`` or ``"gpu"``); see :attr:`device_id`."""
         return self._backend.device
 
+    @property
+    def device_id(self) -> int | None:
+        """CUDA device number of a GPU camera (``None`` on the CPU)."""
+        return self._backend.device_id
+
     def with_config(self, **changes: Any) -> Camera:
-        """Return a new camera with configuration fields overridden."""
+        """Return a new camera with configuration fields overridden (same device)."""
         return Camera(
             self.config.replace(**changes),
             default_temperature_c=self.default_temperature_c,
             precision=self.precision,
-            device=self.device,
+            device=self._backend.spec,
         )
 
     # ------------------------------------------------------------------
@@ -254,6 +259,7 @@ class Camera:
             return value
         return value[self._binned_roi_slices(binning)]
 
+    @_on_device
     def dark_frame(
         self,
         exposure: float,
@@ -294,6 +300,7 @@ class Camera:
         data = self._crop_to_roi(data)
         return Frame(data=data, metadata=self._metadata("dark", exposure, temp, seed))
 
+    @_on_device
     def dark_series(
         self,
         exposure: float,
@@ -312,6 +319,7 @@ class Camera:
             frame.metadata["frame_index"] = i
             yield frame
 
+    @_on_device
     def nondestructive_series(
         self,
         photon_rate: PhotonRate,
@@ -601,6 +609,7 @@ class Camera:
             )
             yield Frame(data=data, metadata=metadata, truth=truth)
 
+    @_on_device
     def dark_nondestructive_series(
         self,
         read_interval: float,
@@ -625,6 +634,7 @@ class Camera:
             include_truth=include_truth,
         )
 
+    @_on_device
     def correlated_double_sample(
         self,
         photon_rate: PhotonRate,
@@ -757,6 +767,7 @@ class Camera:
         )
         return Frame(data=data, metadata=metadata, truth=truth)
 
+    @_on_device
     def expose(
         self,
         photon_rate: PhotonRate,
@@ -949,6 +960,7 @@ class Camera:
             metadata["binning_mode"] = binning_mode
         return Frame(data=result.adu, metadata=metadata, truth=truth)
 
+    @_on_device
     def expose_spectral(
         self,
         photon_rate_cube: NDArray[np.floating[Any]],
@@ -1044,6 +1056,7 @@ class Camera:
         qe = self._backend.asarray(self.config.qe_curve(wavelengths_host), dtype=self._float_dtype)
         return cube, wavelengths_host, xp.tensordot(qe, cube, axes=(0, 0)), xp.sum(cube, axis=0)
 
+    @_on_device
     def correlated_double_sample_spectral(
         self,
         photon_rate_cube: NDArray[np.floating[Any]],
@@ -1105,6 +1118,7 @@ class Camera:
             return extra * float(binning * binning)
         return noise.block_sum(extra, binning)
 
+    @_on_device
     def flat_frame(
         self,
         photon_rate: PhotonRate,
@@ -1132,6 +1146,7 @@ class Camera:
         frame.metadata["frame_type"] = "flat"
         return frame
 
+    @_on_device
     def bias_frame(
         self,
         temperature: float | None = None,
@@ -1143,6 +1158,7 @@ class Camera:
         frame.metadata["frame_type"] = "bias"
         return frame
 
+    @_on_device
     def observe(
         self,
         scene: Scene,
@@ -1210,6 +1226,7 @@ class Camera:
         if scene.wcs is not None:
             frame.metadata.update(scene.wcs.header_cards())
 
+    @_on_device
     def expose_series(
         self,
         photon_rate: PhotonRate,
@@ -1249,6 +1266,7 @@ class Camera:
             frame.metadata["frame_index"] = i
             yield frame
 
+    @_on_device
     def observe_series(
         self,
         scene: Scene,
@@ -1417,6 +1435,7 @@ class Camera:
     # ------------------------------------------------------------------
     # Calibration masters
     # ------------------------------------------------------------------
+    @_on_device
     def master_bias(
         self,
         n_frames: int,
@@ -1431,6 +1450,7 @@ class Camera:
         frames = (self.bias_frame(temperature, seed=s) for s in self._series_seeds(seed, n_frames))
         return combine(frames, method=method)
 
+    @_on_device
     def master_dark(
         self,
         exposure: float,
@@ -1449,6 +1469,7 @@ class Camera:
 
         return combine(self.dark_series(exposure, n_frames, temperature, seed=seed), method=method)
 
+    @_on_device
     def master_flat(
         self,
         photon_rate: PhotonRate,
@@ -1517,5 +1538,5 @@ class Camera:
         h, w = self.resolution
         return (
             f"Camera(name={self.config.name!r}, sensor={self.config.sensor_type.value!r}, "
-            f"resolution={h}x{w}, device={self.device!r})"
+            f"resolution={h}x{w}, device={self._backend.spec!r})"
         )

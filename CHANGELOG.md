@@ -6,6 +6,53 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-10-07
+
+### Added
+
+- **`device="gpu:N"` and `device="auto"`.** Every `device` argument (`Camera`,
+  `get_backend`, and the CLI's `[camera]` table) now speaks the AO stack's
+  vocabulary (aocore CONVENTIONS 8.1): `"cpu"`, `"gpu"`, `"gpu:N"` for CUDA
+  device `N`, and `"auto"`, which picks the GPU when CuPy is installed and sees
+  a device and the CPU otherwise. A `"gpu:N"` beyond the devices CuPy sees
+  raises a `ValueError` naming the count. The old spellings (`"numpy"`,
+  `"cuda"`, `"cupy"`) still work, now case-insensitively. A GPU camera is
+  pinned to its card: the fixed-pattern maps and the cuRAND streams are created
+  on it and every camera method runs with it current, so a `"gpu:1"` camera
+  works whichever device is current at the call, and `with_config` keeps it.
+  New: `Camera.device_id`, `ArrayBackend.device_id`, `ArrayBackend.spec`
+  (`"cpu"` or `"gpu:N"`) and `ArrayBackend.activate()` (the device context,
+  for calling the low-level `noise` functions on another card).
+- **`precision="single"` / `"double"`.** The working precision takes the
+  shared names (aocore CONVENTIONS 8.2), with `"float32"`/`"float64"` kept as
+  aliases: on `Camera`, as a new `precision` keyword on
+  `Scene.photon_rate_map`/`photoelectron_rate_map` (beside `dtype`), and on the
+  `noise` functions that take a `float_dtype` (`simulate_frame`,
+  `fixed_pattern_maps`, `dark_signal_map`, `photo_signal_map`). A `dtype` and a
+  `precision` that disagree raise `ValueError`. `getframes.resolve_precision`
+  maps any of these names to the NumPy dtype. `Camera.precision` still reports
+  the dtype name (`"float32"`/`"float64"`) whichever spelling was passed.
+  `dataset.pairs(dtype=...)` is unchanged: it is the host *storage* type of the
+  finished arrays, not a working precision.
+- The CLI's `[camera]` table takes a `device` key.
+- **Conformance tests** for the device and precision vocabulary, including that
+  each precision name selects the same dtype as in aocore.
+
+### Changed
+
+- An unknown `device` string now raises `ValueError` listing the accepted words
+  (`'cpu', 'gpu', 'gpu:N' ... or 'auto'`), and a non-string `device` a
+  `TypeError`. `device="gpu"` with CuPy installed but no CUDA device raises
+  `RuntimeError` at construction rather than failing at the first frame.
+- `Camera.__repr__` shows the GPU number (`device='gpu:0'`).
+- The noise functions' `float_dtype` default is now `None` (still float64).
+
+### Fixed
+
+- `dataset.pairs` with a GPU camera failed on an implicit CuPy-to-NumPy
+  conversion; it now copies each frame to the host through `to_numpy`, as do
+  the CLI's `.npy`/`.npz` writers now that the CLI can select a GPU.
+
 ## [2.3.0] - 2026-10-07
 
 ### Fixed
@@ -592,7 +639,8 @@ together in 1.0.
 - Documentation, runnable examples, and CI (lint, type-check, test matrix, PyPI
   release via Trusted Publishing).
 
-[Unreleased]: https://github.com/jacotay7/getframes/compare/2.3.0...HEAD
+[Unreleased]: https://github.com/jacotay7/getframes/compare/2.4.0...HEAD
+[2.4.0]: https://github.com/jacotay7/getframes/compare/2.3.0...2.4.0
 [2.3.0]: https://github.com/jacotay7/getframes/compare/2.2.0...2.3.0
 [2.2.0]: https://github.com/jacotay7/getframes/compare/2.1.1...2.2.0
 [2.1.1]: https://github.com/jacotay7/getframes/compare/2.1.0...2.1.1
