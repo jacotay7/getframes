@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pytest
 
@@ -279,3 +281,83 @@ def test_gpu_number_beyond_the_device_count_is_rejected() -> None:
     count = cupy.cuda.runtime.getDeviceCount()
     with pytest.raises(ValueError, match=f"CuPy sees {count} device"):
         gf.Camera.from_preset("generic_cmos", device=f"gpu:{count}")
+
+
+_STRUCTURED_DETECTOR = {
+    "prnu": 0.02,
+    "dark_current_nonuniformity": 0.05,
+    "reset_noise_e": 1.5,
+    "read_noise_nonuniformity": 0.2,
+    "readout_common_mode_noise_adu": 1.3,
+    "amplifier_layout": (2, 2),
+    "amp_gain_nonuniformity": 0.02,
+    "amp_offset_spread_adu": 3.0,
+    "bias_structure_amplitude_adu": 2.0,
+    "dead_pixel_fraction": 0.02,
+    "bad_column_fraction": 0.05,
+}
+
+
+@pytest.mark.parametrize("precision", ["single", "double"])
+@pytest.mark.parametrize(
+    ("preset", "changes"),
+    [
+        ("generic_cmos", {}),
+        ("generic_cmos", _STRUCTURED_DETECTOR),
+        ("generic_cmos", {**_STRUCTURED_DETECTOR, "roi": (4, 2, 20, 16)}),
+        ("generic_emccd", {"avalanche_gain_nonuniformity": 0.05}),
+        ("generic_eapd", {"avalanche_input_noise_e": 0.4, "read_noise_correlated_fraction": 0.5}),
+    ],
+)
+def test_gpu_fused_kernels_are_bit_identical_to_separate_operations(
+    monkeypatch: pytest.MonkeyPatch, preset: str, changes: dict[str, object], precision: str
+) -> None:
+    cupy = _cupy()
+    from getframes import _cuda
+
+    config = gf.load_preset(preset).replace(resolution=(24, 32), **changes)
+    camera = gf.Camera(config, device="gpu", precision=precision, seed=3)
+    dtype = camera._float_dtype
+    rate = cupy.asarray(np.random.default_rng(0).uniform(0.0, 2e6, camera.resolution), dtype=dtype)
+    fused_calls = {"readout": 0, "expectation": 0}
+
+    def counted(name: str, function: Any) -> Any:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            result = function(*args, **kwargs)
+            fused_calls[name] += result is not None
+            return result
+
+        return wrapper
+
+    def frames() -> list[gf.Frame]:
+        workspace = noise.DetectorWorkspace()
+        out = cupy.empty(camera.resolution, dtype=cupy.uint32)
+        series = [
+            camera.expose(rate, 1e-3, seed=4),
+            camera.expose(rate, 1e-3, seed=5, background=12.5, extra_electrons=3.0),
+            camera.expose(2e5, 1e-3, seed=6),
+            camera.expose(rate, 1e-3, seed=7, workspace=workspace),
+            camera.expose(rate, 1e-3, seed=8, workspace=workspace, out=out, include_truth=False),
+            camera.dark_frame(0.5, seed=9),
+        ]
+        if not config.nonlinearity:
+            series.append(camera.correlated_double_sample(rate, 1e-3, seed=10))
+        return series
+
+    monkeypatch.setattr(_cuda, "fused_readout", counted("readout", _cuda.fused_readout))
+    monkeypatch.setattr(_cuda, "fused_expectation", counted("expectation", _cuda.fused_expectation))
+    fused = frames()
+    assert fused_calls["readout"] > 0 and fused_calls["expectation"] > 0
+
+    monkeypatch.setattr(_cuda, "fused_readout", lambda *args, **kwargs: None)
+    monkeypatch.setattr(_cuda, "fused_expectation", lambda *args, **kwargs: None)
+    reference = frames()
+
+    bits = cupy.uint32 if np.dtype(dtype) == np.float32 else cupy.uint64
+    for got, want in zip(fused, reference, strict=True):
+        assert cupy.array_equal(got.data, want.data)
+        if want.truth is not None:
+            for name in ("mean_electrons", "mean_photoelectrons"):
+                assert cupy.array_equal(
+                    getattr(got.truth, name).view(bits), getattr(want.truth, name).view(bits)
+                )

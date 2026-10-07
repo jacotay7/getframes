@@ -39,9 +39,11 @@ from typing import TYPE_CHECKING, Any, NamedTuple
 import numpy as np
 from aocore import block_sum
 
-from .backend import ArrayBackend, _working_dtype, get_backend
+from .backend import ArrayBackend, _CuPyGenerator, _working_dtype, get_backend
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable, Iterator
+
     from numpy.typing import DTypeLike, NDArray
 
     from .config import CameraConfig
@@ -153,6 +155,32 @@ class DetectorWorkspace:
             buffer = backend.xp.empty(shape, dtype=dtype_obj)
             self._buffers[key] = buffer
         return buffer
+
+
+def _working_operand(value: Any, float_dtype: DTypeLike, backend: ArrayBackend) -> Any:
+    """``backend.asarray(value, dtype=float_dtype)``, keeping a host scalar on the host.
+
+    A Python or NumPy scalar (or 0-d NumPy array) becomes a NumPy scalar of the
+    working dtype. It rounds exactly as the 0-d array would and combines with
+    backend arrays the same way, but on the GPU it avoids allocating and
+    uploading a 0-d device array on every frame.
+    """
+    if isinstance(value, (int, float, np.integer, np.floating)) or (
+        isinstance(value, np.ndarray) and value.ndim == 0
+    ):
+        return np.asarray(value, dtype=float_dtype)[()]
+    return backend.asarray(value, dtype=float_dtype)
+
+
+def _is_scalar_value(value: Any, target: float) -> bool:
+    """Whether ``value`` is a plain Python number equal to ``target``.
+
+    Used to skip identity arithmetic (``x * 1``, ``x / 1``, ``x + 0``) on whole
+    frames; skipping it changes at most the sign of a zero, which rounding to
+    integer ADU erases. Only Python scalars qualify, since comparing a 0-d device
+    array would synchronise the GPU.
+    """
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value == target
 
 
 def _validate_output_buffer(
@@ -545,8 +573,8 @@ def photo_signal_map(
     xp = resolved.xp
     height, width = config.resolution
     qe = config.quantum_efficiency if quantum_efficiency is None else quantum_efficiency
-    rate = resolved.asarray(photon_rate, dtype=float_dtype)
-    background = resolved.asarray(background_photon_rate, dtype=float_dtype)
+    rate = _working_operand(photon_rate, float_dtype, resolved)
+    background = _working_operand(background_photon_rate, float_dtype, resolved)
     if rate.ndim not in (0, 2) or background.ndim not in (0, 2):
         raise ValueError("photon_rate/background must be a scalar or a 2-D array.")
 
@@ -1063,15 +1091,12 @@ def digitize(
     readout_full_well_e = (
         config.output_full_well_e if config.output_full_well_e is not None else config.full_well_e
     )
-    xp.clip(signal, 0.0, readout_full_well_e, out=signal)
 
     # Dead pixels/columns: a fixed defect map that collects no charge (they still
     # carry read/reset noise and the bias pedestal, so they read as dark defects).
     defects = (
         fixed_patterns.defect_mask if fixed_patterns is not None else _defect_mask(config, resolved)
     )
-    if defects is not None:
-        signal[defects] = 0.0
 
     def normal_noise(sigma: Any) -> Any:
         if resolved.is_cpu and signal.dtype == np.dtype(np.float32):
@@ -1080,53 +1105,64 @@ def digitize(
             return draw
         return rng.normal(0.0, sigma, size=signal.shape)
 
-    # An ordinary exposure draws a fresh kTC uncertainty. A nondestructive ramp
-    # passes one cached draw back on every read so reset noise remains common to
-    # the ramp and cancels under correlated double sampling.
-    if reset_noise_e is None:
-        if config.reset_noise_e > 0:
-            signal += normal_noise(config.reset_noise_e)
-    else:
-        signal += reset_noise_e
-
-    # Some eAPD stacks carry an additional per-read component that scales with
-    # avalanche multiplication rather than remaining fixed at the output
-    # amplifier. Keep it separate so ``read_noise_e`` retains its usual output
-    # reference and high-gain data can identify the two terms independently.
-    avalanche_noise = (
-        config.avalanche_input_noise_e
-        if avalanche_input_noise_e is None
-        else avalanche_input_noise_e
-    )
-    if avalanche_noise > 0:
-        gain_scale = config.em_gain * (
-            config.em_gain / config.avalanche_input_noise_reference_gain
-        ) ** (config.avalanche_input_noise_gain_exponent - 1.0)
-        signal += normal_noise(avalanche_noise * gain_scale)
-
-    # Read noise in electrons, added at the amplifier. The per-pixel RMS is a
-    # fixed property of the sensor (see :func:`_read_noise_sigma_map`), so only the
-    # Gaussian draw itself is per-frame.
-    #
-    # ``read_noise_correlated_fraction`` splits that draw in two. The correlated
-    # part is passed in by a nondestructive ramp, which holds one draw for the
-    # whole ramp so that differencing two reads removes it; the independent part
-    # is redrawn every read and survives the difference. An ordinary exposure has
-    # nothing to correlate against and draws the full RMS.
-    if config.read_noise_e > 0:
-        sigma_map = (
-            fixed_patterns.read_noise_sigma
-            if fixed_patterns is not None
-            else _read_noise_sigma_map(config, resolved, float_dtype=signal.dtype)
-        )
-        correlated_weight = (
-            config.read_noise_correlated_fraction if correlated_read_noise_e is not None else 0.0
-        )
-        if correlated_weight > 0.0 and correlated_read_noise_e is not None:
-            signal += correlated_read_noise_e
-            signal += normal_noise(sigma_map * np.sqrt(1.0 - correlated_weight))
+    def electron_noise() -> Iterator[Any]:
+        """Additive electron-domain noise terms, drawn lazily in stream order."""
+        # An ordinary exposure draws a fresh kTC uncertainty. A nondestructive ramp
+        # passes one cached draw back on every read so reset noise remains common to
+        # the ramp and cancels under correlated double sampling.
+        if reset_noise_e is None:
+            if config.reset_noise_e > 0:
+                yield normal_noise(config.reset_noise_e)
         else:
-            signal += normal_noise(sigma_map)
+            yield reset_noise_e
+
+        # Some eAPD stacks carry an additional per-read component that scales with
+        # avalanche multiplication rather than remaining fixed at the output
+        # amplifier. Keep it separate so ``read_noise_e`` retains its usual output
+        # reference and high-gain data can identify the two terms independently.
+        avalanche_noise = (
+            config.avalanche_input_noise_e
+            if avalanche_input_noise_e is None
+            else avalanche_input_noise_e
+        )
+        if avalanche_noise > 0:
+            gain_scale = config.em_gain * (
+                config.em_gain / config.avalanche_input_noise_reference_gain
+            ) ** (config.avalanche_input_noise_gain_exponent - 1.0)
+            yield normal_noise(avalanche_noise * gain_scale)
+
+        # Read noise in electrons, added at the amplifier. The per-pixel RMS is a
+        # fixed property of the sensor (see :func:`_read_noise_sigma_map`), so only
+        # the Gaussian draw itself is per-frame.
+        #
+        # ``read_noise_correlated_fraction`` splits that draw in two. The correlated
+        # part is passed in by a nondestructive ramp, which holds one draw for the
+        # whole ramp so that differencing two reads removes it; the independent part
+        # is redrawn every read and survives the difference. An ordinary exposure
+        # has nothing to correlate against and draws the full RMS.
+        if config.read_noise_e > 0:
+            sigma_map = (
+                fixed_patterns.read_noise_sigma
+                if fixed_patterns is not None
+                else _read_noise_sigma_map(config, resolved, float_dtype=signal.dtype)
+            )
+            correlated_weight = (
+                config.read_noise_correlated_fraction
+                if correlated_read_noise_e is not None
+                else 0.0
+            )
+            if correlated_weight > 0.0 and correlated_read_noise_e is not None:
+                yield correlated_read_noise_e
+                yield normal_noise(sigma_map * np.sqrt(1.0 - correlated_weight))
+            else:
+                yield normal_noise(sigma_map)
+
+    def common_mode() -> Any:
+        if common_mode_adu is not None:
+            return common_mode_adu
+        if config.readout_common_mode_noise_adu > 0:
+            return rng.normal(0.0, config.readout_common_mode_noise_adu)
+        return 0.0
 
     if fixed_patterns is None:
         gain_map, amp_offset = _amplifier_maps(config, resolved, float_dtype=signal.dtype)
@@ -1135,15 +1171,53 @@ def digitize(
         gain_map = fixed_patterns.amplifier_gain
         amp_offset = fixed_patterns.amplifier_offset
         bias_structure = fixed_patterns.bias_structure
-    signal /= gain_map
-    signal += config.bias_offset_adu
-    signal += amp_offset
-    signal += bias_structure
-    if common_mode_adu is None:
-        if config.readout_common_mode_noise_adu > 0:
-            signal += rng.normal(0.0, config.readout_common_mode_noise_adu)
-    else:
-        signal += common_mode_adu
+
+    noise_terms: Iterable[Any] = electron_noise()
+    common: Any | None = None
+    if not resolved.is_cpu:
+        # On the GPU the readout is launch-bound for WFS-sized frames, so draw the
+        # noise now (same stream order) and run the whole readout as one kernel.
+        noise_terms = list(noise_terms)
+        common = common_mode()
+        from . import _cuda
+
+        fused = _cuda.fused_readout(
+            signal,
+            backend=resolved,
+            full_well_e=readout_full_well_e,
+            defects=defects,
+            noise_terms=noise_terms,
+            gain=gain_map,
+            bias_offset_adu=config.bias_offset_adu,
+            amplifier_offset_adu=amp_offset,
+            bias_structure_adu=bias_structure,
+            common_mode_adu=common,
+            max_adu=config.max_adu,
+            out=out,
+            output_slices=_output_slices,
+            out_validated=_out_validated,
+        )
+        if fused is not None:
+            return fused
+
+    # The same steps one array operation at a time (the NumPy reference, and the
+    # GPU fallback for operands the fused kernel does not take). Adding a Python
+    # zero or dividing by a Python one is skipped: it cannot change any ADU.
+    xp.clip(signal, 0.0, readout_full_well_e, out=signal)
+    if defects is not None:
+        signal[defects] = 0.0
+    for term in noise_terms:
+        if not _is_scalar_value(term, 0.0):
+            signal += term
+    if not _is_scalar_value(gain_map, 1.0):
+        signal /= gain_map
+    for offset in (config.bias_offset_adu, amp_offset, bias_structure):
+        if not _is_scalar_value(offset, 0.0):
+            signal += offset
+    if common is None:
+        common = common_mode()
+    if not _is_scalar_value(common, 0.0):
+        signal += common
     xp.rint(signal, out=signal)
     xp.clip(signal, 0, config.max_adu, out=signal)
     if out is None:
@@ -1182,7 +1256,11 @@ def frame_electrons(
     (``float64`` exact, or ``float32`` for the memory-light fast path).
     """
     resolved = backend or get_backend()
-    electrons = rng.poisson(mean_electrons).astype(mean_electrons.dtype)
+    if isinstance(rng, _CuPyGenerator):
+        # The same draw, converted to the working dtype inside the sampler kernel.
+        electrons = rng._poisson_as(mean_electrons)
+    else:
+        electrons = rng.poisson(mean_electrons).astype(mean_electrons.dtype)
 
     if config.clock_induced_charge_e > 0:
         electrons += rng.poisson(config.clock_induced_charge_e, size=electrons.shape)
@@ -1224,7 +1302,8 @@ def frame_electrons(
                 float_dtype=electrons.dtype,
             ).avalanche_gain_multiplier
         )
-        electrons *= gain_multiplier
+        if not _is_scalar_value(gain_multiplier, 1.0):  # x * 1.0 == x: skip the pass
+            electrons *= gain_multiplier
 
     return electrons
 
@@ -1253,6 +1332,7 @@ def simulate_frame(
     _preserve_truth: bool = True,
     _output_slices: tuple[slice, slice] | None = None,
     _out_validated: bool = False,
+    _mean_total_out: list[Any] | None = None,
 ) -> SimulationResult:
     """Simulate one frame end-to-end, returning ADU and the noise-free truth.
 
@@ -1366,17 +1446,6 @@ def simulate_frame(
     photo_out = None
     if workspace is not None and not _preserve_truth:
         photo_out = workspace._buffer("mean_photo", resolved, config.resolution, float_dtype)
-    mean_photo = photo_signal_map(
-        config,
-        photon_rate,
-        exposure_s,
-        background_photon_rate,
-        quantum_efficiency,
-        float_dtype,
-        backend=resolved,
-        fixed_patterns=fixed_patterns,
-        out=photo_out,
-    )
     mean_dark = (
         dark_signal_map(
             config,
@@ -1389,17 +1458,58 @@ def simulate_frame(
         if _dark_signal is None
         else _dark_signal
     )
-    if workspace is None:
-        mean_total = mean_photo + mean_dark
-    elif not _preserve_truth:
-        # The photo expectation is private scratch when truth is disabled, so it
-        # can become the total in place with no allocation or extra copy kernel.
-        mean_total = mean_photo
-        mean_total += mean_dark
+    expectation = None
+    if not resolved.is_cpu and fixed_patterns is not None:
+        # Launch-bound GPU frames: one kernel for the photo and total expectations.
+        from . import _cuda
+
+        expectation = _cuda.fused_expectation(
+            _working_operand(photon_rate, float_dtype, resolved),
+            _working_operand(background_photon_rate, float_dtype, resolved),
+            exposure_scale=exposure_s
+            * (config.quantum_efficiency if quantum_efficiency is None else quantum_efficiency),
+            prnu=fixed_patterns.prnu_multiplier if config.prnu > 0 else 1.0,
+            dark=mean_dark,
+            extra=_working_operand(extra_electrons, float_dtype, resolved),
+            shape=config.resolution,
+            dtype=float_dtype,
+            photo_out=photo_out,
+            total_out=(
+                workspace._buffer("mean_total", resolved, config.resolution, float_dtype)
+                if workspace is not None and photo_out is None
+                else None
+            ),
+        )
+    if expectation is not None:
+        mean_photo, mean_total = expectation
     else:
-        mean_total = workspace._buffer("mean_total", resolved, config.resolution, float_dtype)
-        resolved.xp.add(mean_photo, mean_dark, out=mean_total)
-    mean_total += resolved.asarray(extra_electrons, dtype=float_dtype)
+        mean_photo = photo_signal_map(
+            config,
+            photon_rate,
+            exposure_s,
+            background_photon_rate,
+            quantum_efficiency,
+            float_dtype,
+            backend=resolved,
+            fixed_patterns=fixed_patterns,
+            out=photo_out,
+        )
+        if workspace is None:
+            mean_total = mean_photo + mean_dark
+        elif not _preserve_truth:
+            # The photo expectation is private scratch when truth is disabled, so it
+            # can become the total in place with no allocation or extra copy kernel.
+            mean_total = mean_photo
+            mean_total += mean_dark
+        else:
+            mean_total = workspace._buffer("mean_total", resolved, config.resolution, float_dtype)
+            resolved.xp.add(mean_photo, mean_dark, out=mean_total)
+        mean_total += _working_operand(extra_electrons, float_dtype, resolved)
+    if _mean_total_out is not None and workspace is None and binning == 1:
+        # ``mean_total`` is a fresh array here and the chain below only reads it,
+        # so the caller may keep it as the ``photo + dark + extra`` truth instead
+        # of summing the same arrays again in the same order.
+        _mean_total_out.append(mean_total)
 
     if binning > 1:
         height, width = config.resolution
