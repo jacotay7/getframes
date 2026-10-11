@@ -22,7 +22,7 @@ from .analysis import (
     ramp_photon_transfer,
 )
 from .backend import ArrayBackend, get_array_module, get_backend, resolve_precision, to_numpy
-from .calibrate import calibrate, combine
+from .calibrate import Calibration, calibrate, combine
 from .camera import Camera
 from .config import CameraConfig, SensorType
 from .frame import Frame, FrameTruth
@@ -63,6 +63,7 @@ __all__ = [
     "ArrayBackend",
     "ArrayPSF",
     "Bandpass",
+    "Calibration",
     "Camera",
     "CameraConfig",
     "Catalog",

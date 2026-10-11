@@ -361,3 +361,42 @@ def test_gpu_fused_kernels_are_bit_identical_to_separate_operations(
                 assert cupy.array_equal(
                     getattr(got.truth, name).view(bits), getattr(want.truth, name).view(bits)
                 )
+
+
+def test_gpu_calibration_recovers_photons_on_device() -> None:
+    cupy = _cupy()
+    camera = gf.Camera.from_preset("andor_ocam2k", device="gpu").with_config(resolution=(64, 64))
+    cal = gf.Calibration.from_camera(camera, 1e-3, n_darks=32, seed=1)
+    assert isinstance(cal.dark_adu, cupy.ndarray)
+    photons = cupy.full((64, 64), 20.0)
+
+    total = cupy.zeros((64, 64))
+    for seed in range(60):
+        frame = camera.expose(photons / 1e-3, 1e-3, seed=seed, include_truth=False)
+        image = cal.to_photons(frame)
+        assert isinstance(image, cupy.ndarray)
+        total += image
+    assert float((total / 60).mean()) == pytest.approx(20.0, rel=0.005)
+    assert isinstance(cal.saturated(frame), cupy.ndarray)
+    assert camera.effective_read_noise_e() == pytest.approx(216.0 / 600.0)
+
+
+def test_gpu_calibration_matches_cpu_statistically_and_crosses_devices() -> None:
+    cupy = _cupy()
+    means = {}
+    calibrations = {}
+    gpu_frames = []
+    for device in ("cpu", "gpu"):
+        config = gf.load_preset("generic_scmos").replace(resolution=(64, 64))
+        camera = gf.Camera(config, device=device)
+        calibrations[device] = cal = gf.Calibration.from_camera(camera, 1e-2, n_darks=16, seed=3)
+        rate = camera._backend.xp.full((64, 64), 5_000.0)
+        frames = [camera.expose(rate, 1e-2, seed=s, include_truth=False) for s in range(20)]
+        means[device] = float(np.mean([gf.to_numpy(cal.to_photons(f)).mean() for f in frames]))
+        if device == "gpu":
+            gpu_frames = frames
+    assert means["cpu"] == pytest.approx(50.0, rel=0.005)
+    assert means["gpu"] == pytest.approx(50.0, rel=0.005)
+    # A host-built calibration applied to a device frame computes on the device.
+    crossed = calibrations["cpu"].to_photons(gpu_frames[0])
+    assert isinstance(crossed, cupy.ndarray)

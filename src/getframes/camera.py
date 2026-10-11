@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
     from numpy.typing import NDArray
 
+    from .calibrate import Calibration
     from .noise import DetectorWorkspace, PhotonRate
     from .scene import Scene
     from .scene.sources import Source
@@ -1511,6 +1512,88 @@ class Camera:
         data = np.asarray(master.data, dtype=np.float64) - np.asarray(bias, dtype=np.float64)
         metadata = {**master.metadata, "bias_subtracted": True}
         return Frame(data=data, metadata=metadata)
+
+    @_on_device
+    def calibration(
+        self,
+        exposure: float,
+        n_darks: int = 64,
+        temperature: float | None = None,
+        *,
+        seed: int | None = None,
+        binning: int = 1,
+        binning_mode: str = "digital",
+        flat: Frame | NDArray[np.floating[Any]] | None = None,
+        linearize: bool = True,
+    ) -> Calibration:
+        """ADU calibration from ``n_darks`` mean-combined dark frames.
+
+        Shorthand for :meth:`getframes.Calibration.from_camera` with this camera;
+        see there for the arguments.
+        """
+        from .calibrate import Calibration
+
+        return Calibration.from_camera(
+            self,
+            exposure,
+            n_darks,
+            temperature,
+            seed=seed,
+            binning=binning,
+            binning_mode=binning_mode,
+            flat=flat,
+            linearize=linearize,
+        )
+
+    @_on_device
+    def effective_read_noise_e(self, *, binning: int = 1, binning_mode: str = "digital") -> float:
+        r"""Read noise of one frame referred to the input, in electrons RMS per pixel.
+
+        The Gaussian noise a single ordinary :meth:`expose` adds at the output
+        amplifier --- read noise, kTC/reset noise and any avalanche-scaled input
+        noise --- summed in quadrature and divided by the mean EM/avalanche gain
+        ``G``, i.e. expressed in electrons *collected in the pixel*::
+
+            sigma_eff = sqrt(sigma_read**2 + sigma_reset**2 + sigma_avalanche**2) / G
+
+        For a per-pixel read-noise map (sCMOS non-uniformity, RTS tail, channel
+        or edge structure) ``sigma_read`` is the quadrature mean of this sensor's
+        fixed map over the output pixels, so ``sigma_eff**2`` is the frame-mean
+        read variance. An EMCCD at gain 600 with 216 e- output noise gives
+        0.36 e-.
+
+        This is not the whole noise floor of a gain stage. EM and avalanche
+        multiplication also multiply the *shot* noise of everything they amplify
+        (signal, dark current, clock-induced charge) by the excess noise factor
+        ``F`` (``config.gain_excess_noise_factor``: ``sqrt(2)`` for an EMCCD), so
+        in input electrons the per-pixel SNR of a signal ``S`` on a dark level
+        ``D`` is
+
+        .. math::
+
+            \mathrm{SNR} = \frac{S}{\sqrt{F^2 (S + D) + \sigma_\mathrm{eff}^2}}.
+
+        Parameters
+        ----------
+        binning:
+            Binning factor of the frames. ``"digital"`` binning sums ``binning**2``
+            independent reads, so the noise grows by ``binning``; ``"on_chip"``
+            reads each super-pixel once, so it does not.
+        binning_mode:
+            ``"digital"`` or ``"on_chip"``, as for :meth:`expose`.
+        """
+        if binning < 1:
+            raise ValueError("binning must be a positive integer.")
+        if binning_mode not in ("digital", "on_chip"):
+            raise ValueError("binning_mode must be 'digital' or 'on_chip'.")
+        sigma = self._fixed_patterns.read_noise_sigma
+        if isinstance(sigma, (int, float)):
+            read_rms = float(sigma)
+        else:
+            cropped = self._crop_to_roi(sigma).astype(np.float64)
+            read_rms = float(np.sqrt(self._backend.scalar(self._backend.xp.mean(cropped**2))))
+        per_read = noise._input_referred_read_noise_e(self.config, read_rms)
+        return per_read * binning if binning_mode == "digital" else per_read
 
     def _metadata(
         self, frame_type: str, exposure: float, temperature: float, seed: int | None

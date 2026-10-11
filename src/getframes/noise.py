@@ -650,10 +650,61 @@ def apply_gain_stage(
     f2 = excess_noise_factor**2
     alpha = 1.0 / (f2 - 1.0)
     theta = gain * (f2 - 1.0)
+    # ``F = sqrt(2)`` gives ``alpha == 1``: the shape is the input itself.
+    shape = electrons if alpha == 1.0 else electrons * alpha
+    if (
+        isinstance(rng, np.random.Generator)
+        and isinstance(electrons, np.ndarray)
+        and electrons.ndim > 0
+    ):
+        # NumPy returns Gamma(shape=0) as exactly 0 *without consuming any draws*,
+        # so sampling only the lit pixels (in the same C order) yields the same
+        # values and leaves the generator in the same state, bit for bit. It still
+        # pays NumPy's per-element broadcasting cost for every zero, which
+        # dominates photon-starved frames (a wavefront sensor's dark background),
+        # so gather the lit pixels when they are a minority.
+        flat = shape.reshape(-1)
+        lit = flat > 0
+        # (Negative input falls through so NumPy still rejects it.)
+        if 2 * int(np.count_nonzero(lit)) <= flat.size and not bool((flat < 0).any()):
+            out = np.zeros(flat.size, dtype=electrons.dtype)
+            out[lit] = rng.gamma(shape=flat[lit], scale=theta)
+            return out.reshape(electrons.shape)
     # Both NumPy and CuPy define Gamma(shape=0) as exactly zero.  Sampling the
     # full shape therefore preserves the model while avoiding a mask, gather,
     # scatter, and (on GPU) a synchronizing ``any`` reduction.
-    return rng.gamma(shape=electrons * alpha, scale=theta).astype(electrons.dtype, copy=False)
+    return rng.gamma(shape=shape, scale=theta).astype(electrons.dtype, copy=False)
+
+
+def _input_referred_read_noise_e(
+    config: CameraConfig, read_noise_rms_e: float | None = None
+) -> float:
+    """Per-read noise of one ordinary frame, referred to the input, in electrons.
+
+    Sums in quadrature the Gaussian terms :func:`digitize` adds at the output
+    amplifier --- kTC/reset noise, the avalanche-scaled input noise
+    (``avalanche_input_noise_e`` times ``G * (G / G_ref) ** (p - 1)``) and the read
+    noise --- and divides by the mean multiplication ``G`` (``em_gain`` when a
+    gain stage is active, else 1)::
+
+        sigma_in = sqrt(reset_noise_e**2 + sigma_avalanche**2 + read_rms**2) / G
+
+    ``read_noise_rms_e`` is the RMS read noise at the output (for a per-pixel map,
+    its quadrature mean); it defaults to ``config.read_noise_e``. Shot noise, and
+    the excess noise factor a gain stage multiplies it by, are not included.
+    """
+    read_rms = config.read_noise_e if read_noise_rms_e is None else read_noise_rms_e
+    gain = config.em_gain if config.has_gain_stage else 1.0
+    avalanche = 0.0
+    if config.avalanche_input_noise_e > 0:
+        avalanche = (
+            config.avalanche_input_noise_e
+            * config.em_gain
+            * (config.em_gain / config.avalanche_input_noise_reference_gain)
+            ** (config.avalanche_input_noise_gain_exponent - 1.0)
+        )
+    total = math.sqrt(config.reset_noise_e**2 + avalanche**2 + read_rms**2)
+    return total / gain
 
 
 def apply_em_gain(
