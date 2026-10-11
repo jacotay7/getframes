@@ -36,6 +36,7 @@ nav:
       - Radiometry & the infrared: guides/radiometry.md
       - Scale & datasets: guides/datasets.md
       - GPU detector execution: guides/gpu.md
+      - A WFS camera in a closed loop: guides/wfs-closed-loop.md
       - Camera presets: guides/presets.md
       - Detector characterisation: guides/characterization.md
       - Validation: guides/validation.md

@@ -38,8 +38,8 @@ removals. A JOSS paper + citation remain a post-2.0 follow-up.
 | `backend.py` | Optional NumPy/CuPy array and RNG boundary, explicit host conversion, and backend convolution. NumPy is the reference/default. Owns the stack's `device` vocabulary (`"cpu"`, `"gpu"`, `"gpu:N"`, `"auto"`; parsed by `_parse_device`, resolved by `get_backend`) and `precision` vocabulary (`resolve_precision`: `"single"`/`"double"`, aliases `"float32"`/`"float64"`). A GPU `ArrayBackend` carries a `device_id`; `activate()` makes it current. Kept local rather than `aocore.Backend`: getframes draws per-frame noise from a device-native (cuRAND) stream, which `aocore.Backend.random` (host-side `Generator`) does not provide. |
 | `_cuda.py` | Private fused CuPy `ElementwiseKernel`s for the launch-bound GPU hot path: the photo + total expectation (`fused_expectation`, called from `simulate_frame`) and the whole readout (`fused_readout`, called from `digitize`). Each mirrors the separate CuPy operations it replaces op for op (same order, working precision, Python scalars rounded to it, `--fmad=false`), so seeded GPU frames are bit-identical to the unfused path, which remains the fallback for any operand it cannot take exactly. Imported only on the GPU backend; CuPy is imported lazily. |
 | `frame.py` | `Frame` container: a NumPy array (ADU) plus metadata; array-like; optional FITS export. |
-| `camera.py` | `Camera`, the main user-facing object. Orchestrates config + scene + noise into `Frame`s. Holds the RNG and high-level methods (`dark_frame`, `dark_series`, reset-correlated `nondestructive_series`, `correlated_double_sample`, `expose`, `observe`, `*_series`, `master_*`). Reset-correlated readout has one core, the private `_ramp_reads`, which walks a ramp on an arbitrary per-read interval pattern; `nondestructive_series` drives it uniformly and `correlated_double_sample` drives it as pedestal-then-signal. Put new ramp-readout modes there rather than in a second loop — the interval-scaled bias/settling/avalanche terms are easy to get subtly wrong twice. Every public method that touches device arrays is decorated with `backend._on_device`, which runs it (each step, for generator methods) with the camera's CUDA device current; decorate new ones too, or `device="gpu:N"` silently allocates on the wrong card. |
-| `calibrate.py` | Master-frame builders (`combine`) and `calibrate` reduction — the raw → reduced → truth loop (phase 1.1). |
+| `camera.py` | `Camera`, the main user-facing object. Orchestrates config + scene + noise into `Frame`s. Holds the RNG and high-level methods (`dark_frame`, `dark_series`, reset-correlated `nondestructive_series`, `correlated_double_sample`, `expose`, `observe`, `*_series`, `master_*`, plus `calibration` and the input-referred `effective_read_noise_e`). Reset-correlated readout has one core, the private `_ramp_reads`, which walks a ramp on an arbitrary per-read interval pattern; `nondestructive_series` drives it uniformly and `correlated_double_sample` drives it as pedestal-then-signal. Put new ramp-readout modes there rather than in a second loop — the interval-scaled bias/settling/avalanche terms are easy to get subtly wrong twice. Every public method that touches device arrays is decorated with `backend._on_device`, which runs it (each step, for generator methods) with the camera's CUDA device current; decorate new ones too, or `device="gpu:N"` silently allocates on the wrong card. |
+| `calibrate.py` | Master-frame builders (`combine`), `calibrate` reduction — the raw → reduced → truth loop (phase 1.1) — and `Calibration`, the ADU → input-referred electrons → photons inverse of the mean signal chain (mean master dark, `gain_e_per_adu / em_gain`, nonlinearity inverse, optional flat, scalar/curve QE) used for WFS frames. It works on NumPy and CuPy frames; keep its inverse in step with the forward model in `noise.py`. |
 | `observation.py` | `Observation` / `ObservationTruth` / `Pointing`: the time-series driver, jitter/drift/dither, per-frame truth (phase 1.2). |
 | `spectral.py` | Opt-in spectral mode: `QE`, `SED` (relative or absolute via `from_flux_density`), `Spectrum`, `SpectralBandpass`, effective-QE folding, transmission-product helpers (`product`, `from_file`/`from_product`), optional `astropy.units` coercion. |
 | `scene/` | The scene/optics layer: `Scene`, `Source` hierarchy (`PointSource`, `ExtendedSource`, `UniformIllumination`, `Catalog`; point/extended sources accept a `flux_sed` absolute SED), PSFs (`GaussianPSF`/`MoffatPSF`/`AiryPSF`/`ArrayPSF`/`EllipticalGaussianPSF`), `Telescope` (+ `Vignetting`/`RadialDistortion`), `Bandpass` (Vega `johnson` / AB `ab` ugriz·Gaia·2MASS + `Extinction`) in `photometry.py`, `Thermal` graybody background in `thermal.py`, `WCSInfo`, `LightCurve`. Renders a photon-rate map; no randomness. |
@@ -211,7 +211,7 @@ make the smallest change that fits the existing patterns; and if a change spans
 layers, respect the one-way data flow. When something is genuinely done and
 verified, say so plainly; when a step was skipped or a test fails, say *that*.
 
-## Performance notes (GPU hot path)
+## Performance notes (hot path)
 
 - Small GPU frames are launch-bound (each CuPy call costs 10–20 µs of host time on a
   slow core), so per-frame work counts CuPy calls, not FLOPs. Large frames, and the
@@ -229,6 +229,15 @@ verified, say so plainly; when a step was skipped or a test fails, say *that*.
   `backend.asarray` for a value that may be a scalar, and pass scalar distribution
   parameters through the `_CuPyGenerator` wrapper (it reuses a cached device copy),
   so a GPU frame does not upload a fresh 0-d array per call.
+- **CPU gain stage.** NumPy's `Generator.gamma` returns `Gamma(shape=0)` as exactly
+  zero *without consuming a draw* but still pays its per-element dispatch, so
+  `apply_gain_stage` samples only the lit pixels (C order) when they are a minority.
+  This is bit-identical only because zero-shape elements consume nothing;
+  `tests/test_wfs_calibration.py::test_gain_stage_matches_full_gamma_draw_bit_for_bit`
+  guards it against the installed NumPy. Do not extend the trick to Poisson: there a
+  zero mean also consumes nothing, but every pixel carries dark current. An exact
+  vectorised replica of NumPy's small-rate Poisson (for CIC) was tried and measured
+  no faster than `rng.poisson`, so it was not kept.
 - Identity arithmetic on a whole frame (`+ 0`, `/ 1`, `* 1` by a *Python* scalar) is
   skipped via `noise._is_scalar_value`; it cannot change any ADU (at most the sign
   of a zero, which rounding erases). Keep the test to Python scalars: reading a 0-d

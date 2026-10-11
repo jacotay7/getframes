@@ -127,6 +127,10 @@ for the methodology.
 - **Calibration & ground truth** — master bias/dark/flat builders and a
   `calibrate` reduction that closes the
   **[raw → reduced → truth loop](https://jacotay7.github.io/getframes/guides/calibration/)**.
+- **Wavefront-sensor cameras** — `Calibration` turns ADU back into
+  input-referred electrons and photons, `Camera.effective_read_noise_e` gives
+  the input-referred noise, and a guide covers
+  **[a WFS camera in a closed loop](https://jacotay7.github.io/getframes/guides/wfs-closed-loop/)**.
 - **Observations** — `Observation` drives time series with jitter, drift, dither
   and persistence, carrying per-frame
   **[truth](https://jacotay7.github.io/getframes/guides/time-series/)**.

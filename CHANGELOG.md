@@ -6,6 +6,68 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.6.0] - 2026-10-10
+
+### Added
+
+- **`Calibration`: ADU to input-referred electrons and incident photons**
+  (`gf.Calibration`, `Camera.calibration`). `Calibration.from_camera(cam,
+  exposure, n_darks=64, seed=...)` averages exposure-matched dark frames into a
+  mean master dark on the camera's device and precision; `to_electrons` applies
+  `L^-1[(ADU - dark) * gain_e_per_adu / em_gain] / flat`, inverting the
+  configured nonlinearity (closed form or Newton) by default; `to_photons`
+  divides by the scalar QE `expose` applies, a `quantum_efficiency`, the
+  `qe_curve` at `wavelength_nm`, or its effective value over a `bandpass`;
+  `saturated` flags pixels whose charge reached the input well, the output
+  register or the ADC ceiling. It works on NumPy and CuPy frames, takes an
+  optional unit-mean flat, and handles binned frames. Tests check that the mean
+  calibrated flux matches the incident photons to 0.5% for EMCCD, qCMOS, sCMOS,
+  eAPD, CCD and CMOS presets (issue #10).
+- **`Camera.effective_read_noise_e(binning=..., binning_mode=...)`**: the
+  per-frame read noise referred to the input (electrons collected in the
+  pixel): output read noise (the quadrature mean of a per-pixel map), kTC/reset
+  noise and avalanche-scaled noise, divided by the EM/avalanche gain. The
+  docstring and the new guide give the excess-noise-factor SNR.
+- **Guide: [A WFS camera in a closed loop](docs/guides/wfs-closed-loop.md)**:
+  exposure vs. frame period, ADU calibration and its accuracy, input-referred
+  noise and the excess noise factor, recommended EMCCD/qCMOS/sCMOS/eAPD/CCD
+  presets, and keeping small frames cheap.
+- `benchmarks/bench_small_frames.py`: seeded 256x256 WFS frames for one preset
+  per detector class, with before/after comparison and a SHA-256 digest of
+  seeded output for bit-identity checks; results in
+  `benchmarks/small-frame-results.md`.
+
+### Performance
+
+- **Photon-starved EMCCD and eAPD frames are faster on the CPU, with
+  bit-identical seeded output.** NumPy returns `Gamma(shape=0)` as exactly zero
+  without consuming a draw, but still visits every such pixel; the gain stage
+  now samples only the pixels that hold charge when they are a minority (a
+  wavefront sensor's dark background), and skips the `* 1` shape scaling at
+  `F = sqrt(2)`. Same draws, same order, same generator state afterwards;
+  seeded frames of every preset, in both precisions, are bit-identical to 2.5.0.
+  On one Neoverse-N1 core (256x256 Shack-Hartmann spots, 1 ms, in-process A/B):
+  the Gamma draw 1.43 → 0.78 ms; whole frames `andor_ocam2k` 6.57 → 5.95 ms
+  (1.10x), `leonardo_saphira` 4.79 → 4.29 ms (1.12x), `first_light_imaging_cred_one`
+  7.16 → 6.63 ms (1.08x); presets without a gain stage are unchanged. The CPU
+  chain is otherwise at its sampler floor (about 85% of a frame is NumPy's
+  Poisson, Gamma and Gaussian draws). An exact vectorised replica of NumPy's
+  small-rate Poisson for the CIC draw was tried and measured no faster, so it
+  was not kept. See `benchmarks/small-frame-results.md`.
+
+### Documented
+
+- The 1--2% calibrated-flux deficit seen in the dithered Shack-Hartmann
+  prototype is not a deterministic offset of the signal chain: averaged over
+  300 frames the prototype recovers 1.002 (OCAM2K), 0.999 (ORCA-Quest 2) and
+  1.001 (generic sCMOS) of the incident flux, while a single 288x288 frame
+  scatters by 1.2%, 1.0% and 3.3%. The guide lists the deterministic offsets a
+  pipeline can introduce (median master dark, scalar vs. spectral QE,
+  nonlinearity, saturation, unflattened fixed patterns) and their remedies.
+- The Nüvü HNü 240 / 128 presets cap the *amplified* charge at their 500 / 800
+  e- `full_well_e` (no `output_full_well_e`), so at EM gain 1000 a pixel holding
+  one electron saturates; the guide warns about it (#11).
+
 ## [2.5.0] - 2026-10-07
 
 ### Added
