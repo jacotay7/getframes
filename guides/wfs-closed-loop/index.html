@@ -1,0 +1,1465 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Realistic synthetic camera frames for scientific imaging pipelines">
+      
+      
+      
+        <link rel="canonical" href="https://jacotay7.github.io/getframes/guides/wfs-closed-loop/">
+      
+      
+        <link rel="prev" href="../gpu/">
+      
+      
+        <link rel="next" href="../presets/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>A WFS camera in a closed loop - getframes</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#a-wfs-camera-in-a-closed-loop" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="getframes" class="md-header__button md-logo" aria-label="getframes" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            getframes
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              A WFS camera in a closed loop
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/jacotay7/getframes" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jacotay7/getframes
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="getframes" class="md-nav__button md-logo" aria-label="getframes" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    getframes
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/jacotay7/getframes" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    jacotay7/getframes
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Guides
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Guides
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../noise-model/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    The noise model
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../calibration/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Calibration & ground truth
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scenes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observing scenes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../time-series/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Time series & observations
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../spectral/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Spectral mode
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../radiometry/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Radiometry & the infrared
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../datasets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scale & datasets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    GPU detector execution
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A WFS camera in a closed loop
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    A WFS camera in a closed loop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#one-frame-per-loop-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One frame per loop step
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exposure-versus-frame-period" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exposure versus frame period
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-adu-to-photons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From ADU to photons
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="From ADU to photons">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-accurate-is-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How accurate is it?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#noise-referred-to-the-input" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Noise referred to the input
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-presets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended presets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keeping-frames-cheap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keeping frames cheap
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../presets/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Camera presets
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../characterization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Detector characterisation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../validation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Validation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../stability/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    API stability
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#one-frame-per-loop-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        One frame per loop step
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exposure-versus-frame-period" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exposure versus frame period
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-adu-to-photons" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From ADU to photons
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="From ADU to photons">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-accurate-is-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How accurate is it?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#noise-referred-to-the-input" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Noise referred to the input
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-presets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended presets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#keeping-frames-cheap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keeping frames cheap
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="a-wfs-camera-in-a-closed-loop">A WFS camera in a closed loop<a class="headerlink" href="#a-wfs-camera-in-a-closed-loop" title="Permanent link">&para;</a></h1>
+<p>An adaptive-optics loop reads its wavefront-sensor (WFS) camera once per step:
+a small frame, a short exposure, often a photon-starved signal, and thousands of
+frames per simulated second. This guide covers what changes when a <code>getframes</code>
+camera plays that role: how exposure relates to the frame period, how to turn
+ADU back into photons with <a class="autorefs autorefs-internal" href="../../reference/#getframes.calibrate.Calibration"><code>Calibration</code></a>, what
+noise to expect, which presets to start from, and how to keep each frame cheap.</p>
+<h2 id="one-frame-per-loop-step">One frame per loop step<a class="headerlink" href="#one-frame-per-loop-step" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">getframes</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">gf</span>
+
+<span class="n">cam</span> <span class="o">=</span> <span class="n">gf</span><span class="o">.</span><span class="n">Camera</span><span class="o">.</span><span class="n">from_preset</span><span class="p">(</span><span class="s2">"andor_ocam2k"</span><span class="p">)</span><span class="o">.</span><span class="n">with_config</span><span class="p">(</span><span class="n">resolution</span><span class="o">=</span><span class="p">(</span><span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">))</span>
+<span class="n">cal</span> <span class="o">=</span> <span class="n">gf</span><span class="o">.</span><span class="n">Calibration</span><span class="o">.</span><span class="n">from_camera</span><span class="p">(</span><span class="n">cam</span><span class="p">,</span> <span class="n">exposure</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">,</span> <span class="n">n_darks</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+
+<span class="n">photons</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">full</span><span class="p">(</span><span class="n">cam</span><span class="o">.</span><span class="n">resolution</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">)</span>  <span class="c1"># your WFS optics: photons/pixel this frame</span>
+<span class="k">for</span> <span class="n">step</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">100</span><span class="p">):</span>
+    <span class="n">frame</span> <span class="o">=</span> <span class="n">cam</span><span class="o">.</span><span class="n">expose</span><span class="p">(</span><span class="n">photons</span> <span class="o">/</span> <span class="mf">1e-3</span><span class="p">,</span> <span class="mf">1e-3</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="n">step</span><span class="p">,</span> <span class="n">include_truth</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">image</span> <span class="o">=</span> <span class="n">cal</span><span class="o">.</span><span class="n">to_photons</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>  <span class="c1"># photons/pixel, ready for the centroider</span>
+    <span class="c1"># ... slopes -&gt; reconstructor -&gt; DM -&gt; next step's photons ...</span>
+</code></pre></div>
+<p><code>expose</code> takes a photon <strong>rate</strong> (photons/s/pixel), so an optics model that
+returns photons per frame divides by the exposure. Seeding each step
+(<code>seed=step</code>, or seeds derived from your own generator) makes every loop
+iteration reproducible on its own.</p>
+<h2 id="exposure-versus-frame-period">Exposure versus frame period<a class="headerlink" href="#exposure-versus-frame-period" title="Permanent link">&para;</a></h2>
+<p><code>getframes</code> simulates one integration of length <code>exposure</code> followed by one
+readout:</p>
+<ul>
+<li><strong>Photo-signal, dark current and detector glow scale with <code>exposure</code>.</strong> The
+  photon rate is integrated over it.</li>
+<li><strong>Read noise, kTC/reset noise and clock-induced charge (CIC) are per frame</strong>,
+  independent of exposure. At kHz rates CIC usually dominates the EMCCD dark
+  signal: the OCAM2K preset's 0.0049 e-/pixel/frame CIC is three times its
+  1.6 e-/pixel/s dark current integrated over 1 ms.</li>
+</ul>
+<p>The <strong>frame period</strong> is the loop's business. A frame-transfer EMCCD such as the
+OCAM2K integrates the next frame while it reads the last, so its exposure is the
+whole frame period (1/2067 s at Keck's 2067 fps). A camera with dead time,
+or a loop that runs slower than the camera, exposes for less than the period:
+pass the integration time as <code>exposure</code>, not the period. Readout latency,
+rolling-shutter timing and any delay between exposure and DM command are not
+part of a single frame; model them in the loop.</p>
+<h2 id="from-adu-to-photons">From ADU to photons<a class="headerlink" href="#from-adu-to-photons" title="Permanent link">&para;</a></h2>
+<p><a class="autorefs autorefs-internal" href="../../reference/#getframes.calibrate.Calibration"><code>Calibration</code></a> inverts the mean signal chain:</p>
+<div class="highlight"><pre><span></span><code>electrons = L^-1[(ADU - D) * g / G] / F        (input-referred: collected in the pixel)
+photons   = electrons / QE
+</code></pre></div>
+<p>with <code>D</code> the master dark (the per-pixel <strong>mean</strong> of exposure-matched dark
+frames: bias pedestal, structured bias, dark current, glow and CIC), <code>g</code> the
+conversion gain in e-/ADU, <code>G</code> the EM or avalanche gain, <code>L</code> the detector
+nonlinearity (inverted exactly by default), <code>F</code> an optional unit-mean flat, and
+<code>QE</code> the quantum efficiency <code>expose</code> applied. It runs on NumPy or CuPy frames
+and keeps the camera's working precision.</p>
+<div class="highlight"><pre><span></span><code><span class="n">cal</span> <span class="o">=</span> <span class="n">gf</span><span class="o">.</span><span class="n">Calibration</span><span class="o">.</span><span class="n">from_camera</span><span class="p">(</span><span class="n">cam</span><span class="p">,</span> <span class="n">exposure</span><span class="o">=</span><span class="mf">1e-3</span><span class="p">,</span> <span class="n">n_darks</span><span class="o">=</span><span class="mi">64</span><span class="p">,</span> <span class="n">seed</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>
+<span class="n">cal</span><span class="o">.</span><span class="n">e_per_adu</span>  <span class="c1"># input electrons per ADU: 28 / 600 for the OCAM2K</span>
+<span class="n">electrons</span> <span class="o">=</span> <span class="n">cal</span><span class="o">.</span><span class="n">to_electrons</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>
+<span class="n">photons</span> <span class="o">=</span> <span class="n">cal</span><span class="o">.</span><span class="n">to_photons</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>  <span class="c1"># / config.quantum_efficiency</span>
+<span class="n">photons_700</span> <span class="o">=</span> <span class="n">cal</span><span class="o">.</span><span class="n">to_photons</span><span class="p">(</span><span class="n">frame</span><span class="p">,</span> <span class="n">wavelength_nm</span><span class="o">=</span><span class="mf">700.0</span><span class="p">)</span>  <span class="c1"># / qe_curve(700 nm)</span>
+<span class="n">bad</span> <span class="o">=</span> <span class="n">cal</span><span class="o">.</span><span class="n">saturated</span><span class="p">(</span><span class="n">frame</span><span class="p">)</span>  <span class="c1"># pixels whose charge was clipped</span>
+</code></pre></div>
+<p><code>Camera.calibration(...)</code> is the same as <code>Calibration.from_camera(camera, ...)</code>.
+For real data, or a dark built some other way, construct
+<code>gf.Calibration(config, dark, flat=...)</code> directly.</p>
+<h3 id="how-accurate-is-it">How accurate is it?<a class="headerlink" href="#how-accurate-is-it" title="Permanent link">&para;</a></h3>
+<p>Every stage of the forward chain is linear in expectation (Poisson shot noise,
+the Gamma gain stage, zero-mean read noise, round-to-nearest digitisation with
+at least half an ADU of read noise), so the <strong>mean</strong> of <code>to_photons</code> over many
+frames equals the incident photons. The test suite checks this for every WFS
+detector class with a 64x64 Shack-Hartmann spot pattern averaged over 150
+frames:</p>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Presets tested</th>
+<th>Tolerance on the mean calibrated flux</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>EMCCD</td>
+<td><code>andor_ocam2k</code>, <code>andor_ixon_ultra_888</code></td>
+<td>0.5%</td>
+</tr>
+<tr>
+<td>qCMOS</td>
+<td><code>hamamatsu_orca_quest_2</code></td>
+<td>0.5%</td>
+</tr>
+<tr>
+<td>sCMOS</td>
+<td><code>generic_scmos</code></td>
+<td>0.5%</td>
+</tr>
+<tr>
+<td>eAPD</td>
+<td><code>generic_eapd</code>, <code>leonardo_saphira</code></td>
+<td>0.5%</td>
+</tr>
+<tr>
+<td>eAPD</td>
+<td><code>first_light_imaging_cred_one</code>, with a flat and a per-frame background from unlit pixels</td>
+<td>1%</td>
+</tr>
+<tr>
+<td>CCD / CMOS</td>
+<td><code>generic_ccd</code>, <code>generic_cmos</code></td>
+<td>0.5%</td>
+</tr>
+</tbody>
+</table>
+<p>The C-RED One preset carries a 69 ADU per-frame common-mode readout term, about
+6 input electrons on <em>every</em> pixel of a frame. It is zero-mean, so it does not
+bias the calibration, but it dominates a frame's summed flux; a pipeline
+removes it from reference or unlit pixels, as the test does.</p>
+<p>A <strong>single frame</strong> is much noisier than that. Its total flux scatters by the
+shot noise times the excess-noise factor plus the read noise summed over every
+pixel: for a 288x288 frame with 100 photons per subaperture (about 20,000
+photons in all) the per-frame scatter of the total is 1.2% for the OCAM2K, 1.0%
+for the ORCA-Quest 2 and 3.3% for the generic sCMOS, whose 1.6 e- read noise
+summed over 83,000 pixels rivals the signal. Averaged over 300 frames the same
+prototype recovers 1.002, 0.999 and 1.001 of the incident flux.</p>
+<div class="admonition note">
+<p class="admonition-title">Where a 1--2% calibrated-flux offset comes from</p>
+<p>With a mean master dark, the matching scalar QE and no saturation, the
+calibrated flux of <code>expose</code> frames has no deterministic offset; a 1--2%
+deficit on a handful of frames is the per-frame scatter above. Offsets that
+<em>are</em> deterministic come from the pipeline or the physics, and each has a
+remedy:</p>
+<ul>
+<li><strong>A median master dark</strong> (<code>Camera.master_dark</code>'s default) misses the mean
+  of a skewed dark: EM-amplified CIC, hot pixels, RTS. The calibrated flux
+  then reads <em>high</em> by the missing mean, about 8% at 0.05 photons/pixel on
+  the OCAM2K. <code>Calibration.from_camera</code> always averages.</li>
+<li><strong>The QE.</strong> <code>expose</code> applies the scalar <code>quantum_efficiency</code>; spectral mode
+  applies the <code>qe_curve</code>. They can differ by tens of percent (the
+  ORCA-Quest 2 scalar 0.85 is its peak; its curve gives 0.50 at 700 nm), so
+  pass <code>wavelength_nm=</code> or <code>bandpass=</code> to <code>to_photons</code> for spectral frames.</li>
+<li><strong>Nonlinearity</strong> bends bright pixels low (<code>generic_scmos</code>: 0.67% at 2/3 of
+  full well). <code>Calibration</code> inverts it unless <code>linearize=False</code>.</li>
+<li><strong>Saturation.</strong> Charge above the input well, the output-register ceiling
+  (<code>output_full_well_e / em_gain</code>: 467 e- per pixel for the OCAM2K at gain
+  600) or the ADC range is lost; <code>saturated()</code> flags those pixels.</li>
+<li><strong>Fixed patterns.</strong> PRNU and gain maps average out over a frame but not
+  over a few-pixel spot; pass a <code>flat</code> (for example
+  <code>cam.master_flat(..., bias=cal.dark_adu, method="mean")</code>).</li>
+</ul>
+</div>
+<h2 id="noise-referred-to-the-input">Noise referred to the input<a class="headerlink" href="#noise-referred-to-the-input" title="Permanent link">&para;</a></h2>
+<p><a class="autorefs autorefs-internal" title="effective_read_noise_e(*, binning=1, binning_mode='digital')" href="../../reference/#getframes.camera.Camera.effective_read_noise_e"><code>Camera.effective_read_noise_e</code></a>
+returns the per-pixel read noise of one ordinary frame in electrons <em>collected
+in the pixel</em>: the output-amplifier read noise (the quadrature mean of a
+per-pixel sCMOS map), kTC/reset noise and any avalanche-scaled term, all divided
+by the EM/avalanche gain:</p>
+<div class="highlight"><pre><span></span><code><span class="n">gf</span><span class="o">.</span><span class="n">Camera</span><span class="o">.</span><span class="n">from_preset</span><span class="p">(</span><span class="s2">"andor_ocam2k"</span><span class="p">)</span><span class="o">.</span><span class="n">effective_read_noise_e</span><span class="p">()</span>  <span class="c1"># 0.36 e-</span>
+</code></pre></div>
+<p>A gain stage also multiplies the <em>shot</em> noise of everything it amplifies by the
+excess noise factor <code>F</code> (<code>config.gain_excess_noise_factor</code>): <code>sqrt(2)</code> for an
+EMCCD at high gain, about 1.2--1.25 for HgCdTe eAPDs. In input electrons the
+per-pixel signal-to-noise of a signal <code>S</code> on a dark-plus-CIC level <code>D</code> is</p>
+<div class="highlight"><pre><span></span><code>SNR = S / sqrt(F^2 (S + D) + sigma_eff^2)
+</code></pre></div>
+<p>so an EMCCD buys its sub-electron read noise at the price of halving the
+effective QE (<code>F^2 = 2</code>) for shot-noise-limited pixels. At equal QE a
+gain-free detector with read noise <code>sigma_1</code> beats an EMCCD with <code>sigma_E</code> once
+<code>S + D &gt; (sigma_1^2 - sigma_E^2) / (F^2 - 1)</code>: about 0.06 e- per pixel for the
+ORCA-Quest 2 (0.44 e-) against the OCAM2K (0.36 e-), about 3 e- for a 1.75 e-
+sCMOS.</p>
+<h2 id="recommended-presets">Recommended presets<a class="headerlink" href="#recommended-presets" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Preset</th>
+<th>Format</th>
+<th style="text-align: right;">QE</th>
+<th style="text-align: right;">Effective read noise</th>
+<th style="text-align: right;">F</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>EMCCD</td>
+<td><code>andor_ocam2k</code></td>
+<td>240x240, 24 µm</td>
+<td style="text-align: right;">0.90</td>
+<td style="text-align: right;">0.36 e-</td>
+<td style="text-align: right;">1.41</td>
+<td>Keck-characterised CCD220 at gain 600, 2 kHz; CIC 0.0049 e-/frame</td>
+</tr>
+<tr>
+<td>EMCCD</td>
+<td><code>andor_ixon_ultra_888</code></td>
+<td>1024x1024, 13 µm</td>
+<td style="text-align: right;">0.95</td>
+<td style="text-align: right;">0.15 e-</td>
+<td style="text-align: right;">1.41</td>
+<td>General-purpose EMCCD at gain 300</td>
+</tr>
+<tr>
+<td>qCMOS</td>
+<td><code>hamamatsu_orca_quest_2</code></td>
+<td>4096x2304, 4.6 µm</td>
+<td style="text-align: right;">0.85</td>
+<td style="text-align: right;">0.44 e-</td>
+<td style="text-align: right;">1.00</td>
+<td>Photon-number-resolving read noise; use a small <code>resolution</code> (see below)</td>
+</tr>
+<tr>
+<td>sCMOS</td>
+<td><code>andor_marana_4_2b_11</code>, <code>photometrics_prime_95b</code></td>
+<td>11 µm</td>
+<td style="text-align: right;">0.95</td>
+<td style="text-align: right;">1.16, 1.57 e-</td>
+<td style="text-align: right;">1.00</td>
+<td>Characterised against real dark stacks; per-pixel read noise and RTS</td>
+</tr>
+<tr>
+<td>eAPD</td>
+<td><code>first_light_imaging_cred_one</code></td>
+<td>256x320, 24 µm</td>
+<td style="text-align: right;">0.70</td>
+<td style="text-align: right;">2.6 e-</td>
+<td style="text-align: right;">1.21</td>
+<td>HgCdTe infrared WFS; PRNU 5.5% and a gain map (use a flat); 69 ADU common mode</td>
+</tr>
+<tr>
+<td>eAPD</td>
+<td><code>leonardo_saphira</code></td>
+<td>256x320, 24 µm</td>
+<td style="text-align: right;">0.70</td>
+<td style="text-align: right;">1.16 e-</td>
+<td style="text-align: right;">1.25</td>
+<td>Avalanche gain 50</td>
+</tr>
+<tr>
+<td>CCD</td>
+<td><code>scimeasure_little_joe_ccd39</code></td>
+<td>80x80, 24 µm</td>
+<td style="text-align: right;">0.905</td>
+<td style="text-align: right;">4.5 e-</td>
+<td style="text-align: right;">1.00</td>
+<td>The classic CCD39 WFS camera</td>
+</tr>
+</tbody>
+</table>
+<p>Effective read noise is <code>Camera.effective_read_noise_e()</code> for the preset as
+shipped (for a per-pixel sCMOS map it exceeds the nominal <code>read_noise_e</code>, which
+is the mean rather than the quadrature mean of the map).</p>
+<div class="admonition warning">
+<p class="admonition-title">The Nüvü EMCCD presets saturate at one electron</p>
+<p><code>nuvu_hnu_240</code> and <code>nuvu_hnu_128_omega</code> set <code>full_well_e</code> to 500 and 800 e-
+and no <code>output_full_well_e</code>, so that value also caps the <em>amplified</em> charge
+at the digitiser. At EM gain 1000 a pixel holding a single electron
+saturates, and calibrated fluxes come out a few percent of the truth. Until
+the presets carry a sourced output-register capacity, set one yourself, e.g.
+<code>with_config(output_full_well_e=...)</code>, or use <code>andor_ocam2k</code>, which models
+the same CCD220 with Keck-measured input and output wells. Gains and read modes are preset values; override them with</p>
+</div>
+<p><code>with_config(em_gain=..., read_noise_e=...)</code> to explore a camera's operating
+range (the input-referred noise of an EMCCD scales as <code>read_noise_e / em_gain</code>).</p>
+<h2 id="keeping-frames-cheap">Keeping frames cheap<a class="headerlink" href="#keeping-frames-cheap" title="Permanent link">&para;</a></h2>
+<p>A closed-loop study can spend most of its time in <code>expose</code>. On the CPU a frame
+is bound by NumPy's Poisson, Gamma and Gaussian samplers, so:</p>
+<ul>
+<li><strong>Simulate the WFS format, not the whole sensor.</strong> <code>with_config(resolution=(256,
+  256))</code> builds a 256x256 detector. A detector <code>roi</code> is different: it simulates
+  the full sensor (amplifier geometry, fixed patterns) and then crops, which is
+  right for sensor studies but costs a full-sensor frame each step.</li>
+<li><strong>Shrink the config before building the camera</strong> for a large-format preset:
+  <code>gf.Camera(gf.load_preset("hamamatsu_orca_quest_2").replace(resolution=(256,
+  256)))</code>. <code>Camera.from_preset(...).with_config(...)</code> first builds the full
+  sensor's fixed-pattern maps (4096x2304 for the ORCA-Quest 2), which costs
+  seconds and, on a GPU, hundreds of megabytes.</li>
+<li><strong><code>include_truth=False</code></strong> skips the noise-free truth arrays.</li>
+<li><strong>Reuse a <a class="autorefs autorefs-internal" title="getframes.noise.DetectorWorkspace" href="../../reference/#getframes.noise.DetectorWorkspace"><code>DetectorWorkspace</code></a> and an
+  <code>out</code> frame</strong> (<code>expose(..., workspace=ws, out=buf)</code>) to avoid per-frame
+  allocations: 13% for the OCAM2K frames below, little for the other presets.</li>
+<li><strong><code>device="gpu"</code></strong> runs the chain as two fused CUDA kernels; see the
+  <a href="../gpu/#small-frames-fused-kernels">GPU guide</a> for frames/s on several GPUs.</li>
+</ul>
+<p>On the CPU a 256x256 frame costs about 4--7 ms (an Intel i7-10700 and an Ampere
+Neoverse-N1 core), about 85% of it in NumPy's Poisson, Gamma and Gaussian
+samplers. Their draws come from one sequential stream, and a seeded frame must
+stay reproducible, so they cannot be swapped or threaded. Since 2.6.0 the Gamma
+gain stage samples only the pixels that hold charge, which NumPy's sampler would
+otherwise visit one by one to return zero; the draws, their order and the
+generator state are unchanged, so seeded frames are bit-identical to 2.5.0.
+Measured with <code>benchmarks/bench_small_frames.py</code> (1 ms, seeded,
+<code>include_truth=False</code>, one Neoverse-N1 core):</p>
+<table>
+<thead>
+<tr>
+<th>Preset</th>
+<th style="text-align: right;">Photons/subaperture</th>
+<th style="text-align: right;">2.5.0 (ms)</th>
+<th style="text-align: right;">2.6.0 (ms)</th>
+<th style="text-align: right;">2.6.0 + workspace/out (ms)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>andor_ocam2k</code></td>
+<td style="text-align: right;">100</td>
+<td style="text-align: right;">6.49</td>
+<td style="text-align: right;">5.84</td>
+<td style="text-align: right;">5.05</td>
+</tr>
+<tr>
+<td><code>andor_ocam2k</code></td>
+<td style="text-align: right;">2000</td>
+<td style="text-align: right;">7.36</td>
+<td style="text-align: right;">6.87</td>
+<td style="text-align: right;">6.07</td>
+</tr>
+<tr>
+<td><code>andor_ixon_ultra_888</code></td>
+<td style="text-align: right;">100</td>
+<td style="text-align: right;">5.72</td>
+<td style="text-align: right;">5.04</td>
+<td style="text-align: right;">5.04</td>
+</tr>
+<tr>
+<td><code>first_light_imaging_cred_one</code></td>
+<td style="text-align: right;">100</td>
+<td style="text-align: right;">7.19</td>
+<td style="text-align: right;">6.81</td>
+<td style="text-align: right;">6.82</td>
+</tr>
+<tr>
+<td><code>hamamatsu_orca_quest_2</code></td>
+<td style="text-align: right;">100</td>
+<td style="text-align: right;">3.88</td>
+<td style="text-align: right;">4.03</td>
+<td style="text-align: right;">4.02</td>
+</tr>
+<tr>
+<td><code>generic_scmos</code></td>
+<td style="text-align: right;">100</td>
+<td style="text-align: right;">4.15</td>
+<td style="text-align: right;">4.28</td>
+<td style="text-align: right;">4.29</td>
+</tr>
+</tbody>
+</table>
+<p>EMCCD and eAPD frames gain 5--14%; presets without a gain stage run the same
+code as before (their differences are run-to-run drift). The full tables, an
+in-process A/B and the raw data are in
+<a href="https://github.com/jacotay7/getframes/blob/main/benchmarks/small-frame-results.md"><code>benchmarks/small-frame-results.md</code></a>.
+For kHz-rate studies that need much more, use the GPU.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+          <button type="button" class="md-top md-icon" data-md-component="top" hidden>
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8z"/></svg>
+  Back to top
+</button>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "navigation.top", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
