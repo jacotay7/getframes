@@ -114,7 +114,7 @@ image-builder checks that apply to a detector package, for every PSF model:
 `check_point_source_centring` (also on the vignetting map),
 `check_point_source_flux`, and `check_edge_flux_loss` (light off a detector edge
 is lost, not renormalized). They need `aocore>=0.1.3`, pinned in the `dev`
-extra only; the runtime pin stays `>=0.1.2`. The OPD-driven checks (tilt,
+extra only (both pins allow aocore 0.2, which is additive); the runtime pin stays `>=0.1.2`. The OPD-driven checks (tilt,
 slopes, wind, Zernikes, RMS) do not apply because getframes PSFs are analytic,
 not images of an OPD map. It also pins the section 8
 software vocabulary: every `device=` takes `"cpu"`/`"gpu"`/`"gpu:N"`/`"auto"`
@@ -166,7 +166,11 @@ CUDA-independent.
 - `.github/workflows/docs.yml` — deploys MkDocs to GitHub Pages.
 
 To cut a release: bump `src/getframes/__about__.py` and the `CHANGELOG.md`, tag
-`X.Y.Z`, and push the tag.
+`X.Y.Z`, and push the tag. Tags
+are bare `X.Y.Z` (2.6.0 was tagged `v2.6.0` by mistake; the workflow accepts both).
+When aocore cuts a new minor release, widen the `<0.N` cap here once the suite passes
+against it: a stale cap makes getframes uninstallable next to packages that need the
+new aocore.
 
 ## Keeping the repo healthy
 
@@ -246,7 +250,7 @@ verified, say so plainly; when a step was skipped or a test fails, say *that*.
 ## Things to avoid
 
 - Don't add heavy core runtime dependencies. Core runtime deps are `numpy`, `scipy`,
-  `astropy`, and the lightweight shared core `aocore` (pinned `>=0.1.2,<0.2`; imported
+  `astropy`, and the lightweight shared core `aocore` (pinned `>=0.1.2,<0.3`; imported
   at module top level, ~10 ms beyond NumPy), plus the `tomli` backport on <3.11.
   `astropy` became core at the 2.0 cut (FITS I/O, WCS pixel↔world projection, catalogs); still import it *lazily* inside
   the functions that use it (it is slow to import) — never at module top level, so

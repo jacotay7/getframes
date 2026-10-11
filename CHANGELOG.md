@@ -6,6 +6,14 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [2.6.1] - 2026-10-11
+
+### Fixed
+
+- Allow aocore 0.2 (`aocore>=0.1.2,<0.3`). aocore 0.2.0 is additive and the
+  test suite passes against it; the old `<0.2` cap made getframes impossible to
+  install next to packages that need aocore 0.2 (e.g. shmpipeline-ao 0.2).
+
 ## [2.6.0] - 2026-10-10
 
 ### Added
@@ -752,7 +760,9 @@ together in 1.0.
 - Documentation, runnable examples, and CI (lint, type-check, test matrix, PyPI
   release via Trusted Publishing).
 
-[Unreleased]: https://github.com/jacotay7/getframes/compare/2.5.0...HEAD
+[Unreleased]: https://github.com/jacotay7/getframes/compare/2.6.1...HEAD
+[2.6.1]: https://github.com/jacotay7/getframes/compare/v2.6.0...2.6.1
+[2.6.0]: https://github.com/jacotay7/getframes/compare/2.5.0...v2.6.0
 [2.5.0]: https://github.com/jacotay7/getframes/compare/2.4.0...2.5.0
 [2.4.0]: https://github.com/jacotay7/getframes/compare/2.3.0...2.4.0
 [2.3.0]: https://github.com/jacotay7/getframes/compare/2.2.0...2.3.0
