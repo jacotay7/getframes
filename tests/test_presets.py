@@ -53,6 +53,23 @@ def test_cred_one_preset_is_camera_specific_and_data_constrained():
     assert p99 == pytest.approx(26_000.0, abs=150.0)
 
 
+def test_imx455_preset_is_camera_specific_and_data_constrained():
+    cfg = load_preset("sony_imx455")
+    assert cfg.sensor_type.value == "CMOS"
+    assert cfg.resolution == (6422, 9600)
+    assert cfg.pixel_size_um == 3.76
+    assert cfg.bit_depth == 16
+    # The operating point it was measured at: 100 DN pedestal, 10 dB gain.
+    assert cfg.bias_offset_adu == pytest.approx(101.0)
+    assert cfg.gain_e_per_adu == pytest.approx(0.245, rel=0.02)
+    assert cfg.extra["local_characterization"].startswith("bench-data/imx455/")
+    assert "10 dB" in cfg.extra["operating_point"]
+    # The ADC saturates before the pixel well at this gain.
+    adc_ceiling_e = (2**cfg.bit_depth - 1 - cfg.bias_offset_adu) * cfg.gain_e_per_adu
+    assert adc_ceiling_e < cfg.full_well_e
+    assert adc_ceiling_e == pytest.approx(15_900.0, rel=0.01)
+
+
 def test_saphira_and_cred_one_presets_have_distinct_scope():
     detector = load_preset("leonardo_saphira")
     camera = load_preset("first_light_imaging_cred_one")

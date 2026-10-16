@@ -1,0 +1,41 @@
+# Sony IMX455 — 61 MP full-frame back-illuminated CMOS, 3.76 um pixels.
+# Measured on a NSV455 camera (Neutralino/V4L2) at 10 dB analog gain with a
+# 100 DN black level, 16 October 2026, from dark and flat exposure series reduced
+# with getframes.analysis.characterize_dark / characterize_flat.
+name = "Sony IMX455"
+manufacturer = "Sony"
+model = "IMX455 (NSV455 camera, 10 dB, 100 DN pedestal)"
+sensor_type = "CMOS"
+resolution = [6422, 9600]             # frame the camera delivers, rows x columns
+pixel_size_um = 3.76
+quantum_efficiency = 0.9               # not measured here; representative BSI IMX455 peak
+full_well_e = 51000.0                  # pixel well; at 10 dB the 16-bit ADC clips first, near 15.9 ke-
+bit_depth = 16
+gain_e_per_adu = 0.244                 # 0.245 +/- 0.005 pooled from darks, flats and a spot plateau
+bias_offset_adu = 101.0                # the 100 DN black level as measured
+bias_pixel_spread_adu = 3.1            # robust spread of the per-pixel bias intercepts
+read_noise_e = 2.63                    # forward-fitted: reproduces the 25 ms darks' 11.24 ADU
+read_noise_nonuniformity = 0.10        # forward-fitted; 0.24 measured is mostly 16-frame scatter
+read_noise_rts_fraction = 0.0167       # forward-fitted to the 1.41% measured above 3x the median
+read_noise_rts_factor = 4.0            # their median read noise over the median
+dark_current_e_per_s = 43.1            # 176 ADU/s; see [extra].dark_signal_caveat
+dark_current_ref_temp_c = 34.0         # the camera's reported sensor temperature
+dark_current_doubling_temp_c = 6.3     # not measured here; silicon default
+dark_current_nonuniformity = 0.007     # forward-fitted; 2.0% measured includes per-pixel fit scatter
+hot_pixel_fraction = 0.00007           # dark current above 10x the median
+hot_pixel_factor = 15.0                # their median dark current over the median
+prnu = 0.009                           # with the flat's illumination falloff divided out
+nonlinearity = 0.036                   # forward-fitted to 0.08% departure below the ADC ceiling; upper bound
+notes = "Sony IMX455 at the operating point of a NSV455 camera: 10 dB analog gain, 100 DN black level, 16-bit output. Gain, bias, read noise and its per-pixel distribution, dark signal, DSNU, hot pixels, PRNU and linearity are measured on this camera from 7 dark stacks (25 ms to 4 s) and 9 flat stacks (2 ms to 640 ms, past ADC saturation) of 16 frames each, three crops across the sensor, reduced with getframes' own characterize_dark and characterize_flat. Read noise, its spread and RTS tail, dark current and DSNU are forward-fitted: a simulated dark series from this preset, characterised the same way, reproduces the bench's measured values. The dark signal is high for this sensor (43.1 e-/s at a reported 34 C) and was measured without a light-tight cap, so it may include ambient light; treat it as an upper bound. QE and the pixel full well are not measured here."
+
+[extra]
+local_characterization = "bench-data/imx455/20261016T085326Z, NSV455 SN005 on orin-005, acquired 2026-10-16"
+operating_point = "analog gain 10 dB, black level 100 DN, 16-bit"
+dark_signal_caveat = "Measured with the telescope uncapped: uniform across the sensor, Poisson (Fano 1.00), but not separable from diffuse room light. The camera's sensor temperatures are labelled nominal; its board read 55 C."
+measured_full_well_onset_adu = 55772.0  # photon-transfer variance peak, a lower bound on saturation
+ptc_gain_e_per_adu = 0.2427
+dark_gain_e_per_adu = 0.2554            # characterize_dark reads ~4% high on simulated data
+dark_temporal_noise_25ms_adu = 11.24    # median per-pixel temporal sigma
+dark_temporal_noise_4s_adu = 53.89
+dark_mean_25ms_adu = 103.9
+dark_mean_4s_adu = 804.5

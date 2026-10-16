@@ -6,6 +6,13 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `sony_imx455` preset: the Sony IMX455 at a NSV455 camera's 10 dB, 100 DN-pedestal
+  operating point, fitted to bench dark and flat stacks with `characterize_dark` /
+  `characterize_flat`. Its measurement-convolved fields are forward-fitted so a
+  simulated series characterised the same way reproduces the bench.
+
 ## [2.6.1] - 2026-10-11
 
 ### Fixed

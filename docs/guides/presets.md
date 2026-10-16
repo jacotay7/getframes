@@ -39,6 +39,7 @@ cam = gf.Camera(warmer)
 | `leonardo_saphira` | EAPD | HgCdTe avalanche IR array (AO wavefront sensing) |
 | `first_light_imaging_cred_one` | EAPD | C-RED One global-reset raw reads, with 32-channel structure |
 | `zwo_asi2600mm` | CMOS | Sony IMX571 cooled CMOS |
+| `sony_imx455` | CMOS | Sony IMX455 at a NSV455 camera's 10 dB operating point, fitted to bench darks and flats |
 | `hamamatsu_orca_fusion` | sCMOS | Back-thinned sCMOS with per-pixel read noise |
 | `hamamatsu_orca_quest_2` | sCMOS | qCMOS low-noise camera, digitized full QE curve |
 | `nuvu_hnu_240` | EMCCD | CCD220 deep-depletion EMCCD, high-gain AO mode |
@@ -72,6 +73,19 @@ nonuniformity, and the combined cap-plus-camera rate. The physical format, QE,
 full well, excess-noise factor, and intrinsic-background limit are constrained by
 [FLI/Oxford specifications](https://andor.oxinst.com/products/c-red-series/c-red-one)
 and [published characterization](https://arxiv.org/abs/2409.04247).
+
+`sony_imx455` is the IMX455 as a NSV455 camera runs it: 10 dB analog gain, a
+100 DN black level, 16-bit output. It is fitted to 7 dark and 9 flat stacks of 16
+frames taken on that camera and reduced with
+[`characterize_dark`][getframes.analysis.characterize.characterize_dark] and
+[`characterize_flat`][getframes.analysis.characterize.characterize_flat]. Read noise, its spread
+and RTS tail, dark current, DSNU and nonlinearity are forward-fitted: a dark or flat
+series simulated from the preset and characterised the same way reproduces the
+measured values, which keeps the characterisation's own small-sample scatter out of
+the preset. The dark signal (43 e-/s at a reported 34 °C) was measured without a
+light-tight cap and may include room light, so treat it as an upper bound. QE and
+the pixel full well are not measured; at 10 dB the 16-bit converter saturates near
+15.9 ke-, well before the well.
 
 A warm cap is not a zero-flux dark in the near infrared. Model its emission as an
 incident `background` passed to `Camera.nondestructive_series`; do not add it to

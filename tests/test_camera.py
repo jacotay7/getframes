@@ -566,6 +566,46 @@ def test_read_noise_correlated_fraction_is_validated():
             _cds_test_config(read_noise_correlated_fraction=invalid)
 
 
+def test_imx455_preset_reproduces_its_bench_darks():
+    """The bench's dark series, simulated and characterised the same way.
+
+    Bench values: 7 exposures, 25 ms to 4 s, 16 frames each, on a NSV455 at 10 dB
+    with a 100 DN black level (the preset's ``extra`` records the run).
+    """
+    from dataclasses import replace
+
+    from getframes import load_preset
+    from getframes.analysis import characterize_dark, stack_statistics
+
+    preset = load_preset("sony_imx455")
+    camera = Camera(replace(preset, resolution=(160, 160)), seed=11)
+    exposures = (0.025, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0)
+    stacks = {
+        exposure: stack_statistics(
+            [
+                np.asarray(
+                    camera.dark_frame(exposure, temperature=34.0, seed=1000 * k + i).data,
+                    dtype=np.float64,
+                )
+                for i in range(16)
+            ],
+            exposure_s=exposure,
+        )
+        for k, exposure in enumerate(exposures)
+    }
+    dark = characterize_dark(stacks)
+    assert dark.read_noise_e == pytest.approx(2.666, rel=0.04)
+    assert dark.dark_current_e_per_s == pytest.approx(44.94, rel=0.04)
+    assert dark.bias_offset_adu == pytest.approx(101.06, abs=1.0)
+    assert dark.gain_e_per_adu == pytest.approx(0.2554, rel=0.03)
+    assert dark.dark_current_nonuniformity == pytest.approx(0.020, abs=0.004)
+    assert dark.read_noise_rts_fraction == pytest.approx(0.0141, rel=0.35)
+    assert dark.fano_factor == pytest.approx(1.0, abs=0.05)
+    sigma = {e: float(np.median(np.sqrt(stacks[e].variance_adu2))) for e in (0.025, 4.0)}
+    assert sigma[0.025] == pytest.approx(11.24, rel=0.04)
+    assert sigma[4.0] == pytest.approx(53.89, rel=0.03)
+
+
 def test_cred_one_preset_matches_its_acceptance_report():
     """The vendor measured this serial number in the mode we simulate."""
     from dataclasses import replace

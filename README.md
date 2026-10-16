@@ -37,7 +37,7 @@ pip install -e '.[dev]'          # from a clone, for development
 ```python
 import getframes as gf
 
-cam = gf.Camera.from_preset("andor_ikon_m934")  # 21 presets, or your own CameraConfig
+cam = gf.Camera.from_preset("andor_ikon_m934")  # 23 presets, or your own CameraConfig
 frame = cam.dark_frame(exposure=60.0, temperature=-60.0, seed=0)
 
 frame.data  # (1024, 1024) array of ADU
